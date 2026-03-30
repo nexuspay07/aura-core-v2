@@ -55,16 +55,6 @@ def create_token(username: str):
 # ==========================
 # ✅ PREFLIGHT HANDLER (CRITICAL FIX)
 # ==========================
-@router.options("/login")
-async def login_options():
-    return JSONResponse(content={"message": "OK"})
-
-
-@router.options("/register")
-async def register_options():
-    return JSONResponse(content={"message": "OK"})
-
-
 # ==========================
 # REGISTER
 # ==========================

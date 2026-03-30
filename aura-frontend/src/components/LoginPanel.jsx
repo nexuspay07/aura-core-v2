@@ -14,7 +14,7 @@ export default function LoginPage() {
     setMessage("");
 
     try {
-      const res = await fetch(`${backendUrl}/register`, {
+      const res = await fetch(backendUrl + "/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -34,7 +34,7 @@ export default function LoginPage() {
     setMessage("");
 
     try {
-      const res = await fetch(`${backendUrl}/login`, {
+      const res = await fetch(backendUrl + "/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
