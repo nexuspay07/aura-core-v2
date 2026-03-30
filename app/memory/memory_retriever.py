@@ -1,4 +1,4 @@
-from app.db.database import SessionLocal
+from AURA.AURA_CORE_V2.app.db.database import SessionLocal
 from app.db.memory_models import ConversationMemory
 from app.memory.vector_engine import embed_text, cosine_similarity
 

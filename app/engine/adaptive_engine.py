@@ -1,7 +1,7 @@
 # app/engine/adaptive_engine.py
 
 from sqlalchemy.orm import Session
-from app.db.database import SessionLocal
+from AURA.AURA_CORE_V2.app.db.database import SessionLocal
 from app.db.memory_models import ConversationMemory
 
 

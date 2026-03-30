@@ -1,21 +1,37 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Table, Column, Integer, String, JSON, DateTime
 from datetime import datetime
+from .database import metadata
 
-from app.db.database import Base
+users = Table(
+    "users",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("username", String, unique=True),
+    Column("password", String),
+)
 
+simulation_history = Table(
+    "simulation_history",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("user_id", Integer),
+    Column("goal", String),
+    Column("scenario", JSON),
+    Column("results", JSON),
+    Column("agents", JSON),
+    Column("events", JSON),
+    Column("explanation", JSON),
+    Column("timestamp", DateTime, default=datetime.utcnow)
+)
+from fastapi import Depends, HTTPException
 
-class UsageLog(Base):
+fake_users_db = {
+    "blaise": {"id": 1, "username": "blaise"},
+    "guest": {"id": 0, "username": "guest"}
+}
 
-    __tablename__ = "usage_logs"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    tenant_id = Column(String, index=True)
-
-    domain = Column(String, index=True)
-
-    message = Column(Text)
-
-    response = Column(Text)
-
-    timestamp = Column(DateTime, default=datetime.utcnow)
+def get_current_user(username: str = "guest"):
+    user = fake_users_db.get(username)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user

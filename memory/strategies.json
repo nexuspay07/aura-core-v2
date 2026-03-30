@@ -1,0 +1,18 @@
+{
+    "strategy_ec021b": {
+        "template": "unknown",
+        "wins": 0,
+        "losses": 1,
+        "usage_count": 1,
+        "average_fitness": 0.2188746460446468,
+        "last_used": "2026-03-10T17:08:02.314438"
+    },
+    "strategy_ac8fcd": {
+        "template": "unknown",
+        "wins": 2,
+        "losses": 5,
+        "usage_count": 7,
+        "average_fitness": 0.4816379840806592,
+        "last_used": "2026-03-10T17:12:42.516331"
+    }
+}

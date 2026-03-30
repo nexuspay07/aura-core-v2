@@ -1,0 +1,515 @@
+[
+  {
+    "type": "goal",
+    "data": {
+      "type": "goal",
+      "content": "Goal generated at cycle 1",
+      "cycle": 1,
+      "timestamp": 1772546268.328581
+    },
+    "timestamp": 1772546268.328581,
+    "access_count": 1,
+    "last_accessed": 1772546268.330083
+  },
+  {
+    "type": "decision",
+    "data": {
+      "action": "reflect",
+      "confidence": 0.2,
+      "bias_used": 0.0,
+      "timestamp": 1772546268.3305886
+    },
+    "timestamp": 1772546268.3305886,
+    "access_count": 0
+  },
+  {
+    "type": "plan",
+    "data": {
+      "id": "plan_02f579",
+      "goal": "reflect",
+      "steps": [
+        {
+          "step_id": "plan_02f579_step1",
+          "action": "reflect",
+          "status": "pending"
+        }
+      ],
+      "timestamp": 1772546268.3305886
+    },
+    "timestamp": 1772546268.3305886,
+    "access_count": 0
+  },
+  {
+    "type": "execution",
+    "data": {
+      "type": "execution_result",
+      "plan_id": "plan_02f579",
+      "goal": "reflect",
+      "results": [
+        {
+          "step_id": "plan_02f579_step1",
+          "action": "reflect",
+          "status": "completed",
+          "timestamp": 1772546268.8325827
+        }
+      ],
+      "timestamp": 1772546268.8325827,
+      "access_count": 1,
+      "last_accessed": 1772546270.8375564
+    },
+    "timestamp": 1772546268.833594,
+    "access_count": 1,
+    "last_accessed": 1772546270.8375564
+  },
+  {
+    "type": "self_evaluation",
+    "data": {
+      "action": "reflect",
+      "score": 0.421,
+      "status": "weak",
+      "timestamp": 1772546268.833594
+    },
+    "timestamp": 1772546268.833594,
+    "access_count": 1,
+    "last_accessed": 1772546270.8375564
+  },
+  {
+    "type": "experience",
+    "data": {
+      "cycle": 1,
+      "goal": {
+        "type": "goal",
+        "content": "Goal generated at cycle 1",
+        "cycle": 1,
+        "timestamp": 1772546268.328581
+      },
+      "decision": {
+        "action": "reflect",
+        "confidence": 0.2,
+        "bias_used": 0.0,
+        "timestamp": 1772546268.3305886
+      },
+      "plan": {
+        "id": "plan_02f579",
+        "goal": "reflect",
+        "steps": [
+          {
+            "step_id": "plan_02f579_step1",
+            "action": "reflect",
+            "status": "pending"
+          }
+        ],
+        "timestamp": 1772546268.3305886
+      },
+      "execution": {
+        "type": "execution_result",
+        "plan_id": "plan_02f579",
+        "goal": "reflect",
+        "results": [
+          {
+            "step_id": "plan_02f579_step1",
+            "action": "reflect",
+            "status": "completed",
+            "timestamp": 1772546268.8325827
+          }
+        ],
+        "timestamp": 1772546268.8325827,
+        "access_count": 1,
+        "last_accessed": 1772546270.8375564
+      },
+      "evaluation": {
+        "action": "reflect",
+        "score": 0.421,
+        "status": "weak",
+        "timestamp": 1772546268.833594
+      },
+      "timestamp": 1772546268.8347151
+    },
+    "timestamp": 1772546268.8347151,
+    "access_count": 1,
+    "last_accessed": 1772546270.8375564
+  },
+  {
+    "type": "goal",
+    "data": {
+      "type": "goal",
+      "content": "Goal generated at cycle 2",
+      "cycle": 2,
+      "timestamp": 1772546270.8365464
+    },
+    "timestamp": 1772546270.8365464,
+    "access_count": 1,
+    "last_accessed": 1772546270.8375564
+  },
+  {
+    "type": "decision",
+    "data": {
+      "action": "reflect",
+      "confidence": 0.2,
+      "bias_used": 0.0,
+      "timestamp": 1772546270.838556
+    },
+    "timestamp": 1772546270.838556,
+    "access_count": 0
+  },
+  {
+    "type": "plan",
+    "data": {
+      "id": "plan_fc2ebf",
+      "goal": "reflect",
+      "steps": [
+        {
+          "step_id": "plan_fc2ebf_step1",
+          "action": "reflect",
+          "status": "pending"
+        }
+      ],
+      "timestamp": 1772546270.840553
+    },
+    "timestamp": 1772546270.840553,
+    "access_count": 0
+  },
+  {
+    "type": "execution",
+    "data": {
+      "type": "execution_result",
+      "plan_id": "plan_fc2ebf",
+      "goal": "reflect",
+      "results": [
+        {
+          "step_id": "plan_fc2ebf_step1",
+          "action": "reflect",
+          "status": "completed",
+          "timestamp": 1772546271.3421488
+        }
+      ],
+      "timestamp": 1772546271.3421488,
+      "access_count": 1,
+      "last_accessed": 1772546273.352568
+    },
+    "timestamp": 1772546271.3426564,
+    "access_count": 1,
+    "last_accessed": 1772546273.352568
+  },
+  {
+    "type": "self_evaluation",
+    "data": {
+      "action": "reflect",
+      "score": 0.736,
+      "status": "good",
+      "timestamp": 1772546271.3426564
+    },
+    "timestamp": 1772546271.3426564,
+    "access_count": 1,
+    "last_accessed": 1772546273.352568
+  },
+  {
+    "type": "experience",
+    "data": {
+      "cycle": 2,
+      "goal": {
+        "type": "goal",
+        "content": "Goal generated at cycle 2",
+        "cycle": 2,
+        "timestamp": 1772546270.8365464
+      },
+      "decision": {
+        "action": "reflect",
+        "confidence": 0.2,
+        "bias_used": 0.0,
+        "timestamp": 1772546270.838556
+      },
+      "plan": {
+        "id": "plan_fc2ebf",
+        "goal": "reflect",
+        "steps": [
+          {
+            "step_id": "plan_fc2ebf_step1",
+            "action": "reflect",
+            "status": "pending"
+          }
+        ],
+        "timestamp": 1772546270.840553
+      },
+      "execution": {
+        "type": "execution_result",
+        "plan_id": "plan_fc2ebf",
+        "goal": "reflect",
+        "results": [
+          {
+            "step_id": "plan_fc2ebf_step1",
+            "action": "reflect",
+            "status": "completed",
+            "timestamp": 1772546271.3421488
+          }
+        ],
+        "timestamp": 1772546271.3421488,
+        "access_count": 1,
+        "last_accessed": 1772546273.352568
+      },
+      "evaluation": {
+        "action": "reflect",
+        "score": 0.736,
+        "status": "good",
+        "timestamp": 1772546271.3426564
+      },
+      "timestamp": 1772546271.3449378
+    },
+    "timestamp": 1772546271.3449378,
+    "access_count": 1,
+    "last_accessed": 1772546273.352568
+  },
+  {
+    "type": "goal",
+    "data": {
+      "type": "goal",
+      "content": "Goal generated at cycle 3",
+      "cycle": 3,
+      "timestamp": 1772546273.3503306
+    },
+    "timestamp": 1772546273.3503306,
+    "access_count": 1,
+    "last_accessed": 1772546273.352568
+  },
+  {
+    "type": "decision",
+    "data": {
+      "action": "reflect",
+      "confidence": 0.2,
+      "bias_used": 0.0,
+      "timestamp": 1772546273.352568
+    },
+    "timestamp": 1772546273.352568,
+    "access_count": 0
+  },
+  {
+    "type": "plan",
+    "data": {
+      "id": "plan_cd5122",
+      "goal": "reflect",
+      "steps": [
+        {
+          "step_id": "plan_cd5122_step1",
+          "action": "reflect",
+          "status": "pending"
+        }
+      ],
+      "timestamp": 1772546273.3545678
+    },
+    "timestamp": 1772546273.3545678,
+    "access_count": 0
+  },
+  {
+    "type": "execution",
+    "data": {
+      "type": "execution_result",
+      "plan_id": "plan_cd5122",
+      "goal": "reflect",
+      "results": [
+        {
+          "step_id": "plan_cd5122_step1",
+          "action": "reflect",
+          "status": "completed",
+          "timestamp": 1772546273.8563032
+        }
+      ],
+      "timestamp": 1772546273.8563032,
+      "access_count": 1,
+      "last_accessed": 1772546275.8625777
+    },
+    "timestamp": 1772546273.8574057,
+    "access_count": 1,
+    "last_accessed": 1772546275.8625777
+  },
+  {
+    "type": "self_evaluation",
+    "data": {
+      "action": "reflect",
+      "score": 0.825,
+      "status": "excellent",
+      "timestamp": 1772546273.8584118
+    },
+    "timestamp": 1772546273.8584118,
+    "access_count": 1,
+    "last_accessed": 1772546275.8625777
+  },
+  {
+    "type": "experience",
+    "data": {
+      "cycle": 3,
+      "goal": {
+        "type": "goal",
+        "content": "Goal generated at cycle 3",
+        "cycle": 3,
+        "timestamp": 1772546273.3503306
+      },
+      "decision": {
+        "action": "reflect",
+        "confidence": 0.2,
+        "bias_used": 0.0,
+        "timestamp": 1772546273.352568
+      },
+      "plan": {
+        "id": "plan_cd5122",
+        "goal": "reflect",
+        "steps": [
+          {
+            "step_id": "plan_cd5122_step1",
+            "action": "reflect",
+            "status": "pending"
+          }
+        ],
+        "timestamp": 1772546273.3545678
+      },
+      "execution": {
+        "type": "execution_result",
+        "plan_id": "plan_cd5122",
+        "goal": "reflect",
+        "results": [
+          {
+            "step_id": "plan_cd5122_step1",
+            "action": "reflect",
+            "status": "completed",
+            "timestamp": 1772546273.8563032
+          }
+        ],
+        "timestamp": 1772546273.8563032,
+        "access_count": 1,
+        "last_accessed": 1772546275.8625777
+      },
+      "evaluation": {
+        "action": "reflect",
+        "score": 0.825,
+        "status": "excellent",
+        "timestamp": 1772546273.8584118
+      },
+      "timestamp": 1772546273.859407
+    },
+    "timestamp": 1772546273.859407,
+    "access_count": 1,
+    "last_accessed": 1772546275.8625777
+  },
+  {
+    "type": "goal",
+    "data": {
+      "type": "goal",
+      "content": "Goal generated at cycle 4",
+      "cycle": 4,
+      "timestamp": 1772546275.8610585
+    },
+    "timestamp": 1772546275.8610585,
+    "access_count": 1,
+    "last_accessed": 1772546275.8625777
+  },
+  {
+    "type": "decision",
+    "data": {
+      "action": "explore",
+      "confidence": 0.2,
+      "bias_used": 0.0,
+      "timestamp": 1772546275.863586
+    },
+    "timestamp": 1772546275.863586,
+    "access_count": 0
+  },
+  {
+    "type": "plan",
+    "data": {
+      "id": "plan_3f940e",
+      "goal": "explore",
+      "steps": [
+        {
+          "step_id": "plan_3f940e_step1",
+          "action": "explore",
+          "status": "pending"
+        }
+      ],
+      "timestamp": 1772546275.8665745
+    },
+    "timestamp": 1772546275.8665745,
+    "access_count": 0
+  },
+  {
+    "type": "execution",
+    "data": {
+      "type": "execution_result",
+      "plan_id": "plan_3f940e",
+      "goal": "explore",
+      "results": [
+        {
+          "step_id": "plan_3f940e_step1",
+          "action": "explore",
+          "status": "completed",
+          "timestamp": 1772546276.3689456
+        }
+      ],
+      "timestamp": 1772546276.3689456
+    },
+    "timestamp": 1772546276.3689456,
+    "access_count": 0
+  },
+  {
+    "type": "self_evaluation",
+    "data": {
+      "action": "explore",
+      "score": 0.629,
+      "status": "good",
+      "timestamp": 1772546276.3711977
+    },
+    "timestamp": 1772546276.3711977,
+    "access_count": 0
+  },
+  {
+    "type": "experience",
+    "data": {
+      "cycle": 4,
+      "goal": {
+        "type": "goal",
+        "content": "Goal generated at cycle 4",
+        "cycle": 4,
+        "timestamp": 1772546275.8610585
+      },
+      "decision": {
+        "action": "explore",
+        "confidence": 0.2,
+        "bias_used": 0.0,
+        "timestamp": 1772546275.863586
+      },
+      "plan": {
+        "id": "plan_3f940e",
+        "goal": "explore",
+        "steps": [
+          {
+            "step_id": "plan_3f940e_step1",
+            "action": "explore",
+            "status": "pending"
+          }
+        ],
+        "timestamp": 1772546275.8665745
+      },
+      "execution": {
+        "type": "execution_result",
+        "plan_id": "plan_3f940e",
+        "goal": "explore",
+        "results": [
+          {
+            "step_id": "plan_3f940e_step1",
+            "action": "explore",
+            "status": "completed",
+            "timestamp": 1772546276.3689456
+          }
+        ],
+        "timestamp": 1772546276.3689456
+      },
+      "evaluation": {
+        "action": "explore",
+        "score": 0.629,
+        "status": "good",
+        "timestamp": 1772546276.3711977
+      },
+      "timestamp": 1772546276.374187
+    },
+    "timestamp": 1772546276.374187,
+    "access_count": 0
+  }
+]

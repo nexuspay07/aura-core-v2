@@ -2,7 +2,7 @@
 
 from sqlalchemy import Column, Integer, String, Float, DateTime
 from datetime import datetime
-from app.db.database import Base
+from AURA.AURA_CORE_V2.app.db.database import Base
 
 class ConversationMemory(Base):
     __tablename__ = "conversation_memory"

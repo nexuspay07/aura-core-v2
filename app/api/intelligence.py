@@ -1,81 +1,37 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from app.db.database import SessionLocal  # your database session
-from app.engine.agi_engine import AGIEngine
+from fastapi import APIRouter
+from app.learning.strategy_memory_engine import StrategyMemoryEngine
+from app.learning.strategy_darwin_engine import StrategyDarwinEngine
 
 router = APIRouter()
 
 
-# Dependency to get DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-@router.post("/process")
-def process_intelligence(
-    tenant_id: str,
-    domain: str,
-    input_text: str,
-    db: Session = Depends(get_db)
-):
+@router.get("/strategies/ranking")
+def get_strategy_ranking():
     """
-    Process input through AGIEngine:
-    - recall existing memory
-    - reinforce confidence/importance
-    - create new memory if needed
-    - return response
+    Return ranked strategies based on historical performance.
     """
 
-    agi = AGIEngine(db)
+    memory_engine = StrategyMemoryEngine()
 
-    response = agi.process_input(
-        tenant_id=tenant_id,
-        domain=domain,
-        input_text=input_text
-    )
-
-    return {
-        "response": response,
-        "status": "learned"
-    }
-from app.engine.memory_consolidation_engine import MemoryConsolidationEngine
-
-consolidation_engine = MemoryConsolidationEngine()
-
-
-@router.post("/consolidate")
-def consolidate_memory(request: dict):
-
-    result = consolidation_engine.consolidate_memories(
-        tenant_id=request["tenant_id"],
-        domain=request["domain"]
-    )
+    ranking = memory_engine.get_strategy_ranking()
 
     return {
         "status": "success",
-        "consolidation": result
+        "strategy_ranking": ranking
     }
-from fastapi import APIRouter
-from AURA.AURA_CORE_V2.app.main import agi_engine
-
-router = APIRouter()
 
 
-@router.post("/reflect")
-def reflect(data: dict):
+@router.get("/strategies/best")
+def get_best_strategy():
+    """
+    Return best performing strategy.
+    """
 
-    goal = data.get("goal")
-    plan = data.get("plan", [])
-    results = data.get("results", [])
+    darwin = StrategyDarwinEngine()
 
-    reflection = agi_engine.reflect(goal, plan, results)
+    best = darwin.select_best_strategy()
 
     return {
-        "status": "reflection_complete",
-        "reflection": reflection
+        "status": "success",
+        "best_strategy": best
     }

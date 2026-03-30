@@ -1,0 +1,64 @@
+[
+  {
+    "type": "execution_result",
+    "plan_id": "plan_02f579",
+    "goal": "reflect",
+    "results": [
+      {
+        "step_id": "plan_02f579_step1",
+        "action": "reflect",
+        "status": "completed",
+        "timestamp": 1772546268.8325827
+      }
+    ],
+    "timestamp": 1772546268.8325827,
+    "access_count": 1,
+    "last_accessed": 1772546270.8375564
+  },
+  {
+    "type": "execution_result",
+    "plan_id": "plan_fc2ebf",
+    "goal": "reflect",
+    "results": [
+      {
+        "step_id": "plan_fc2ebf_step1",
+        "action": "reflect",
+        "status": "completed",
+        "timestamp": 1772546271.3421488
+      }
+    ],
+    "timestamp": 1772546271.3421488,
+    "access_count": 1,
+    "last_accessed": 1772546273.352568
+  },
+  {
+    "type": "execution_result",
+    "plan_id": "plan_cd5122",
+    "goal": "reflect",
+    "results": [
+      {
+        "step_id": "plan_cd5122_step1",
+        "action": "reflect",
+        "status": "completed",
+        "timestamp": 1772546273.8563032
+      }
+    ],
+    "timestamp": 1772546273.8563032,
+    "access_count": 1,
+    "last_accessed": 1772546275.8625777
+  },
+  {
+    "type": "execution_result",
+    "plan_id": "plan_3f940e",
+    "goal": "explore",
+    "results": [
+      {
+        "step_id": "plan_3f940e_step1",
+        "action": "explore",
+        "status": "completed",
+        "timestamp": 1772546276.3689456
+      }
+    ],
+    "timestamp": 1772546276.3689456
+  }
+]

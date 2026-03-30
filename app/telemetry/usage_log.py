@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime
 from datetime import datetime
 
-from app.db.database import Base
+from AURA.AURA_CORE_V2.app.db.database import Base
 
 
 class UsageLog(Base):

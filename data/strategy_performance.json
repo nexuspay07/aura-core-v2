@@ -1,0 +1,51 @@
+[
+  {
+    "strategy_id": 1,
+    "goal": "Optimize memory usage",
+    "score": 1.0,
+    "success": true,
+    "timestamp": 1773417770.2147317
+  },
+  {
+    "strategy_id": 1,
+    "goal": "Optimize memory usage",
+    "score": 1.0,
+    "success": true,
+    "timestamp": 1773418413.1203232
+  },
+  {
+    "strategy_id": 1,
+    "goal": "Enhance decision accuracy",
+    "score": 1.0,
+    "success": true,
+    "timestamp": 1773434292.5500941
+  },
+  {
+    "strategy_id": 1,
+    "goal": "Optimize memory usage",
+    "score": 1.0,
+    "success": true,
+    "timestamp": 1773434744.7158597
+  },
+  {
+    "strategy_id": 1,
+    "goal": "Refine planning strategies",
+    "score": 1.0,
+    "success": true,
+    "timestamp": 1773435061.509782
+  },
+  {
+    "strategy_id": 1,
+    "goal": "Optimize memory usage",
+    "score": 1.0,
+    "success": true,
+    "timestamp": 1773436171.0261548
+  },
+  {
+    "strategy_id": 1,
+    "goal": "Refine planning strategies",
+    "score": 1.0,
+    "success": true,
+    "timestamp": 1773436512.3773837
+  }
+]

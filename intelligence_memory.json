@@ -1,0 +1,11 @@
+[
+    {
+        "id": 1,
+        "timestamp": "2026-02-28T15:13:47.759539",
+        "data": {
+            "event": "test",
+            "data": "AURA intelligence active",
+            "timestamp": "2026-02-28T15:13:47.759539"
+        }
+    }
+]

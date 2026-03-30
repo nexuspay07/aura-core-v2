@@ -1,0 +1,282 @@
+[
+  {
+    "id": 1,
+    "parameters": {
+      "explore": 0.3,
+      "analyze": 0.31,
+      "optimize": 0.31,
+      "reflect": 0.12
+    },
+    "fitness": 0.642
+  },
+  {
+    "id": 2,
+    "parameters": {
+      "explore": 0.32,
+      "analyze": 0.32,
+      "optimize": 0.3,
+      "reflect": 0.08
+    },
+    "fitness": 0
+  },
+  {
+    "id": 3,
+    "parameters": {
+      "explore": 0.28,
+      "analyze": 0.37,
+      "optimize": 0.41,
+      "reflect": 0.13
+    },
+    "fitness": 0.96
+  },
+  {
+    "id": 4,
+    "parameters": {
+      "explore": 0.25,
+      "analyze": 0.37,
+      "optimize": 0.44,
+      "reflect": 0.16
+    },
+    "fitness": 0
+  },
+  {
+    "id": 5,
+    "parameters": {
+      "explore": 0.26,
+      "analyze": 0.49,
+      "optimize": 0.24,
+      "reflect": 0.29
+    },
+    "fitness": 0.788
+  },
+  {
+    "id": 6,
+    "parameters": {
+      "explore": 0.29,
+      "analyze": 0.4,
+      "optimize": 0.41,
+      "reflect": 0.18
+    },
+    "fitness": 0
+  },
+  {
+    "id": 7,
+    "parameters": {
+      "explore": 0.26,
+      "analyze": 0.46,
+      "optimize": 0.46,
+      "reflect": 0.28
+    },
+    "fitness": 0.674
+  },
+  {
+    "id": 8,
+    "parameters": {
+      "explore": 0.31,
+      "analyze": 0.4,
+      "optimize": 0.38,
+      "reflect": 0.08
+    },
+    "fitness": 0
+  },
+  {
+    "id": 9,
+    "parameters": {
+      "explore": 0.25,
+      "analyze": 0.22,
+      "optimize": 0.48,
+      "reflect": 0.3
+    },
+    "fitness": 0.391
+  },
+  {
+    "id": 10,
+    "parameters": {
+      "explore": 0.3,
+      "analyze": 0.33,
+      "optimize": 0.42,
+      "reflect": 0.11
+    },
+    "fitness": 0
+  },
+  {
+    "id": 11,
+    "parameters": {
+      "explore": 0.25,
+      "analyze": 0.33,
+      "optimize": 0.28,
+      "reflect": 0.23
+    },
+    "fitness": 0.888
+  },
+  {
+    "id": 12,
+    "parameters": {
+      "explore": 0.31,
+      "analyze": 0.41,
+      "optimize": 0.43,
+      "reflect": 0.11
+    },
+    "fitness": 0
+  },
+  {
+    "id": 13,
+    "parameters": {
+      "explore": 0.36,
+      "analyze": 0.3,
+      "optimize": 0.32,
+      "reflect": 0.13
+    },
+    "fitness": 0.726
+  },
+  {
+    "id": 14,
+    "parameters": {
+      "explore": 0.32,
+      "analyze": 0.38,
+      "optimize": 0.4,
+      "reflect": 0.14
+    },
+    "fitness": 0
+  },
+  {
+    "id": 15,
+    "parameters": {
+      "explore": 0.48,
+      "analyze": 0.37,
+      "optimize": 0.35,
+      "reflect": 0.27
+    },
+    "fitness": 0.829
+  },
+  {
+    "id": 16,
+    "parameters": {
+      "explore": 0.27,
+      "analyze": 0.35,
+      "optimize": 0.37,
+      "reflect": 0.1
+    },
+    "fitness": 0
+  },
+  {
+    "id": 17,
+    "parameters": {
+      "explore": 0.26,
+      "analyze": 0.44,
+      "optimize": 0.32,
+      "reflect": 0.17
+    },
+    "fitness": 0.445
+  },
+  {
+    "id": 18,
+    "parameters": {
+      "explore": 0.27,
+      "analyze": 0.39,
+      "optimize": 0.43,
+      "reflect": 0.16
+    },
+    "fitness": 0
+  },
+  {
+    "id": 19,
+    "parameters": {
+      "explore": 0.21,
+      "analyze": 0.25,
+      "optimize": 0.28,
+      "reflect": 0.2
+    },
+    "fitness": 0.827
+  },
+  {
+    "id": 20,
+    "parameters": {
+      "explore": 0.3,
+      "analyze": 0.37,
+      "optimize": 0.44,
+      "reflect": 0.16
+    },
+    "fitness": 0
+  },
+  {
+    "id": 21,
+    "parameters": {
+      "explore": 0.21,
+      "analyze": 0.34,
+      "optimize": 0.46,
+      "reflect": 0.25
+    },
+    "fitness": 0.644
+  },
+  {
+    "id": 22,
+    "parameters": {
+      "explore": 0.24,
+      "analyze": 0.39,
+      "optimize": 0.44,
+      "reflect": 0.14
+    },
+    "fitness": 0
+  },
+  {
+    "id": 23,
+    "parameters": {
+      "explore": 0.48,
+      "analyze": 0.21,
+      "optimize": 0.31,
+      "reflect": 0.28
+    },
+    "fitness": 0.805
+  },
+  {
+    "id": 24,
+    "parameters": {
+      "explore": 0.28,
+      "analyze": 0.33,
+      "optimize": 0.37,
+      "reflect": 0.16
+    },
+    "fitness": 0
+  },
+  {
+    "id": 25,
+    "parameters": {
+      "explore": 0.39,
+      "analyze": 0.25,
+      "optimize": 0.39,
+      "reflect": 0.1
+    },
+    "fitness": 0.859
+  },
+  {
+    "id": 26,
+    "parameters": {
+      "explore": 0.32,
+      "analyze": 0.34,
+      "optimize": 0.44,
+      "reflect": 0.14
+    },
+    "fitness": 0
+  },
+  {
+    "id": 27,
+    "parameters": {
+      "explore": 0.46,
+      "analyze": 0.21,
+      "optimize": 0.25,
+      "reflect": 0.14
+    },
+    "fitness": 0.755
+  },
+  {
+    "id": 28,
+    "parameters": {
+      "explore": 0.27,
+      "analyze": 0.39,
+      "optimize": 0.45,
+      "reflect": 0.09
+    },
+    "fitness": 0
+  }
+]

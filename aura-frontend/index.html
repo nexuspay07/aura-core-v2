@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AURA AI Lab</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #0f172a;
+            color: white;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #38bdf8;
+        }
+
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+            border: none;
+        }
+
+        button {
+            background: #38bdf8;
+            cursor: pointer;
+        }
+
+        .box {
+            background: #1e293b;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>🚀 AURA AI Simulation Lab</h1>
+
+<!-- USER INPUT -->
+<div class="box">
+    <h3>User</h3>
+    <input id="username" placeholder="Enter username (blaise or guest)" />
+</div>
+
+<!-- SIMULATION INPUT -->
+<div class="box">
+    <h3>Run Simulation</h3>
+    <input id="goal" placeholder="Enter goal (e.g. Increase revenue)" />
+    <button onclick="runSimulation()">Run Simulation</button>
+</div>
+
+<!-- RESULT -->
+<div class="box">
+    <h3>Simulation Result</h3>
+    <pre id="result"></pre>
+</div>
+
+<!-- HISTORY -->
+<div class="box">
+    <h3>History</h3>
+    <button onclick="loadHistory()">Load History</button>
+    <pre id="history"></pre>
+</div>
+
+<script>
+const BASE_URL = "http://127.0.0.1:8000";
+
+// =============================
+// 🚀 RUN SIMULATION
+// =============================
+async function runSimulation() {
+    const username = document.getElementById("username").value || "guest";
+    const goal = document.getElementById("goal").value || "Increase revenue";
+
+    const response = await fetch(`${BASE_URL}/lab/simulate?username=${username}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            goal: goal,
+            scenario: {},
+            strategies: []
+        })
+    });
+
+    const data = await response.json();
+
+    document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+}
+
+
+// =============================
+// 📜 LOAD HISTORY
+// =============================
+async function loadHistory() {
+    const username = document.getElementById("username").value || "guest";
+
+    const response = await fetch(`${BASE_URL}/lab/history?username=${username}`);
+    const data = await response.json();
+
+    document.getElementById("history").textContent = JSON.stringify(data, null, 2);
+}
+</script>
+
+</body>
+</html>
