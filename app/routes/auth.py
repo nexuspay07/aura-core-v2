@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import JSONResponse
 from app.db.database import database
 from app.models.user import users
 from pydantic import BaseModel
@@ -19,9 +20,7 @@ ACCESS_TOKEN_EXPIRE_HOURS = 2
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-# ✅ ADD THIS BACK
 security = HTTPBearer()
-
 
 # ==========================
 # MODELS
@@ -30,16 +29,17 @@ class AuthRequest(BaseModel):
     username: str
     password: str
 
-# ==========================
-# PASSWORD HELPERS (FIXED)
-# ==========================
-from passlib.context import CryptContext
 
+# ==========================
+# PASSWORD HELPERS
+# ==========================
 def hash_password(password: str):
     return pwd_context.hash(password)
 
+
 def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
+
 
 # ==========================
 # TOKEN CREATION
@@ -50,6 +50,20 @@ def create_token(username: str):
         "exp": datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+# ==========================
+# ✅ PREFLIGHT HANDLER (CRITICAL FIX)
+# ==========================
+@router.options("/login")
+async def login_options():
+    return JSONResponse(content={"message": "OK"})
+
+
+@router.options("/register")
+async def register_options():
+    return JSONResponse(content={"message": "OK"})
+
 
 # ==========================
 # REGISTER
@@ -77,6 +91,7 @@ async def register(data: AuthRequest):
 
     return {"message": "User created successfully"}
 
+
 # ==========================
 # LOGIN
 # ==========================
@@ -94,7 +109,11 @@ async def login(data: AuthRequest):
 
     token = create_token(user["username"])
 
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }
+
 
 # ==========================
 # CURRENT USER (PROTECTED)
