@@ -3,6 +3,7 @@ uvicorn[standard]==0.30.6
 databases
 sqlalchemy
 asyncpg
+aiosqlite
 python-dotenv
 passlib[bcrypt]
 python-jose
