@@ -7,3 +7,4 @@ aiosqlite
 python-dotenv
 passlib[bcrypt]
 python-jose
+psutil
