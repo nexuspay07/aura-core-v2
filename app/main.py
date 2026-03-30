@@ -264,3 +264,7 @@ def get_me(current_user=Depends(get_current_user)):
 @app.get("/test-auth")
 def test_auth(current_user=Depends(get_current_user)):
     return {"user": current_user}
+
+@app.get("/cors-test")
+def cors_test():
+    return {"status": "ok"}
