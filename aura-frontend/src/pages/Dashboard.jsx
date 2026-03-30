@@ -1,82 +1,65 @@
 import React, { useEffect, useState } from "react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ScatterChart,
-  Scatter
-} from "recharts";
 
 export default function Dashboard() {
-  const [data, setData] = useState([]);
-  const [scatter, setScatter] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [totalRuns, setTotalRuns] = useState(0);
+  const [avgScore, setAvgScore] = useState(0);
+  const [error, setError] = useState("");
 
-  const fetchData = async () => {
-    const token = localStorage.getItem("token");
+  const backendUrl = "https://aura-ai.onrender.com";
 
-    const res = await fetch("http://aura-ai.onrender.com/strategy/all", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const strategies = await res.json();
-
-    // 📈 Line chart data (scores)
-    const chartData = strategies.map((s, index) => ({
-      name: s.name + "-" + index,
-      score: s.score,
-      votes: s.votes
-    }));
-
-    // 🎯 Scatter data (risk vs score)
-    const scatterData = strategies.map((s) => ({
-      x: s.data?.risk === "high" ? 3 : s.data?.risk === "medium" ? 2 : 1,
-      y: s.score,
-      name: s.name
-    }));
-
-    setData(chartData);
-    setScatter(scatterData);
-  };
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (!token) return;
+
+    const fetchDashboard = async () => {
+      try {
+        const res = await fetch(`${backendUrl}/dashboard`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.detail || "Failed to fetch");
+
+        setHistory(data.history);
+        setTotalRuns(data.total_runs);
+        setAvgScore(data.average_score);
+      } catch (err) {
+        setError(err.message || "Something went wrong");
+      }
+    };
+
+    fetchDashboard();
+  }, [token]);
+
+  if (!token) return <p>Please login first.</p>;
 
   return (
-    <div style={{ padding: "20px", color: "white", background: "#0f172a", minHeight: "100vh" }}>
-      <h1>AURA Dashboard 📊</h1>
+    <div style={{ maxWidth: "800px", margin: "50px auto" }}>
+      <h2>Dashboard</h2>
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-      {/* ========================= */}
-      {/* 📈 STRATEGY PERFORMANCE */}
-      {/* ========================= */}
-      <h2>Strategy Performance</h2>
+      <p>Total Runs: {totalRuns}</p>
+      <p>Average Score: {avgScore.toFixed(2)}</p>
 
-      <LineChart width={600} height={300} data={data}>
-        <CartesianGrid stroke="#444" />
-        <XAxis dataKey="name" />
-        <YAxis />
-        <Tooltip />
-        <Line type="monotone" dataKey="score" stroke="#38bdf8" />
-      </LineChart>
-
-      {/* ========================= */}
-      {/* 🎯 RISK VS SCORE */}
-      {/* ========================= */}
-      <h2>Risk vs Score</h2>
-
-      <ScatterChart width={600} height={300}>
-        <CartesianGrid />
-        <XAxis dataKey="x" name="Risk Level" />
-        <YAxis dataKey="y" name="Score" />
-        <Tooltip cursor={{ strokeDasharray: "3 3" }} />
-        <Scatter data={scatter} fill="#22c55e" />
-      </ScatterChart>
-
+      <h3>History</h3>
+      {history.length === 0 && <p>No simulations yet.</p>}
+      <ul>
+        {history.map((sim, idx) => (
+          <li key={idx}>
+            <strong>Goal:</strong> {sim.goal} |{" "}
+            <strong>Best Strategy:</strong>{" "}
+            {sim.result?.best_strategy?.name || "N/A"} |{" "}
+            <strong>Score:</strong>{" "}
+            {sim.result?.best_strategy?.final_score ?? "N/A"}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

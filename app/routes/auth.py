@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import JSONResponse
 from app.db.database import database
 from app.models.user import users
 from pydantic import BaseModel
@@ -9,20 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
 import os
 
-router = APIRouter(prefix="/auth")
-
-from fastapi import Request
-
-@router.options("/{rest_of_path:path}")
-async def preflight_handler(rest_of_path: str, request: Request):
-    return JSONResponse(
-        content={"message": "OK"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-        },
-    )
+router = APIRouter()
 
 # ==========================
 # SECURITY CONFIG
@@ -32,7 +18,6 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 2
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-
 security = HTTPBearer()
 
 # ==========================
@@ -42,17 +27,14 @@ class AuthRequest(BaseModel):
     username: str
     password: str
 
-
 # ==========================
 # PASSWORD HELPERS
 # ==========================
 def hash_password(password: str):
     return pwd_context.hash(password)
 
-
 def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
-
 
 # ==========================
 # TOKEN CREATION
@@ -64,10 +46,6 @@ def create_token(username: str):
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-
-# ==========================
-# ✅ PREFLIGHT HANDLER (CRITICAL FIX)
-# ==========================
 # ==========================
 # REGISTER
 # ==========================
@@ -94,7 +72,6 @@ async def register(data: AuthRequest):
 
     return {"message": "User created successfully"}
 
-
 # ==========================
 # LOGIN
 # ==========================
@@ -112,28 +89,20 @@ async def login(data: AuthRequest):
 
     token = create_token(user["username"])
 
-    return {
-        "access_token": token,
-        "token_type": "bearer"
-    }
-
+    return {"access_token": token, "token_type": "bearer"}
 
 # ==========================
-# CURRENT USER (PROTECTED)
+# CURRENT USER
 # ==========================
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
     token = credentials.credentials
-
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
-
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-
         return {"username": username}
-
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
