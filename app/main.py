@@ -1,10 +1,8 @@
-# app/main.py
 import os
 from dotenv import load_dotenv
 
-# Load .env file for local development
+# Load environment variables
 load_dotenv()
-
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +13,20 @@ from pydantic import BaseModel
 # CREATE APP
 # ==========================
 app = FastAPI(title="AURA AI")
+
+# ==========================
+# ✅ CORS (MUST BE RIGHT AFTER APP CREATION)
+# ==========================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",   # React dev
+        "https://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ==========================
 # DATABASE
@@ -33,7 +45,6 @@ from app.lab.explanation_engine import explanation_engine
 from app.lab.agent_engine import agent_engine
 from app.lab.debate_engine import debate_engine
 
-
 # ==========================
 # ROUTERS
 # ==========================
@@ -42,34 +53,18 @@ from app.api.strategy_routes import router as strategy_router
 from app.routes import simulation
 from app.api.marketplace_routes import router as marketplace_router
 
-
-app.include_router(marketplace_router)
 app.include_router(auth_router)
 app.include_router(strategy_router)
 app.include_router(simulation.router)
-
-# ==========================
-# MIDDLEWARE
-# ==========================
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # your frontend
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
+app.include_router(marketplace_router)
 
 # ==========================
 # STARTUP / SHUTDOWN
 # ==========================
 @app.on_event("startup")
 async def startup():
-    metadata.create_all(engine)   # ✅ create tables
-    await database.connect()      # ✅ connect DB
+    metadata.create_all(engine)
+    await database.connect()
 
 
 @app.on_event("shutdown")
@@ -115,7 +110,7 @@ async def simulate(
     world["market"] = scenario["market"]
 
     sim_result["results"] = world_engine.apply_world(
-        sim_result["results"], world
+        sim_result.get("results", []), world
     )
 
     # 🔹 Memory patterns
@@ -135,27 +130,25 @@ async def simulate(
     agent_steps = agent_engine.run_agents(sim_result)
 
     # 🔹 FINAL DECISION
-    # 🔹 FINAL DECISION (FIXED — SINGLE SOURCE OF TRUTH)
-
-    # Ensure every strategy has final_score
     for s in sim_result["results"]:
-     if "final_score" not in s:
-        s["final_score"] = s.get("score", 0)
+        if "final_score" not in s:
+            s["final_score"] = s.get("score", 0)
 
-    # Sort results (best first)
     sim_result["results"] = sorted(
-    sim_result["results"],
-    key=lambda x: x["final_score"],
-    reverse=True
-)
+        sim_result["results"],
+        key=lambda x: x["final_score"],
+        reverse=True
+    )
 
-    # Select best strategy
-    best = sim_result["results"][0]
+    best = sim_result["results"][0] if sim_result["results"] else {}
 
     sim_result["best_strategy"] = best
 
-    # 🔹 Explanation
-    explanation = explanation_engine.generate(best, sim_result["results"])
+    # 🔹 Explanation (FIXED)
+    explanation = explanation_engine.generate({
+        "results": sim_result["results"],
+        "best_strategy": best
+    })
 
     # 🔹 Save history
     await history_engine.save(username, {
@@ -241,7 +234,7 @@ async def get_sim(sim_id: int, current_user=Depends(get_current_user)):
     history = await history_engine.get(current_user["username"])
 
     for sim in history:
-        if sim["id"] == sim_id:
+        if sim.get("id") == sim_id:
             return sim
 
     return {"error": "Simulation not found"}
@@ -274,4 +267,3 @@ def get_me(current_user=Depends(get_current_user)):
 @app.get("/test-auth")
 def test_auth(current_user=Depends(get_current_user)):
     return {"user": current_user}
-

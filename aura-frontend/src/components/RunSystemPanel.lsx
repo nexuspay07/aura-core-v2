@@ -1,0 +1,45 @@
+import React, { useState } from "react";
+
+export default function RunSystemPanel() {
+  const [goal, setGoal] = useState("");
+  const [response, setResponse] = useState("");
+
+  const handleRun = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return alert("You must log in first!");
+
+    try {
+      const res = await fetch("https://aura-ai.onrender.com/system/run_stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`, // ✅ include token
+        },
+        body: JSON.stringify({ goal }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Error ${res.status}: ${text}`);
+      }
+
+      const data = await res.json();
+      setResponse(JSON.stringify(data, null, 2));
+    } catch (err) {
+      setResponse(err.message);
+    }
+  };
+
+  return (
+    <div>
+      <input
+        type="text"
+        placeholder="Enter goal"
+        value={goal}
+        onChange={(e) => setGoal(e.target.value)}
+      />
+      <button onClick={handleRun}>Run System</button>
+      <pre>{response}</pre>
+    </div>
+  );
+}

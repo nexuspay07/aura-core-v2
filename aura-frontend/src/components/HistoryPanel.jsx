@@ -6,7 +6,7 @@ export default function HistoryPanel() {
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    fetch("http://aura-ai.onrender.com/lab/history", {
+    fetch("https://aura-ai.onrender.com/lab/history", {
       headers: {
         Authorization: `Bearer ${token}`
       }

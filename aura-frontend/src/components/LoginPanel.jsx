@@ -1,83 +1,79 @@
 import React, { useState } from "react";
 
-export default function LoginPanel() {
-  const [isRegister, setIsRegister] = useState(false);
+export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  const endpoint = isRegister ? "register" : "login";
+  const backendUrl = "https://aura-ai.onrender.com"; // change if needed
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Register user
+  const handleRegister = async () => {
+    setError("");
+    setMessage("");
 
     try {
-      const response = await fetch(`http://aura-ai.onrender.com/${endpoint}`, {
+      const res = await fetch(`${backendUrl}/register`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ username, password })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.detail || "Error");
-        return;
-      }
-
-      // ✅ REGISTER → just switch to login
-      if (isRegister) {
-        alert("Account created. Please login.");
-        setIsRegister(false);
-        return;
-      }
-
-      // ✅ LOGIN → save token
-      localStorage.setItem("token", data.access_token);
-
-      // ✅ redirect
-      window.location.href = "/";
-
+      if (!res.ok) throw new Error(`Register failed: ${res.status}`);
+      const data = await res.json();
+      setMessage("Registration successful! You can now login.");
     } catch (err) {
-      console.error(err);
-      alert("Server connection failed");
+      setError(err.message);
+    }
+  };
+
+  // Login user
+  const handleLogin = async () => {
+    setError("");
+    setMessage("");
+
+    try {
+      const res = await fetch(`${backendUrl}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!res.ok) throw new Error(`Login failed: ${res.status}`);
+      const data = await res.json();
+      localStorage.setItem("token", data.access_token);
+      setMessage("Login successful!");
+    } catch (err) {
+      setError(err.message);
     }
   };
 
   return (
-    <div style={{ padding: "40px", textAlign: "center" }}>
-      <h2>{isRegister ? "Register" : "Login"}</h2>
-
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <br /><br />
-
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <br /><br />
-
-        <button type="submit">
-          {isRegister ? "Create Account" : "Login"}
+    <div style={{ maxWidth: "400px", margin: "50px auto", textAlign: "center" }}>
+      <h2>Login / Register</h2>
+      <input
+        type="text"
+        placeholder="Username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        style={{ width: "100%", marginBottom: "10px", padding: "8px" }}
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        style={{ width: "100%", marginBottom: "10px", padding: "8px" }}
+      />
+      <div>
+        <button onClick={handleRegister} style={{ marginRight: "10px" }}>
+          Register
         </button>
-      </form>
-
-      <br />
-
-      <button onClick={() => setIsRegister(!isRegister)}>
-        {isRegister
-          ? "Already have an account? Login"
-          : "Create new account"}
-      </button>
+        <button onClick={handleLogin}>Login</button>
+      </div>
+      {error && <p style={{ color: "red" }}>{error}</p>}
+      {message && <p style={{ color: "green" }}>{message}</p>}
     </div>
   );
 }
