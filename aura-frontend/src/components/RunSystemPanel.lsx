@@ -9,7 +9,7 @@ export default function RunSystemPanel() {
     if (!token) return alert("You must log in first!");
 
     try {
-      const res = await fetch("https://aura-ai.onrender.com/system/run_stream", {
+      const res = await fetch("https://aura-ai-core.onrender.com/system/run_stream", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

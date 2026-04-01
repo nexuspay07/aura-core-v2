@@ -1,25 +1,44 @@
+// File: aura-frontend/src/components/AuthPanel.jsx
+
 import React, { useState } from "react";
+
 const AuthPanel = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  // ✅ central backend URL
+  const backendUrl =
+    process.env.REACT_APP_API_URL ||
+    "https://aura-ai-core.onrender.com";
+
   const login = async () => {
-    const formData = new URLSearchParams();
-    formData.append("username", username);
-    formData.append("password", password);
+    try {
+      const response = await fetch(`${backendUrl}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username,
+          password,
+        }),
+      });
 
-    const response = await fetch("http://aura-ai.onrender.com/auth/login", {
-      method: "POST",
-      body: formData
-    });
+      const data = await response.json();
 
-    const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Login failed");
+      }
 
-    if (data.access_token) {
       localStorage.setItem("token", data.access_token);
-      alert("Login successful");
-    } else {
-      alert("Login failed");
+      alert("Login successful ✅");
+
+      // optional reload
+      window.location.reload();
+
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
     }
   };
 

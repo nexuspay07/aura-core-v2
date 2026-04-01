@@ -4,6 +4,8 @@ import os
 from sqlalchemy import create_engine, MetaData
 from databases import Database
 from dotenv import load_dotenv
+import os
+print("DATABASE_URL =", os.getenv("DATABASE_URL"))
 
 # Load environment variables from .env (for local dev)
 load_dotenv()

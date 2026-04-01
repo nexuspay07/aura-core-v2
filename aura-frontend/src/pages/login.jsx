@@ -1,12 +1,19 @@
+// File: aura-frontend/src/pages/Login.jsx
+
 import React, { useState } from "react";
 
 const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  // ✅ single backend source
+  const backendUrl =
+    process.env.REACT_APP_API_URL ||
+    "https://aura-ai-core.onrender.com";
+
   const handleLogin = async () => {
     try {
-      const res = await fetch("http://aura-ai.onrender.com/auth/login", {
+      const res = await fetch(`${backendUrl}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -21,18 +28,20 @@ const Login = () => {
       console.log("LOGIN RESPONSE:", data);
 
       if (!res.ok) {
-        alert(data.detail || "Login failed");
-        return;
+        throw new Error(data.detail || "Login failed");
       }
 
-      // ✅ SAVE TOKEN (VERY IMPORTANT)
+      // ✅ SAVE TOKEN
       localStorage.setItem("token", data.access_token);
 
-      alert("Login successful");
+      alert("Login successful ✅");
+
+      // optional: redirect instead of just staying
+      window.location.href = "/";
 
     } catch (err) {
       console.error(err);
-      alert("Server error");
+      alert(err.message || "Server error");
     }
   };
 

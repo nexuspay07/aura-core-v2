@@ -6,7 +6,7 @@ export default function Dashboard() {
   const [avgScore, setAvgScore] = useState(0);
   const [error, setError] = useState("");
 
-  const backendUrl = "https://aura-ai.onrender.com";
+  const backendUrl = "https://aura-ai-core.onrender.com";
 
   const token = localStorage.getItem("token");
 

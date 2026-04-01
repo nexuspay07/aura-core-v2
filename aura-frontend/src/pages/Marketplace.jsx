@@ -28,8 +28,8 @@ export default function Marketplace() {
   const loadStrategies = async () => {
     try {
       const [all, mine] = await Promise.all([
-        authFetch("http://aura-ai.onrender.com/marketplace/all"),
-        authFetch("http://aura-ai.onrender.com/marketplace/mine")
+        authFetch("https://aura-ai-core.onrender.com/marketplace/all"),
+        authFetch("https://aura-ai-core.onrender.com/marketplace/mine")
       ]);
 
       setStrategies(all);
@@ -59,7 +59,7 @@ export default function Marketplace() {
   // =============================
   const deleteStrategy = async (id) => {
     try {
-      await fetch(`http://aura-ai.onrender.com/marketplace/${id}`, {
+      await fetch(`https://aura-ai-core.onrender.com/marketplace/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`
