@@ -1,7 +1,7 @@
-// src/components/SimulationPanel.jsx
+// File: aura-frontend/src/components/SimulationPanel.jsx
 
-import React, { useState } from "react";
-import { useEffect } from "react";
+import React, { useState, useEffect } from "react";
+
 export default function SimulationPanel() {
   const [scenario, setScenario] = useState("");
   const [logs, setLogs] = useState([]);
@@ -14,34 +14,39 @@ export default function SimulationPanel() {
 
   const [pendingStep, setPendingStep] = useState(null);
 
+  // ✅ SINGLE SOURCE OF TRUTH
+  const backendUrl =
+    process.env.REACT_APP_API_URL ||
+    "https://aura-ai-core.onrender.com";
+
   useEffect(() => {
-  const saved = localStorage.getItem("reuse_strategy");
+    const saved = localStorage.getItem("reuse_strategy");
 
-  if (saved) {
-    const strategy = JSON.parse(saved);
-
-    setScenario(strategy.goal || "");
-    localStorage.removeItem("reuse_strategy");
-  }
-}, []);
+    if (saved) {
+      const strategy = JSON.parse(saved);
+      setScenario(strategy.goal || "");
+      localStorage.removeItem("reuse_strategy");
+    }
+  }, []);
 
   // =============================
-  // AUTH FETCH (SAFE)
+  // AUTH FETCH
   // =============================
-  const authFetch = async (url, options = {}) => {
+  const authFetch = async (endpoint, options = {}) => {
     const token = localStorage.getItem("token");
 
-    const res = await fetch(url, {
+    const res = await fetch(`${backendUrl}${endpoint}`, {
       ...options,
       headers: {
         ...(options.headers || {}),
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
+        "Content-Type": "application/json",
+      },
     });
 
     if (!res.ok) {
-      throw new Error("Request failed");
+      const text = await res.text();
+      throw new Error(text || "Request failed");
     }
 
     return res;
@@ -59,16 +64,12 @@ export default function SimulationPanel() {
   // APPROVE / REJECT
   // =============================
   const approveStep = async () => {
-    await authFetch("http://aura-ai.onrender.com/control/approve", {
-      method: "POST"
-    });
+    await authFetch("/control/approve", { method: "POST" });
     setPendingStep(null);
   };
 
   const rejectStep = async () => {
-    await authFetch("http://aura-ai.onrender.com/control/reject", {
-      method: "POST"
-    });
+    await authFetch("/control/reject", { method: "POST" });
     setPendingStep(null);
   };
 
@@ -85,14 +86,14 @@ export default function SimulationPanel() {
     setResults(null);
 
     try {
-      const res = await authFetch("https://aura-ai.onrender.com/lab/simulate", {
+      const res = await authFetch("/lab/simulate", {
         method: "POST",
         body: JSON.stringify({
           goal: scenario,
           risk_tolerance: risk,
           budget: budget,
-          market: market
-        })
+          market: market,
+        }),
       });
 
       const data = await res.json();
@@ -106,30 +107,29 @@ export default function SimulationPanel() {
   };
 
   // =============================
-  // ✅ SAVE STRATEGY (FIXED)
+  // SAVE STRATEGY
   // =============================
   const saveStrategy = async (strategy) => {
     try {
-      const res = await authFetch("http://aura-ai.onrender.com/marketplace/save", {
+      const res = await authFetch("/marketplace/save", {
         method: "POST",
         body: JSON.stringify({
           name: strategy.name,
           goal: scenario,
-          ...strategy
-        })
+          ...strategy,
+        }),
       });
 
       const data = await res.json();
-      alert(data.message || "Saved to marketplace ✅");
-
+      alert(data.message || "Saved ✅");
     } catch (err) {
       console.error(err);
-      alert("Failed to save strategy ❌");
+      alert("Save failed ❌");
     }
   };
 
   // =============================
-  // LIVE SIMULATION (WITH UX FIX)
+  // LIVE SIMULATION
   // =============================
   const runLiveSimulation = async () => {
     if (!scenario.trim()) {
@@ -142,14 +142,14 @@ export default function SimulationPanel() {
     setPendingStep(null);
 
     try {
-      const response = await authFetch("http://aura-ai.onrender.com/system/run_stream", {
+      const response = await authFetch("/system/run_stream", {
         method: "POST",
         body: JSON.stringify({
           goal: scenario,
           risk_tolerance: risk,
           budget: budget,
-          market: market
-        })
+          market: market,
+        }),
       });
 
       const reader = response.body.getReader();
@@ -169,16 +169,14 @@ export default function SimulationPanel() {
         const cleanLines = lines
           .map(l => l.trim())
           .filter(l => l !== "")
-          .map(line => {
-            // 🔥 UX FIX HERE
-            if (line.includes("Arbitration selected")) {
-              return line.replace(
-                "Arbitration selected",
-                "Arbitration suggestion (intermediate)"
-              );
-            }
-            return line;
-          });
+          .map(line =>
+            line.includes("Arbitration selected")
+              ? line.replace(
+                  "Arbitration selected",
+                  "Arbitration suggestion (intermediate)"
+                )
+              : line
+          );
 
         cleanLines.forEach(line => {
           if (line.includes("⚠️ Waiting for human approval")) {
@@ -188,7 +186,6 @@ export default function SimulationPanel() {
 
         setLogs(prev => [...prev, ...cleanLines]);
       }
-
     } catch (err) {
       console.error(err);
       setLogs(prev => [...prev, "❌ Stream error"]);
@@ -218,128 +215,60 @@ export default function SimulationPanel() {
 
       <br /><br />
 
-      {/* CONTROLS */}
-      <div>
-        <label>Risk: {risk}</label>
-        <br />
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.1"
-          value={risk}
-          onChange={(e) => setRisk(parseFloat(e.target.value))}
-        />
+      <label>Risk: {risk}</label>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.1"
+        value={risk}
+        onChange={(e) => setRisk(parseFloat(e.target.value))}
+      />
 
-        <br /><br />
+      <br /><br />
 
-        <label>Budget:</label>
-        <br />
-        <input
-          type="number"
-          value={budget}
-          onChange={(e) => setBudget(Number(e.target.value))}
-        />
+      <label>Budget:</label>
+      <input
+        type="number"
+        value={budget}
+        onChange={(e) => setBudget(Number(e.target.value))}
+      />
 
-        <br /><br />
+      <br /><br />
 
-        <label>Market:</label>
-        <br />
-        <select value={market} onChange={(e) => setMarket(e.target.value)}>
-          <option value="low">Low</option>
-          <option value="normal">Normal</option>
-          <option value="high">High</option>
-        </select>
-      </div>
+      <label>Market:</label>
+      <select value={market} onChange={(e) => setMarket(e.target.value)}>
+        <option value="low">Low</option>
+        <option value="normal">Normal</option>
+        <option value="high">High</option>
+      </select>
 
-      <br />
+      <br /><br />
 
       <button onClick={runSimulation} disabled={loading}>
         Run Simulation
       </button>
 
-      <button
-        onClick={runLiveSimulation}
-        disabled={loading}
-        style={{ marginLeft: "10px" }}
-      >
-        Run Live Simulation 🔥
+      <button onClick={runLiveSimulation} disabled={loading}>
+        Run Live 🔥
       </button>
 
-      <button
-        onClick={() => window.location.href = "/marketplace"}
-        style={{ marginLeft: "10px" }}
-      >
-        Open Marketplace
-      </button>
+      {loading && <p>Running...</p>}
 
-      {loading && <p>Running simulation...</p>}
-
-      {/* HUMAN CONTROL */}
-      {pendingStep && (
-        <div style={{
-          marginTop: "20px",
-          padding: "15px",
-          border: "2px solid orange",
-          borderRadius: "10px"
-        }}>
-          <h3>⚠️ AI Waiting for Approval</h3>
-
-          <button onClick={approveStep} style={{ marginRight: "10px" }}>
-            ✅ Approve
-          </button>
-
-          <button onClick={rejectStep}>
-            ❌ Reject
-          </button>
-        </div>
-      )}
-
-      {/* LIVE LOGS */}
       <h2>Live Logs</h2>
       <div style={{
         background: "#111",
         color: "#0f0",
         padding: "10px",
         height: "250px",
-        overflowY: "scroll",
-        whiteSpace: "pre-line"
-      }}>
-        {logs.map((log, i) => (
-          <div key={i}>{log}</div>
-        ))}
-      </div>
-
-      {/* RESULTS */}
-      <h2>Results</h2>
-
-      {results && results.results && (
-        <div>
-          {results.results.map((strategy, i) => (
-            <div key={i} style={{
-              border: "1px solid gray",
-              padding: "10px",
-              marginBottom: "10px"
-            }}>
-              <p><b>{strategy.name}</b></p>
-              <p>Score: {strategy.final_score || strategy.score}</p>
-
-              <button onClick={() => saveStrategy(strategy)}>
-                💾 Save Strategy
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <pre style={{
-        background: "#f4f4f4",
-        padding: "10px",
-        borderRadius: "5px",
-        maxHeight: "300px",
         overflowY: "scroll"
       }}>
-        {results ? JSON.stringify(results, null, 2) : "No results yet"}
+        {logs.map((log, i) => <div key={i}>{log}</div>)}
+      </div>
+
+      <h2>Results</h2>
+      <pre>
+        {results ? JSON.stringify(results, null, 2) : "No results"}
       </pre>
     </div>
   );

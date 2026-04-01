@@ -1,3 +1,4 @@
+// File location: aura-frontend/src/components/LoginPanel.jsx
 import React, { useState } from "react";
 
 export default function LoginPanel() {
@@ -6,7 +7,8 @@ export default function LoginPanel() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
 
-  const backendUrl = "https://aura-ai.onrender.com";
+  // ✅ Use environment variable for backend URL
+  const backendUrl = process.env.REACT_APP_API_URL || "https://aura-ai-core.onrender.com";
 
   const handleSubmit = async () => {
     const endpoint = isLogin ? "/auth/login" : "/auth/register";
@@ -17,10 +19,7 @@ export default function LoginPanel() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          username,
-          password,
-        }),
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await res.json();
@@ -29,16 +28,15 @@ export default function LoginPanel() {
         throw new Error(data.detail || "Something went wrong");
       }
 
-      // LOGIN
       if (isLogin) {
+        // Store token for future requests
         localStorage.setItem("token", data.access_token);
         setMessage("Login successful");
         window.location.reload();
       } else {
-        setMessage("Registered successfully, now login");
+        setMessage("Registered successfully, please login");
         setIsLogin(true);
       }
-
     } catch (err) {
       setMessage(err.message);
     }

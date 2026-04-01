@@ -1,20 +1,28 @@
+// File: aura-frontend/src/components/HistoryPanel.jsx
+
 import React, { useEffect, useState } from "react";
 
 export default function HistoryPanel() {
   const [history, setHistory] = useState([]);
 
+  // ✅ Use environment variable
+  const backendUrl = process.env.REACT_APP_API_URL || "https://aura-ai-core.onrender.com";
+
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    fetch("https://aura-ai.onrender.com/lab/history", {
+    fetch(`${backendUrl}/lab/history`, {
       headers: {
-        Authorization: `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch history");
+        return res.json();
+      })
       .then(data => setHistory(data))
       .catch(err => console.error(err));
-  }, []);
+  }, [backendUrl]);
 
   return (
     <div style={{ marginTop: "30px" }}>
