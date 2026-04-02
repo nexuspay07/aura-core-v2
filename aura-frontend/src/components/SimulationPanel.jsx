@@ -1,5 +1,3 @@
-// File: aura-frontend/src/components/SimulationPanel.jsx
-
 import React, { useState, useEffect } from "react";
 
 export default function SimulationPanel() {
@@ -14,11 +12,12 @@ export default function SimulationPanel() {
 
   const [pendingStep, setPendingStep] = useState(null);
 
-  // ✅ SINGLE SOURCE OF TRUTH
-  const backendUrl =
-    process.env.REACT_APP_API_URL ||
-    "https://aura-ai-core.onrender.com";
+  // ✅ API URL
+  const API = process.env.REACT_APP_API_URL || "";
 
+  // =============================
+  // LOAD SAVED STRATEGY
+  // =============================
   useEffect(() => {
     const saved = localStorage.getItem("reuse_strategy");
 
@@ -35,7 +34,7 @@ export default function SimulationPanel() {
   const authFetch = async (endpoint, options = {}) => {
     const token = localStorage.getItem("token");
 
-    const res = await fetch(`${backendUrl}${endpoint}`, {
+    const res = await fetch(`${API}${endpoint}`, {
       ...options,
       headers: {
         ...(options.headers || {}),
@@ -64,13 +63,21 @@ export default function SimulationPanel() {
   // APPROVE / REJECT
   // =============================
   const approveStep = async () => {
-    await authFetch("/control/approve", { method: "POST" });
-    setPendingStep(null);
+    try {
+      await authFetch("/control/approve", { method: "POST" });
+      setPendingStep(null);
+    } catch (err) {
+      alert("Approve failed");
+    }
   };
 
   const rejectStep = async () => {
-    await authFetch("/control/reject", { method: "POST" });
-    setPendingStep(null);
+    try {
+      await authFetch("/control/reject", { method: "POST" });
+      setPendingStep(null);
+    } catch (err) {
+      alert("Reject failed");
+    }
   };
 
   // =============================
@@ -107,29 +114,7 @@ export default function SimulationPanel() {
   };
 
   // =============================
-  // SAVE STRATEGY
-  // =============================
-  const saveStrategy = async (strategy) => {
-    try {
-      const res = await authFetch("/marketplace/save", {
-        method: "POST",
-        body: JSON.stringify({
-          name: strategy.name,
-          goal: scenario,
-          ...strategy,
-        }),
-      });
-
-      const data = await res.json();
-      alert(data.message || "Saved ✅");
-    } catch (err) {
-      console.error(err);
-      alert("Save failed ❌");
-    }
-  };
-
-  // =============================
-  // LIVE SIMULATION
+  // LIVE SIMULATION (STREAM)
   // =============================
   const runLiveSimulation = async () => {
     if (!scenario.trim()) {
@@ -167,9 +152,9 @@ export default function SimulationPanel() {
         buffer = lines.pop();
 
         const cleanLines = lines
-          .map(l => l.trim())
-          .filter(l => l !== "")
-          .map(line =>
+          .map((l) => l.trim())
+          .filter((l) => l !== "")
+          .map((line) =>
             line.includes("Arbitration selected")
               ? line.replace(
                   "Arbitration selected",
@@ -178,25 +163,22 @@ export default function SimulationPanel() {
               : line
           );
 
-        cleanLines.forEach(line => {
+        cleanLines.forEach((line) => {
           if (line.includes("⚠️ Waiting for human approval")) {
             setPendingStep(true);
           }
         });
 
-        setLogs(prev => [...prev, ...cleanLines]);
+        setLogs((prev) => [...prev, ...cleanLines]);
       }
     } catch (err) {
       console.error(err);
-      setLogs(prev => [...prev, "❌ Stream error"]);
+      setLogs((prev) => [...prev, "❌ Stream error"]);
     }
 
     setLoading(false);
   };
 
-  // =============================
-  // UI
-  // =============================
   return (
     <div style={{ padding: "20px", fontFamily: "Arial" }}>
       <h1>AURA Simulation Lab</h1>
@@ -255,15 +237,27 @@ export default function SimulationPanel() {
 
       {loading && <p>Running...</p>}
 
+      {pendingStep && (
+        <div>
+          <p>⚠️ Awaiting your decision</p>
+          <button onClick={approveStep}>Approve</button>
+          <button onClick={rejectStep}>Reject</button>
+        </div>
+      )}
+
       <h2>Live Logs</h2>
-      <div style={{
-        background: "#111",
-        color: "#0f0",
-        padding: "10px",
-        height: "250px",
-        overflowY: "scroll"
-      }}>
-        {logs.map((log, i) => <div key={i}>{log}</div>)}
+      <div
+        style={{
+          background: "#111",
+          color: "#0f0",
+          padding: "10px",
+          height: "250px",
+          overflowY: "scroll",
+        }}
+      >
+        {logs.map((log, i) => (
+          <div key={i}>{log}</div>
+        ))}
       </div>
 
       <h2>Results</h2>
