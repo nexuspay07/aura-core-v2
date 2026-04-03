@@ -1,19 +1,21 @@
-// File: aura-frontend/src/components/AuthPanel.jsx
-
 import React, { useState } from "react";
 
-const AuthPanel = () => {
+export default function AuthPanel({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // ✅ central backend URL
-  const backendUrl =
-    process.env.REACT_APP_API_URL ||
-    "https://aura-ai-core.onrender.com";
+  const API = process.env.REACT_APP_API_URL;
 
   const login = async () => {
+    if (!username || !password) {
+      return alert("Enter username and password");
+    }
+
+    setLoading(true);
+
     try {
-      const response = await fetch(`${backendUrl}/auth/login`, {
+      const response = await fetch(`${API}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -30,38 +32,72 @@ const AuthPanel = () => {
         throw new Error(data.detail || "Login failed");
       }
 
+      // ✅ store token
       localStorage.setItem("token", data.access_token);
-      alert("Login successful ✅");
 
-      // optional reload
-      window.location.reload();
+      // ✅ notify parent instead of reload
+      if (onLogin) onLogin();
 
     } catch (err) {
       console.error(err);
       alert(err.message);
     }
+
+    setLoading(false);
   };
 
   return (
-    <div style={{ marginBottom: "20px" }}>
-      <h2>Login</h2>
+    <div style={styles.container}>
+      <h2 style={styles.title}>🔐 AURA Login</h2>
 
       <input
+        style={styles.input}
         placeholder="Username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
       />
 
       <input
+        style={styles.input}
         type="password"
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
 
-      <button onClick={login}>Login</button>
+      <button style={styles.button} onClick={login} disabled={loading}>
+        {loading ? "Logging in..." : "Login"}
+      </button>
     </div>
   );
-};
+}
 
-export default AuthPanel;
+const styles = {
+  container: {
+    background: "#0f172a",
+    padding: "20px",
+    borderRadius: "10px",
+    maxWidth: "300px",
+    margin: "20px auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    color: "#e2e8f0",
+  },
+  title: {
+    textAlign: "center",
+  },
+  input: {
+    padding: "10px",
+    borderRadius: "6px",
+    border: "none",
+  },
+  button: {
+    padding: "10px",
+    borderRadius: "6px",
+    background: "#2563eb",
+    color: "white",
+    border: "none",
+    cursor: "pointer",
+  },
+};

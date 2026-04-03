@@ -1,32 +1,41 @@
-const Navbar = () => {
-  return (
-    <div style={{
-      display: "flex",
-      justifyContent: "space-between",
-      padding: "10px 20px",
-      background: "#111",
-      color: "#fff"
-    }}>
-      <h2>AURA AI</h2>
+export default function Navbar({ onLogout }) {
+  const handleLogout = () => {
+    localStorage.removeItem("token");
 
-      <button
-        onClick={() => {
-          localStorage.removeItem("token")
-          window.location.href = "/login"
-        }}
-        style={{
-          padding: "8px 16px",
-          background: "red",
-          color: "white",
-          border: "none",
-          borderRadius: "5px",
-          cursor: "pointer"
-        }}
-      >
+    // ✅ Notify parent instead of forcing page redirect
+    if (onLogout) onLogout();
+  };
+
+  return (
+    <div style={styles.container}>
+      <h2 style={styles.logo}>AURA AI</h2>
+
+      <button style={styles.button} onClick={handleLogout}>
         Logout
       </button>
     </div>
-  )
+  );
 }
 
-export default Navbar
+const styles = {
+  container: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "12px 20px",
+    background: "#020617",
+    color: "#e2e8f0",
+    borderBottom: "1px solid #1e293b",
+  },
+  logo: {
+    margin: 0,
+  },
+  button: {
+    padding: "8px 16px",
+    background: "#dc2626",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+  },
+};

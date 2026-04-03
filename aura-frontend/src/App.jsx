@@ -3,68 +3,86 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
-  Navigate
+  Navigate,
+  useLocation
 } from "react-router-dom";
 
 import SimulationPanel from "./components/SimulationPanel";
 import Marketplace from "./pages/Marketplace";
-import Login from "./components/LoginPanel";
+import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Navbar from "./components/Navbar";
 
 // =============================
 // 🔒 PROTECTED ROUTE
 // =============================
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
-
   return token ? children : <Navigate to="/login" />;
 }
 
-<Route path="/marketplace" element={<Marketplace />} />
+// =============================
+// 🧠 APP LAYOUT (WITH NAVBAR)
+// =============================
+function AppLayout({ children }) {
+  const location = useLocation();
+
+  // hide navbar on login page
+  const hideNavbar = location.pathname === "/login";
+
+  return (
+    <>
+      {!hideNavbar && <Navbar />}
+      {children}
+    </>
+  );
+}
 
 // =============================
-// APP
+// 🚀 APP
 // =============================
 function App() {
   return (
     <Router>
-      <Routes>
+      <AppLayout>
+        <Routes>
 
-        {/* PUBLIC */}
-        <Route path="/login" element={<Login />} />
+          {/* PUBLIC */}
+          <Route path="/login" element={<Login />} />
 
-        {/* PROTECTED */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <SimulationPanel />
-            </ProtectedRoute>
-          }
-        />
+          {/* PROTECTED */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <SimulationPanel />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/marketplace"
-          element={
-            <ProtectedRoute>
-              <Marketplace />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/marketplace"
+            element={
+              <ProtectedRoute>
+                <Marketplace />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* DEFAULT */}
-        <Route path="*" element={<Navigate to="/" />} />
+          {/* DEFAULT */}
+          <Route path="*" element={<Navigate to="/" />} />
 
-      </Routes>
+        </Routes>
+      </AppLayout>
     </Router>
   );
 }

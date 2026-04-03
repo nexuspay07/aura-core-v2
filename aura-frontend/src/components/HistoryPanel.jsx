@@ -1,40 +1,98 @@
-// File: aura-frontend/src/components/HistoryPanel.jsx
-
 import React, { useEffect, useState } from "react";
 
-export default function HistoryPanel() {
+export default function HistoryPanel({ onReuse }) {
   const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // ✅ Use environment variable
-  const backendUrl = process.env.REACT_APP_API_URL || "https://aura-ai-core.onrender.com";
+  const API = process.env.REACT_APP_API_URL;
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const fetchHistory = async () => {
+      const token = localStorage.getItem("token");
 
-    fetch(`${backendUrl}/lab/history`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then(res => {
+      try {
+        const res = await fetch(`${API}/lab/history`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
         if (!res.ok) throw new Error("Failed to fetch history");
-        return res.json();
-      })
-      .then(data => setHistory(data))
-      .catch(err => console.error(err));
-  }, [backendUrl]);
+
+        const data = await res.json();
+        setHistory(data);
+      } catch (err) {
+        console.error(err);
+      }
+
+      setLoading(false);
+    };
+
+    fetchHistory();
+  }, [API]);
 
   return (
-    <div style={{ marginTop: "30px" }}>
-      <h2>📜 History</h2>
+    <div style={styles.container}>
+      <h2 style={styles.title}>📜 History</h2>
 
-      {history.length === 0 && <p>No history yet.</p>}
+      {loading && <p>Loading...</p>}
+
+      {!loading && history.length === 0 && (
+        <p style={styles.empty}>No history yet.</p>
+      )}
 
       {history.map((h, i) => (
-        <div key={i} style={{ marginBottom: "10px" }}>
-          <strong>{h.goal}</strong>
+        <div key={i} style={styles.card}>
+          <div>
+            <strong>{h.goal}</strong>
+          </div>
+
+          <div style={styles.actions}>
+            <button
+              onClick={() => {
+                // Save for reuse in SimulationPanel
+                localStorage.setItem(
+                  "reuse_strategy",
+                  JSON.stringify(h)
+                );
+
+                if (onReuse) onReuse();
+              }}
+            >
+              Reuse
+            </button>
+          </div>
         </div>
       ))}
     </div>
   );
 }
+
+const styles = {
+  container: {
+    marginTop: "30px",
+    background: "#0f172a",
+    padding: "15px",
+    borderRadius: "10px",
+    color: "#e2e8f0",
+  },
+  title: {
+    marginBottom: "10px",
+  },
+  empty: {
+    opacity: 0.6,
+  },
+  card: {
+    background: "#1e293b",
+    padding: "10px",
+    marginBottom: "10px",
+    borderRadius: "6px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  actions: {
+    display: "flex",
+    gap: "10px",
+  },
+};
