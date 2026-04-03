@@ -1,10 +1,9 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -15,13 +14,15 @@ from pydantic import BaseModel
 app = FastAPI(title="AURA AI")
 
 # ==========================
-# ✅ CORS (MUST BE RIGHT AFTER APP CREATION)
+# ✅ CORS (FIXED)
 # ==========================
-from fastapi.middleware.cors import CORSMiddleware
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # later restrict to frontend URL
+    allow_origins=[
+        "*",  # keep for now (safe to tighten later)
+        "http://localhost:3000",
+        "https://aura-frontend-tmsb.onrender.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,7 +48,6 @@ from app.lab.debate_engine import debate_engine
 # ==========================
 # ROUTERS
 # ==========================
-from app.routes.auth import router as auth_router, get_current_user
 from app.api.strategy_routes import router as strategy_router
 from app.routes import simulation
 from app.api.marketplace_routes import router as marketplace_router
@@ -55,7 +55,6 @@ from app.api.marketplace_routes import router as marketplace_router
 app.include_router(strategy_router)
 app.include_router(simulation.router)
 app.include_router(marketplace_router)
-app.include_router(auth_router, prefix="/auth")
 
 # ==========================
 # STARTUP / SHUTDOWN
@@ -65,11 +64,9 @@ async def startup():
     metadata.create_all(engine)
     await database.connect()
 
-
 @app.on_event("shutdown")
 async def shutdown():
     await database.disconnect()
-
 
 # ==========================
 # REQUEST MODEL
@@ -80,6 +77,11 @@ class SimulationRequest(BaseModel):
     budget: int = 10000
     market: str = "normal"
 
+# ==========================
+# SAFE USER (NO LOGIN MODE)
+# ==========================
+async def get_optional_user():
+    return {"username": "guest"}
 
 # ==========================
 # SIMULATION
@@ -87,7 +89,7 @@ class SimulationRequest(BaseModel):
 @app.post("/lab/simulate")
 async def simulate(
     data: SimulationRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_optional_user)
 ):
     scenario = data.dict()
     goal = scenario.get("goal")
@@ -97,38 +99,34 @@ async def simulate(
 
     username = current_user["username"]
 
-    # 🔹 Base simulation
     sim_result = simulation_engine.run_simulation(goal, scenario)
 
-    # 🔹 World modeling
     domain = world_engine.detect_domain(goal)
     world = world_engine.build_world(domain)
 
-    world["risk_tolerance"] = scenario["risk_tolerance"]
-    world["budget"] = scenario["budget"]
-    world["market"] = scenario["market"]
+    world.update({
+        "risk_tolerance": scenario["risk_tolerance"],
+        "budget": scenario["budget"],
+        "market": scenario["market"],
+    })
 
     sim_result["results"] = world_engine.apply_world(
         sim_result.get("results", []), world
     )
 
-    # 🔹 Memory patterns
     patterns = await history_engine.analyze_patterns(username)
 
     for strategy in sim_result["results"]:
         if strategy["name"] in patterns:
             strategy["score"] += patterns[strategy["name"]] * 0.2
 
-    # 🔹 Debate system
     debated_strategies, debates = debate_engine.run_debate(
         sim_result["results"], goal
     )
     sim_result["results"] = debated_strategies
 
-    # 🔹 Multi-agent system
     agent_steps = agent_engine.run_agents(sim_result)
 
-    # 🔹 FINAL DECISION
     for s in sim_result["results"]:
         if "final_score" not in s:
             s["final_score"] = s.get("score", 0)
@@ -141,15 +139,11 @@ async def simulate(
 
     best = sim_result["results"][0] if sim_result["results"] else {}
 
-    sim_result["best_strategy"] = best
-
-    # 🔹 Explanation (FIXED)
     explanation = explanation_engine.generate({
         "results": sim_result["results"],
         "best_strategy": best
     })
 
-    # 🔹 Save history
     await history_engine.save(username, {
         "goal": goal,
         "scenario": scenario,
@@ -169,42 +163,41 @@ async def simulate(
         "domain": domain
     }
 
-
 # ==========================
-# LIVE STREAM
+# STREAM (FIXED)
 # ==========================
 @app.post("/system/run_stream")
 async def run_stream(
     data: SimulationRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_optional_user)
 ):
     async def event_generator():
-        async for step in cognitive_loop.run_simulation_stream(data.dict()):
-            yield step
+        try:
+            async for step in cognitive_loop.run_simulation_stream(data.dict()):
+                yield f"{step}\n"
+        except Exception as e:
+            yield f"❌ Stream error: {str(e)}\n"
 
     return StreamingResponse(event_generator(), media_type="text/plain")
 
-
 # ==========================
-# CONTROL ENDPOINTS
+# CONTROL
 # ==========================
 @app.post("/control/approve")
 async def approve():
     control_engine.approve()
     return {"status": "approved"}
 
-
 @app.post("/control/reject")
 async def reject():
     control_engine.reject()
     return {"status": "rejected"}
 
-
 # ==========================
 # DASHBOARD
 # ==========================
 @app.get("/dashboard")
-async def dashboard(current_user: dict = Depends(get_current_user)):
+async def dashboard(current_user: dict = Depends(get_optional_user)):
     username = current_user["username"]
 
     history = await history_engine.get(username)
@@ -224,28 +217,12 @@ async def dashboard(current_user: dict = Depends(get_current_user)):
         "history": history
     }
 
-
-# ==========================
-# GET SINGLE SIMULATION
-# ==========================
-@app.get("/simulation/{sim_id}")
-async def get_sim(sim_id: int, current_user=Depends(get_current_user)):
-    history = await history_engine.get(current_user["username"])
-
-    for sim in history:
-        if sim.get("id") == sim_id:
-            return sim
-
-    return {"error": "Simulation not found"}
-
-
 # ==========================
 # HISTORY
 # ==========================
 @app.get("/lab/history")
-async def get_history(current_user: dict = Depends(get_current_user)):
+async def get_history(current_user: dict = Depends(get_optional_user)):
     return await history_engine.get(current_user["username"])
-
 
 # ==========================
 # ROOT
@@ -254,19 +231,9 @@ async def get_history(current_user: dict = Depends(get_current_user)):
 def root():
     return {"message": "AURA AI running 🚀"}
 
-
 # ==========================
-# USER INFO
+# TEST
 # ==========================
-@app.get("/users/me")
-def get_me(current_user=Depends(get_current_user)):
-    return current_user
-
-
-@app.get("/test-auth")
-def test_auth(current_user=Depends(get_current_user)):
-    return {"user": current_user}
-
 @app.get("/cors-test")
 def cors_test():
     return {"status": "ok"}
