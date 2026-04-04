@@ -44,6 +44,9 @@ from app.lab.simulation_engine import simulation_engine
 from app.lab.explanation_engine import explanation_engine
 from app.lab.agent_engine import agent_engine
 from app.lab.debate_engine import debate_engine
+from app.routes.stream import router as stream_router
+
+
 
 # ==========================
 # ROUTERS
@@ -55,6 +58,7 @@ from app.api.marketplace_routes import router as marketplace_router
 app.include_router(strategy_router)
 app.include_router(simulation.router)
 app.include_router(marketplace_router)
+app.include_router(stream_router)
 
 # ==========================
 # STARTUP / SHUTDOWN
