@@ -1,22 +1,21 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from app.db.database import database
 from app.models.strategy import strategies
-from app.routes.auth import get_current_user
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
 
 
 # ==========================
-# SAVE STRATEGY
+# SAVE STRATEGY (NO AUTH)
 # ==========================
 @router.post("/save")
-async def save_strategy(data: dict, user=Depends(get_current_user)):
+async def save_strategy(data: dict):
     await database.execute(
         strategies.insert().values(
             name=data.get("name", "Unnamed Strategy"),
             goal=data.get("goal"),
             data=data,
-            owner=user["username"],
+            owner="guest",   # ✅ fallback user
             is_public=1
         )
     )
@@ -33,12 +32,12 @@ async def get_all():
 
 
 # ==========================
-# GET MY STRATEGIES
+# GET MY STRATEGIES (NOW = ALL GUEST)
 # ==========================
 @router.get("/mine")
-async def get_my(user=Depends(get_current_user)):
+async def get_my():
     query = strategies.select().where(
-        strategies.c.owner == user["username"]
+        strategies.c.owner == "guest"
     )
     return await database.fetch_all(query)
 
@@ -53,19 +52,17 @@ async def get_one(strategy_id: int):
 
 
 # ==========================
-# DELETE STRATEGY
+# DELETE STRATEGY (NO AUTH CHECK)
 # ==========================
 @router.delete("/{strategy_id}")
-async def delete(strategy_id: int, user=Depends(get_current_user)):
+async def delete(strategy_id: int):
     query = strategies.select().where(strategies.c.id == strategy_id)
     strategy = await database.fetch_one(query)
 
     if not strategy:
         return {"error": "Not found"}
 
-    if strategy["owner"] != user["username"]:
-        return {"error": "Unauthorized"}
-
+    # ✅ No ownership check (open system)
     await database.execute(
         strategies.delete().where(strategies.c.id == strategy_id)
     )
