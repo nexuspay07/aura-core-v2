@@ -13,18 +13,15 @@ from fastapi import FastAPI
 # CREATE APP
 # ==========================
 app = FastAPI(title="AURA AI")
+print("✅ CORS LOADED SUCCESSFULLY")
 
 # ==========================
 # ✅ CORS (FIXED)
 # ==========================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "*",  # keep for now (safe to tighten later)
-        "http://localhost:3000",
-        "https://aura-frontend-tmsb.onrender.com",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
