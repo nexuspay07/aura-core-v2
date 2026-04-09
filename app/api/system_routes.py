@@ -51,3 +51,11 @@ async def run_system_stream():
             yield f"data: Step {i}\n\n"
             await asyncio.sleep(0.5)
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+@router.get("/history")
+def get_history():
+    return {"message": "history works"}
