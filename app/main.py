@@ -18,14 +18,19 @@ app = FastAPI(title="AURA AI")
 # ==========================
 from fastapi.middleware.cors import CORSMiddleware
 
+origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",  # ✅ ADD THIS
+    "https://aura-frontend-tmsb.onrender.com",  # your deployed frontend
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # later restrict to frontend URL
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # ==========================
 # DATABASE
 # ==========================
