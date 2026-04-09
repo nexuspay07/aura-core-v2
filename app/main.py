@@ -51,7 +51,6 @@ from app.lab.debate_engine import debate_engine
 # ==========================
 # ROUTERS
 # ==========================
-from app.routes.auth import router as auth_router, get_current_user
 from app.api.strategy_routes import router as strategy_router
 from app.routes import simulation
 from app.api.marketplace_routes import router as marketplace_router
@@ -61,7 +60,7 @@ app.include_router(lab_routes.router, prefix="/lab", tags=["Lab"])
 app.include_router(strategy_router)
 app.include_router(simulation.router)
 app.include_router(marketplace_router)
-app.include_router(auth_router, prefix="/auth")
+
 
 # ==========================
 # STARTUP / SHUTDOWN
