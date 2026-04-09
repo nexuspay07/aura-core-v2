@@ -18,10 +18,15 @@ print("✅ CORS LOADED SUCCESSFULLY")
 # ==========================
 # ✅ CORS (FIXED)
 # ==========================
+from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=[
+        "http://localhost:3000",
+        "https://aura-frontend-tmsb.onrender.com",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -239,3 +244,17 @@ def root():
 @app.get("/cors-test")
 def cors_test():
     return {"status": "ok"}
+
+@app.get("/stream")
+async def stream():
+    async def event_generator():
+        while True:
+            yield "data: Hello World\n\n"
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Access-Control-Allow-Origin": "https://aura-frontend-tmsb.onrender.com",  # required
+        },
+    )
