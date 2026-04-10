@@ -54,9 +54,9 @@ from app.lab.debate_engine import debate_engine
 from app.api.strategy_routes import router as strategy_router
 from app.routes import simulation
 from app.api.marketplace_routes import router as marketplace_router
-from app.api import lab_routes
+from app.api.lab_routes import router as lab_router
 
-app.include_router(lab_routes.router, prefix="/lab", tags=["Lab"])
+app.include_router(lab_router, prefix="/lab", tags=["Lab"])
 app.include_router(strategy_router)
 app.include_router(simulation.router)
 app.include_router(marketplace_router)
