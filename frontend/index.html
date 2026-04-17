@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AURA AI</title>
+    <style>
+        body {
+            background: #0b1220;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1 {
+            color: #4fd1c5;
+            margin-top: 0;
+        }
+
+        .app {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        input {
+            padding: 10px;
+            width: 340px;
+            border-radius: 6px;
+            border: none;
+            outline: none;
+        }
+
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .run { background: #16a34a; color: white; }
+        .approve { background: #22c55e; color: white; }
+        .reject { background: #ef4444; color: white; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 16px;
+        }
+
+        #output {
+            background: #111827;
+            padding: 15px;
+            border-radius: 10px;
+            min-height: 420px;
+            max-height: 70vh;
+            overflow-y: auto;
+            font-family: Consolas, monospace;
+            white-space: pre-wrap;
+            border: 1px solid #1f2937;
+        }
+
+        #result {
+            background: #1f2937;
+            padding: 15px;
+            border-radius: 10px;
+            min-height: 220px;
+            border: 1px solid #334155;
+        }
+
+        .muted {
+            color: #94a3b8;
+        }
+
+        .line {
+            margin-bottom: 8px;
+        }
+
+        .tag {
+            font-weight: 700;
+        }
+
+        .start { color: #60a5fa; }
+        .simulation { color: #34d399; }
+        .world { color: #22d3ee; }
+        .debate { color: #fbbf24; }
+        .failure { color: #f87171; }
+        .trust { color: #c084fc; }
+        .decision { color: #4ade80; }
+        .waiting { color: #fb923c; }
+        .approved { color: #4ade80; }
+        .rejected { color: #f87171; }
+        .agent { color: #e5e7eb; }
+        .warning { color: #f59e0b; }
+        .error { color: #ef4444; }
+        .complete { color: #4ade80; }
+
+        .card-title {
+            margin-top: 0;
+            margin-bottom: 12px;
+            color: #4fd1c5;
+        }
+
+        .kv {
+            margin: 6px 0;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            margin-right: 6px;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        .footer-note {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .section-title {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            color: #4fd1c5;
+            font-weight: 700;
+        }
+
+        .next-move {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+<div class="app">
+    <h1>🚀 AURA AI</h1>
+
+    <div class="controls">
+        <input id="goal" placeholder="Enter your goal..." value="" />
+        <button class="run" onclick="runAura()">Run AURA</button>
+        <button class="approve" onclick="approve()">✅ Approve</button>
+        <button class="reject" onclick="reject()">❌ Reject</button>
+    </div>
+
+    <div class="layout">
+        <div id="output"></div>
+        <div id="result">
+            <h2 class="card-title">🏆 Best Strategy</h2>
+            <div class="muted">Run a simulation to see results.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentScenario = null;
+let fetchedFinal = false;
+
+function escapeHtml(str) {
+    return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+}
+
+function logLine(step, message) {
+    const output = document.getElementById("output");
+    const div = document.createElement("div");
+    div.className = "line";
+
+    const tag = document.createElement("span");
+    tag.className = `tag ${step}`;
+    tag.textContent = `[${step.toUpperCase()}] `;
+
+    const text = document.createElement("span");
+    text.textContent = message;
+
+    div.appendChild(tag);
+    div.appendChild(text);
+    output.appendChild(div);
+    output.scrollTop = output.scrollHeight;
+}
+
+function getNextMove(best) {
+    const strategy = (best?.name || "").toLowerCase();
+
+    if (strategy === "aggressive") {
+        return "Move quickly, invest in growth early, and capture market share fast — but monitor risk and cash flow tightly.";
+    }
+
+    if (strategy === "balanced") {
+        return "Validate demand, scale in stages, and reinvest steadily while keeping risk under control.";
+    }
+
+    if (strategy === "conservative") {
+        return "Protect cash, reduce exposure, and grow gradually with strong focus on stability and execution discipline.";
+    }
+
+    return "Execute in measured steps, monitor the market closely, and reassess after each major milestone.";
+}
+
+function setResultWaiting(best) {
+    if (!best) return;
+
+    const result = document.getElementById("result");
+    result.innerHTML = `
+        <h2 class="card-title">🏆 Best Strategy</h2>
+        <div class="kv"><b>Name:</b> ${escapeHtml(best.name ?? "Unknown")}</div>
+        <div class="kv"><b>Score:</b> ${Number(best.final_score ?? best.score ?? 0).toFixed(2)}</div>
+        <div class="kv"><b>Trust:</b> ${escapeHtml(best.trust_score ?? "N/A")}</div>
+        <div class="kv"><b>Risk:</b> ${escapeHtml(best.risk ?? "unknown")}</div>
+        <div class="footer-note">Waiting for approval before final full result is loaded.</div>
+    `;
+}
+
+function setFinalResult(data) {
+    const best = data.best_strategy || {};
+    const alternative = data.alternative_strategy || null;
+    const explanation = Array.isArray(data.explanation) ? data.explanation : [];
+    const failures = Array.isArray(data.failures) ? data.failures : [];
+    const fail = failures.find(f => f.strategy === best.name);
+    const nextMove = getNextMove(best);
+
+    const explanationHtml = explanation.length
+        ? explanation.map(item => `<div class="kv">• ${escapeHtml(item)}</div>`).join("")
+        : `<div class="muted">No explanation available.</div>`;
+
+    const failureHtml = fail
+        ? `
+            <div class="kv"><b>Failure Probability:</b> ${escapeHtml(fail.failure_probability)}%</div>
+            <div class="kv"><b>Failure Reasons:</b></div>
+            <div>
+                ${(fail.reasons && fail.reasons.length)
+                    ? fail.reasons.map(r => `<span class="pill">${escapeHtml(r)}</span>`).join("")
+                    : `<span class="muted">None listed</span>`
+                }
+            </div>
+          `
+        : `<div class="muted">No failure analysis found for best strategy.</div>`;
+
+    const result = document.getElementById("result");
+    result.innerHTML = `
+        <h2 class="card-title">🏆 Best Strategy</h2>
+        <div class="kv"><b>Name:</b> ${escapeHtml(best.name ?? "Unknown")}</div>
+        <div class="kv"><b>Score:</b> ${Number(best.final_score ?? best.score ?? 0).toFixed(2)}</div>
+        <div class="kv"><b>Trust:</b> ${escapeHtml(best.trust_score ?? "N/A")}</div>
+        <div class="kv"><b>Risk:</b> ${escapeHtml(best.risk ?? "unknown")}</div>
+        <div class="kv"><b>Confidence:</b> ${escapeHtml(best.confidence_score ?? best.confidence ?? "N/A")}</div>
+
+        <div class="section-title">Risk Analysis</div>
+        ${failureHtml}
+
+        <div class="section-title">Explanation</div>
+        ${explanationHtml}
+
+        <div class="section-title">Next Move</div>
+<div class="next-move">${escapeHtml(nextMove)}</div>
+
+<div class="section-title">Predicted Outcome</div>
+<div class="next-move">
+    Reward: ${escapeHtml(best.outcome?.reward || "N/A")} <br>
+    Risk: ${escapeHtml(best.outcome?.risk || "N/A")} <br>
+    Timeframe: ${escapeHtml(best.outcome?.timeframe || "N/A")}
+</div>
+
+${alternative ? `
+    <div class="section-title">Alternative Strategy</div>
+    <div class="next-move">
+        <b>${escapeHtml(alternative.name || "Unknown")}</b><br>
+        Score: ${Number(alternative.final_score ?? alternative.score ?? 0).toFixed(2)}<br>
+        Decision Score: ${escapeHtml(alternative.decision_score ?? "N/A")}<br>
+        Trust: ${escapeHtml(alternative.trust_score ?? "N/A")}<br>
+        Risk: ${escapeHtml(alternative.risk ?? "unknown")}
+    </div>
+` : ""}
+    `;
+}
+
+if (data.alternative_strategy) {
+    const alt = data.alternative_strategy;
+
+    html += `
+    <div class="section-title">Alternative Option</div>
+    <div class="next-move">
+        ${escapeHtml(alt.name)} — Score: ${alt.final_score.toFixed(2)}<br>
+        Lower risk: ${alt.risk}<br>
+        Trust: ${alt.trust_score}
+    </div>
+
+    <div class="section-title">Action Plan</div>
+<div class="next-move">
+    ${best.action_plan?.map(step => "• " + step).join("<br>") || "N/A"}
+</div>
+    `;
+}
+
+<div id="chatBox" style="background:#111827; padding:15px; border-radius:10px; margin-bottom:16px;">
+    <h2 class="card-title">💬 AURA Conversation</h2>
+    <input id="chatInput" placeholder="Ask AURA something..." style="width:70%;" />
+    <button class="run" onclick="sendChat()">Ask AURA</button>
+    <div id="chatOutput" style="margin-top:12px;"></div>
+</div>
+
+async function sendChat() {
+    const input = document.getElementById("chatInput").value;
+    const output = document.getElementById("chatOutput");
+
+    output.innerHTML = "<div class='muted'>Thinking...</div>";
+
+    try {
+        const res = await fetch("http://127.0.0.1:8002/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: input })
+        });
+
+        const data = await res.json();
+
+        if (data.type === "clarification") {
+            output.innerHTML = `
+                <div><b>AURA:</b> ${data.response}</div>
+            `;
+            return;
+        }
+
+        if (data.type === "conversation") {
+            output.innerHTML = `
+                <div><b>AURA:</b> ${data.response.summary}</div>
+                <div style="margin-top:8px;" class="muted">${data.response.detail}</div>
+            `;
+            return;
+        }
+
+        output.innerHTML = "<div class='error'>Unexpected response.</div>";
+    } catch (err) {
+        output.innerHTML = `<div class='error'>${err.message}</div>`;
+    }
+}
+
+async function fetchFinalResult() {
+    if (!currentScenario || fetchedFinal) return;
+    fetchedFinal = true;
+
+    try {
+        const res = await fetch("http://127.0.0.1:8002/lab/simulate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(currentScenario)
+        });
+
+        if (!res.ok) {
+            throw new Error(`Final result request failed: ${res.status}`);
+        }
+
+        const data = await res.json();
+        setFinalResult(data);
+    } catch (err) {
+        logLine("error", "Failed to fetch final result: " + err.message);
+    }
+}
+
+async function runAura() {
+    const output = document.getElementById("output");
+    const result = document.getElementById("result");
+
+    output.innerHTML = "";
+    fetchedFinal = false;
+
+    result.innerHTML = `
+        <h2 class="card-title">🏆 Best Strategy</h2>
+        <div class="muted">Streaming in progress...</div>
+    `;
+
+    currentScenario = {
+        goal: document.getElementById("goal").value,
+        risk_tolerance: 0.7,
+        budget: 5000,
+        market: "competitive"
+    };
+
+    try {
+        const response = await fetch("http://127.0.0.1:8002/system/run_stream", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(currentScenario)
+        });
+
+        if (!response.ok || !response.body) {
+            throw new Error(`Stream request failed: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            let lines = buffer.split("\n");
+            buffer = lines.pop();
+
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+
+                try {
+                    const data = JSON.parse(line);
+
+                    if (data.step && data.message) {
+                        logLine(data.step, data.message);
+                    }
+
+                    if (data.step === "decision" && data.data) {
+                        setResultWaiting(data.data);
+                    }
+
+                    if (data.step === "approved") {
+                        fetchFinalResult();
+                    }
+
+                    if (data.step === "rejected") {
+                        result.innerHTML = `
+                            <h2 class="card-title">🏆 Best Strategy</h2>
+                            <div class="muted">Simulation was rejected by the user.</div>
+                        `;
+                    }
+
+                } catch (e) {
+                    // intentionally ignore malformed partial lines
+                    // this keeps raw debug junk out of the UI
+                }
+            }
+        }
+
+    } catch (err) {
+        logLine("error", err.message);
+    }
+}
+
+async function approve() {
+    try {
+        const res = await fetch("http://127.0.0.1:8002/control/approve", {
+            method: "POST"
+        });
+
+        if (!res.ok) {
+            throw new Error(`Approve failed: ${res.status}`);
+        }
+    } catch (err) {
+        logLine("error", err.message);
+    }
+}
+
+async function reject() {
+    try {
+        const res = await fetch("http://127.0.0.1:8002/control/reject", {
+            method: "POST"
+        });
+
+        if (!res.ok) {
+            throw new Error(`Reject failed: ${res.status}`);
+        }
+    } catch (err) {
+        logLine("error", err.message);
+    }
+}
+</script>
+</body>
+</html>
