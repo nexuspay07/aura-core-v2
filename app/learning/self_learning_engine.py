@@ -1,62 +1,37 @@
+# app/learning/self_learning_engine.py
+
 class SelfLearningEngine:
-
     def __init__(self):
-        self.history = []
+        self.memory = []
 
-    # ==========================================
-    # RECORD EXPERIENCE
-    # ==========================================
-    def record(self, goal, plan, results):
-        success_score = self.evaluate(results)
+    # ==========================
+    # 🔥 NEW METHOD (FIX ERROR)
+    # ==========================
+    def learn_from_execution(self, goal, sim_result):
+        try:
+            best = sim_result.get("best_strategy", {})
 
-        entry = {
-            "goal": goal,
-            "plan": plan,
-            "results": results,
-            "success_score": success_score
-        }
+            learning_entry = {
+                "goal": goal,
+                "strategy": best.get("name"),
+                "score": best.get("final_score"),
+                "confidence": best.get("confidence"),
+                "timestamp": __import__("datetime").datetime.utcnow().isoformat()
+            }
 
-        self.history.append(entry)
+            self.memory.append(learning_entry)
 
-        return entry
+            print(f"[LEARNING] Stored experience: {learning_entry}")
 
-    # ==========================================
-    # EVALUATE PERFORMANCE
-    # ==========================================
-    def evaluate(self, results):
-        if not results:
-            return 0
+        except Exception as e:
+            print(f"[LEARNING ERROR] {str(e)}")
 
-        success_count = sum(1 for r in results if r.get("status") == "completed")
-
-        return success_count / len(results)
-
-    # ==========================================
-    # GET BEST STRATEGY
-    # ==========================================
-    def get_best_strategy(self, goal):
-        relevant = [h for h in self.history if h["goal"] == goal]
-
-        if not relevant:
-            return None
-
-        best = max(relevant, key=lambda x: x["success_score"])
-        return best["plan"]
-
-    # ==========================================
-    # GET INSIGHTS
-    # ==========================================
-    def get_insights(self):
-        if not self.history:
-            return {"message": "No learning data yet"}
-
-        avg_score = sum(h["success_score"] for h in self.history) / len(self.history)
-
-        return {
-            "total_runs": len(self.history),
-            "average_success": avg_score
-        }
+    # ==========================
+    # OPTIONAL: GET MEMORY
+    # ==========================
+    def get_memory(self):
+        return self.memory
 
 
-# ✅ GLOBAL INSTANCE
+# ✅ INSTANCE
 self_learning_engine = SelfLearningEngine()
