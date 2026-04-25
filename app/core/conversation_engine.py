@@ -114,13 +114,17 @@ class ConversationEngine:
             }
         )
 
+        preferences = self.extract_preferences(goal)
+
         prediction = prediction_engine.predict_outcome(
-            business_intent,
-            name,
-            {
-                "risk": risk
-            }
-        )
+    business_intent,
+    name,
+    {
+        "risk": risk,
+        "budget": preferences.get("budget"),
+        "market": preferences.get("market")
+    }
+)
 
         simple_advice = business_strategy.get(
             "advice",

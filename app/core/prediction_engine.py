@@ -24,51 +24,93 @@ class PredictionEngine:
     def predict_outcome(self, intent: str, strategy: str, scenario: dict):
         intent = intent.lower()
 
+        risk = scenario.get("risk", "medium")
+        budget = scenario.get("budget", 10000)
+        market = scenario.get("market", "normal")
+
+        # --------------------------
+        # Adjust multipliers
+        # --------------------------
+        budget_factor = 1.0
+        if budget < 5000:
+            budget_factor = 0.8
+        elif budget > 30000:
+            budget_factor = 1.2
+
+        risk_factor = 1.0
+        if risk == "low":
+            risk_factor = 0.85
+        elif risk == "high":
+            risk_factor = 1.15
+
+        market_factor = 1.0
+        if market == "competitive":
+            market_factor = 0.8
+        elif market == "monopoly":
+            market_factor = 1.25
+
+        final_factor = budget_factor * risk_factor * market_factor
+
+        # --------------------------
+        # PRICING
+        # --------------------------
         if "pricing" in intent:
+            base_low, base_high = 20, 30
+
+            low = round(base_low * final_factor)
+            high = round(base_high * final_factor)
+
             return {
-                "impact": "Lower pricing may increase conversions by 20–30%",
+                "impact": f"Expected conversion increase ~{low}–{high}%",
                 "tradeoff": "Lower margins in early stages",
                 "timeframe": "Short-term (1–4 weeks)",
-                "confidence": 0.7
+                "confidence": 0.7,
+                "context_note": f"Based on your budget (${budget}) and {market} market conditions"
             }
 
+        # --------------------------
+        # GROWTH
+        # --------------------------
         if "growth" in intent:
+            base_low, base_high = 2, 3
+
+            low = round(base_low * final_factor, 1)
+            high = round(base_high * final_factor, 1)
+
             return {
-                "impact": "Focused growth strategy can improve efficiency by 2–3x",
-                "tradeoff": "Slower expansion initially while testing",
+                "impact": f"Growth efficiency improvement ~{low}–{high}x",
+                "tradeoff": "Slower early scaling while testing",
                 "timeframe": "Medium-term (1–3 months)",
-                "confidence": 0.65
+                "confidence": 0.65,
+                "context_note": f"Adjusted for budget ${budget} and {market} competition"
             }
 
+        # --------------------------
+        # COST
+        # --------------------------
         if "cost" in intent or "expenses" in intent:
+            base_low, base_high = 20, 40
+
+            low = round(base_low * final_factor)
+            high = round(base_high * final_factor)
+
             return {
-                "impact": "Reducing expenses can extend runway by 20–40%",
-                "tradeoff": "May reduce operational capacity",
-                "timeframe": "Immediate to short-term",
-                "confidence": 0.75
+                "impact": f"Runway extension ~{low}–{high}%",
+                "tradeoff": "Reduced operational capacity",
+                "timeframe": "Immediate",
+                "confidence": 0.75,
+                "context_note": f"Based on current cost sensitivity and budget ${budget}"
             }
 
-        if "hiring" in intent:
-            return {
-                "impact": "Delaying hiring until demand is proven can protect cash flow",
-                "tradeoff": "You may grow slower if workload increases quickly",
-                "timeframe": "Short to medium-term",
-                "confidence": 0.65
-            }
-
-        if "market" in intent:
-            return {
-                "impact": "Starting with a narrow niche can improve early traction",
-                "tradeoff": "Limits your initial audience size",
-                "timeframe": "Medium-term (1–3 months)",
-                "confidence": 0.6
-            }
-
+        # --------------------------
+        # DEFAULT
+        # --------------------------
         return {
-            "impact": "This decision may improve stability and reduce risk",
-            "tradeoff": "May limit aggressive growth opportunities",
+            "impact": "Moderate improvement expected depending on execution",
+            "tradeoff": "Balanced risk vs reward",
             "timeframe": "Medium-term",
-            "confidence": 0.5
+            "confidence": 0.6,
+            "context_note": f"General estimate for {market} conditions"
         }
 
 
