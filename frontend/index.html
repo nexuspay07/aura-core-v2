@@ -228,6 +228,18 @@ async function sendMessage() {
                 <div class="card">
                     <b>🧠 Decision Insight</b><br><br>
 
+                    <b>Expected Impact:</b><br>
+${brief.expected_impact || "N/A"}<br><br>
+
+<b>Trade-off:</b><br>
+${brief.tradeoff || "N/A"}<br><br>
+
+<b>Timeframe:</b><br>
+${brief.timeframe || "N/A"}<br><br>
+
+<b>Confidence:</b><br>
+${Math.round((brief.confidence || 0) * 100)}%<br><br>
+
                     <b>Recommended Move:</b><br>
                     ${brief.recommended_move || "N/A"}<br><br>
 
