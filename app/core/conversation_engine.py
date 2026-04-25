@@ -103,7 +103,7 @@ class ConversationEngine:
         risk = best.get("risk", "medium")
         clean_goal = self.clean_goal_text(goal)
 
-        business_intent = business_domain_engine.detect_business_intent(goal)
+        business_intent = business_domain_engine.detect_subdomain(goal)
 
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
