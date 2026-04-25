@@ -124,12 +124,14 @@ class ConversationEngine:
             "Only scale after proof"
         ])
 
+        best_move = next_steps[0] if next_steps else "Start small and test"
+
         decision_brief = {
-            "recommended_move": next_steps[0] if next_steps else "Start with a small test",
+            "recommended_move": best_move,
             "why_this": (
-    f"This approach works because it balances growth and risk.\n"
-    f"It gives you a higher chance of success without overcommitting resources early."
-),
+                "This approach works because it balances growth and risk. "
+                "It gives you a higher chance of success without overcommitting resources early."
+            ),
             "main_risk": self._main_risk_message(risk),
             "watch_metric": self._watch_metric(business_intent),
             "fallback_move": self._fallback_move(name)
@@ -144,9 +146,9 @@ class ConversationEngine:
                 memory_note = "Since you usually prefer faster growth, "
 
         summary = (
-    f"{memory_note}{simple_advice}\n\n"
-    f"👉 Best move: {next_steps[0] if next_steps else 'Start small and test'}"
-)
+            f"{memory_note}{simple_advice}\n\n"
+            f"👉 Best move: {best_move}"
+        )
 
         detail = (
             f"For your goal — {clean_goal} — AURA recommends a {name.lower()} approach."
@@ -185,40 +187,40 @@ class ConversationEngine:
 
     def _main_risk_message(self, risk: str):
         if risk == "high":
-            return "The main risk is moving too fast before the business has enough proof."
+            return "You may spend too much or move too fast before proving that customers actually want it."
 
         if risk == "low":
-            return "The main risk is growing too slowly and missing opportunities."
+            return "You may grow too slowly and allow competitors or opportunities to pass you."
 
-        return "You may spend money before confirming real demand, which can lead to losses."
+        return "You may spend time and money before confirming real demand."
 
     def _watch_metric(self, business_intent: str):
         if business_intent == "pricing":
-            return "conversion rate"
+            return "How many people actually buy after seeing your price"
 
         if business_intent == "growth":
-            return "customer acquisition cost"
+            return "How much it costs to get one real customer"
 
         if business_intent == "cost":
-            return "monthly expenses"
+            return "Whether monthly expenses are going down without hurting sales"
 
         if business_intent == "acquisition":
-            return "number of qualified leads"
+            return "How many qualified leads turn into real customers"
 
         if business_intent == "hiring":
-            return "revenue per employee"
+            return "Whether the new hire increases output or revenue"
 
         if business_intent == "market_entry":
-            return "early customer demand"
+            return "Whether early customers show real demand"
 
-        return "how many people actually buy or show real interest"
+        return "Whether people show real interest or actually buy"
 
     def _fallback_move(self, strategy_name: str):
         if strategy_name == "Aggressive":
-            return "If results are unstable, slow down and switch to a balanced approach."
+            return "If results are unstable, slow down and test with a smaller budget."
 
         if strategy_name == "Conservative":
-            return "If progress is too slow, test one slightly faster growth channel."
+            return "If progress is too slow, test one faster growth channel without risking too much money."
 
         return "If results are unclear, reduce spending and run a smaller experiment."
 
