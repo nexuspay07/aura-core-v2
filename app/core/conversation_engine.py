@@ -103,6 +103,7 @@ class ConversationEngine:
         clean_goal = self.clean_goal_text(goal)
 
         business_intent = business_domain_engine.detect_business_intent(goal)
+
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
             {
@@ -122,6 +123,17 @@ class ConversationEngine:
             "Measure the result",
             "Only scale after proof"
         ])
+
+        decision_brief = {
+            "recommended_move": next_steps[0] if next_steps else "Start with a small test",
+            "why_this": (
+                f"AURA selected the {name.lower()} approach because it had the strongest balance "
+                f"between expected outcome, risk, trust, and failure probability."
+            ),
+            "main_risk": self._main_risk_message(risk),
+            "watch_metric": self._watch_metric(business_intent),
+            "fallback_move": self._fallback_move(name)
+        }
 
         memory_note = ""
         if profile and profile.get("interaction_count", 0) >= 2:
@@ -155,6 +167,7 @@ class ConversationEngine:
             "risk_profile": risk,
             "business_intent": business_intent,
             "caution": self._risk_caution(risk),
+            "decision_brief": decision_brief,
             "advanced_details": advanced_details
         }
 
@@ -166,6 +179,45 @@ class ConversationEngine:
             return "This path is safer, but growth may be slower."
 
         return "This path balances growth and risk."
+
+    def _main_risk_message(self, risk: str):
+        if risk == "high":
+            return "The main risk is moving too fast before the business has enough proof."
+
+        if risk == "low":
+            return "The main risk is growing too slowly and missing opportunities."
+
+        return "The main risk is spending time and money before the idea is clearly validated."
+
+    def _watch_metric(self, business_intent: str):
+        if business_intent == "pricing":
+            return "conversion rate"
+
+        if business_intent == "growth":
+            return "customer acquisition cost"
+
+        if business_intent == "cost":
+            return "monthly expenses"
+
+        if business_intent == "acquisition":
+            return "number of qualified leads"
+
+        if business_intent == "hiring":
+            return "revenue per employee"
+
+        if business_intent == "market_entry":
+            return "early customer demand"
+
+        return "customer response"
+
+    def _fallback_move(self, strategy_name: str):
+        if strategy_name == "Aggressive":
+            return "If results are unstable, slow down and switch to a balanced approach."
+
+        if strategy_name == "Conservative":
+            return "If progress is too slow, test one slightly faster growth channel."
+
+        return "If results are unclear, reduce spending and run a smaller experiment."
 
 
 conversation_engine = ConversationEngine()
