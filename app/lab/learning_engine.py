@@ -11,7 +11,6 @@ class LearningEngine:
         budget = scenario.get("budget", 10000)
         market = scenario.get("market", "normal")
 
-        # 🔹 Normalize context
         risk_level = "high_risk" if risk > 0.6 else "low_risk"
         budget_level = "high_budget" if budget > 8000 else "low_budget"
 
@@ -47,14 +46,11 @@ class LearningEngine:
                 context_scores[key] += score
                 context_counts[key] += 1
 
-        # ==========================
-        # 📊 NORMALIZE
-        # ==========================
         learned_patterns = {}
 
         for key in context_scores:
             avg_score = context_scores[key] / context_counts[key]
-            learned_patterns[key] = avg_score * self.learning_rate
+            learned_patterns[key] = round(avg_score * self.learning_rate, 4)
 
         return learned_patterns
 
@@ -65,11 +61,15 @@ class LearningEngine:
         for strat in strategies:
             key = self.build_context_key(strat["name"], scenario)
 
-            if key in patterns:
-                strat["score"] += patterns[key]
+            bonus = patterns.get(key, 0)
+
+            strat["learning_bonus"] = round(bonus, 4)
+            strat["learning_context_key"] = key
+
+            if bonus:
+                strat["score"] = strat.get("score", 0) + bonus
 
         return strategies
 
 
-# ✅ instance
 learning_engine = LearningEngine()
