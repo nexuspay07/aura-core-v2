@@ -115,14 +115,16 @@ class ConversationEngine:
         )
 
         preferences = self.extract_preferences(goal)
+        budget = preferences.get("budget", 10000)
+        market = preferences.get("market", "normal")
 
         prediction = prediction_engine.predict_outcome(
     business_intent,
     name,
     {
         "risk": risk,
-        "budget": preferences.get("budget"),
-        "market": preferences.get("market")
+        "budget": budget,
+        "market": market
     }
 )
 
