@@ -72,11 +72,11 @@
         }
 
         .section {
-    margin-top: 15px;
-    font-size: 14px;
-    color: #9ca3af;
-    line-height: 1.5;
-}
+            margin-top: 15px;
+            font-size: 14px;
+            color: #9ca3af;
+            line-height: 1.5;
+        }
 
         .card {
             background: #111827;
@@ -84,14 +84,6 @@
             border-radius: 10px;
             margin-top: 15px;
             border: 1px solid #1f2937;
-        }
-
-        .examples {
-            background: #0b1220;
-            padding: 10px 20px;
-            color: #9ca3af;
-            font-size: 13px;
-            border-top: 1px solid #1f2937;
         }
 
         ul {
@@ -104,23 +96,21 @@
 
 <header>
     <div style="font-size:22px; color:#4fd1c5; font-weight:bold;">
-    🚀 AURA — Business Decision Assistant
-</div>
+        🚀 AURA — Business Decision Assistant
+    </div>
 
-<div style="color:#9ca3af; font-size:14px; margin-top:5px;">
-    Get clear, actionable advice for your business decisions.
+    <div style="color:#9ca3af; font-size:14px; margin-top:5px;">
+        Get clear, actionable advice for your business decisions.
 
-    <br><br>
-    Try asking:
-    <br>• How should I price my product?
-    <br>• What is the safest way to start a business?
-    <br>• How do I grow without losing money?
-</div>
+        <br><br>
+        Try asking:
+        <br>• How should I price my product?
+        <br>• What is the safest way to start a business?
+        <br>• How do I grow without losing money?
+    </div>
 </header>
 
 <div id="chat"></div>
-
-</div>
 
 <div id="input-area">
     <input id="message" placeholder="e.g. I want to start a business with low risk..." />
@@ -139,6 +129,8 @@ function addMessage(text, type) {
 
     chat.appendChild(msg);
     chat.scrollTop = chat.scrollHeight;
+
+    return msg;
 }
 
 function renderProfile(profile) {
@@ -167,93 +159,59 @@ function renderProfile(profile) {
     `;
 }
 
-async function sendMessage() {
-    const input = document.getElementById("message");
-    const text = input.value.trim();
+function renderDecisionResponse(r, profile) {
+    const adv = r.advanced_details || {};
+    const brief = r.decision_brief || {};
 
-    if (!text) return;
+    return `
+        <b>${r.summary || ""}</b>
 
-    addMessage(text, "user");
-    input.value = "";
-
-    const responseBox = document.createElement("div");
-    responseBox.className = "message bot";
-    responseBox.innerHTML = "<b>🧠 AURA is thinking...</b><br>";
-    document.getElementById("chat").appendChild(responseBox);
-
-    try {
-        const res = await fetch("https://aura-ai-core-oeae.onrender.com/chat", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-                message: text,
-                session_id: sessionId
-            })
-        });
-
-        const data = await res.json();
-
-        let responseHTML = "";
-
-        if (data.type === "clarification") {
-            responseHTML = `
-                <b>🤔 Clarification</b><br>
-                <div class="section">${data.response}</div>
-            `;
-        }
-
-        if (!data.decision_brief || Object.keys(data.decision_brief).length === 0) {
-    document.getElementById("response").innerHTML = `
-        <div class="response-box">
-            ${data.summary.replace(/\n/g, "<br>")}
+        <div class="section">
+            ${r.detail || ""}
         </div>
-    `;
-    return;
-}
 
-        else if (data.type === "conversation") {
-            const r = data.response;
-            const adv = r.advanced_details || {};
-            const brief = r.decision_brief || {};
-
-            responseHTML = `
-                <b>${r.summary}</b>
-
-                <div class="section">
-                    ${r.detail}
-                </div>
-
+        ${
+            (r.next_steps || []).length
+            ? `
                 <div class="section">
                     <b>What to do next:</b>
                     <ul>
                         ${(r.next_steps || []).map(s => `<li>${s}</li>`).join("")}
                     </ul>
                 </div>
+            `
+            : ""
+        }
 
-                <div class="section">
-                    💡 ${r.caution}
-                </div>
+        ${
+            r.caution
+            ? `<div class="section">💡 ${r.caution}</div>`
+            : ""
+        }
 
+        ${
+            Object.keys(brief).length
+            ? `
                 <div class="card">
                     <b>🧠 Decision Insight</b><br><br>
 
                     <b>Expected Impact:</b><br>
-${brief.expected_impact || "N/A"}<br><br>
+                    ${brief.expected_impact || "N/A"}<br><br>
 
-<b>Trade-off:</b><br>
-${brief.tradeoff || "N/A"}<br><br>
+                    <b>Trade-off:</b><br>
+                    ${brief.tradeoff || "N/A"}<br><br>
 
-<b>Timeframe:</b><br>
-${brief.timeframe || "N/A"}<br><br>
+                    <b>Timeframe:</b><br>
+                    ${brief.timeframe || "N/A"}<br><br>
 
-<b>Confidence:</b><br>
-${Math.round((brief.confidence || 0) * 100)}%<br><br>
+                    <b>Confidence:</b><br>
+                    ${Math.round((brief.confidence || 0) * 100)}%<br><br>
 
                     <b>Recommended Move:</b><br>
                     ${brief.recommended_move || "N/A"}<br><br>
 
                     <b>Context:</b><br>
-${brief.context_note || "General estimate"}<br><br>
+                    ${brief.context_note || "General estimate"}<br><br>
 
                     <b>Why this works:</b><br>
                     ${brief.why_this || "N/A"}<br><br>
@@ -281,8 +239,43 @@ ${brief.context_note || "General estimate"}<br><br>
                     <b>Trust Score:</b> ${adv.trust_score ?? "N/A"}<br>
                     <b>Failure Probability:</b> ${adv.failure_probability ?? "N/A"}%<br>
                 </div>
+            `
+            : ""
+        }
 
-                ${renderProfile(data.profile)}
+        ${renderProfile(profile)}
+    `;
+}
+
+async function sendMessage() {
+    const input = document.getElementById("message");
+    const text = input.value.trim();
+
+    if (!text) return;
+
+    addMessage(text, "user");
+    input.value = "";
+
+    const responseBox = addMessage("<b>🧠 AURA is thinking...</b><br>", "bot");
+
+    try {
+        const res = await fetch("https://aura-ai-core-oeae.onrender.com/chat", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                message: text,
+                session_id: sessionId
+            })
+        });
+
+        const data = await res.json();
+
+        let responseHTML = "";
+
+        if (data.type === "clarification") {
+            responseHTML = `
+                <b>🤔 Clarification</b><br>
+                <div class="section">${data.response}</div>
             `;
         }
 
@@ -326,6 +319,23 @@ ${brief.context_note || "General estimate"}<br><br>
                 </div>
 
                 ${renderProfile(data.profile)}
+            `;
+        }
+
+        else if (data.type === "conversation") {
+            const r = data.response || {};
+
+            responseHTML = renderDecisionResponse(r, data.profile);
+        }
+
+        else if (data.summary) {
+            responseHTML = `
+                <b>${data.summary.replace(/\n/g, "<br>")}</b>
+                ${
+                    data.detail
+                    ? `<div class="section">${data.detail}</div>`
+                    : ""
+                }
             `;
         }
 
