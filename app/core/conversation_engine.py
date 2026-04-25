@@ -1,65 +1,172 @@
-class ConversationEngine:
-    def detect_intent(self, message: str):
-        message_lower = message.lower()
+from app.domains.business.business_domain_engine import business_domain_engine
 
-        if any(word in message_lower for word in ["start", "grow", "scale", "business", "startup"]):
+
+class ConversationEngine:
+
+    def detect_intent(self, message: str):
+        m = message.lower()
+
+        if any(x in m for x in [
+            "pain", "fever", "cough", "headache", "fatigue",
+            "shortness of breath", "dizziness", "symptom", "medical", "health"
+        ]):
+            return "healthcare_strategy"
+
+        if any(x in m for x in [
+            "grow", "startup", "business", "company", "scale",
+            "customers", "revenue", "pricing", "hire", "market"
+        ]):
             return "business_strategy"
 
-        if any(word in message_lower for word in ["invest", "portfolio", "money", "finance", "budget"]):
+        if any(x in m for x in [
+            "invest", "money", "portfolio", "budget", "finance", "returns"
+        ]):
             return "finance_strategy"
-
-        if any(word in message_lower for word in ["help", "what should i do", "advice"]):
-            return "advice"
 
         return "general"
 
     def needs_clarification(self, message: str):
-        short_message = len(message.strip().split()) <= 3
-        vague_terms = ["grow business", "make money", "help me", "improve things"]
-
-        if short_message:
-            return True
-
-        if message.lower().strip() in vague_terms:
-            return True
-
-        return False
+        return len(message.strip().split()) <= 3
 
     def build_clarification_question(self, intent: str):
         if intent == "business_strategy":
-            return "Do you want fast growth, low-risk growth, or long-term stable growth?"
+            return "Do you want fast growth, low-risk growth, or long-term stability?"
+
+        if intent == "healthcare_strategy":
+            return "What symptom are you experiencing and how severe is it?"
 
         if intent == "finance_strategy":
-            return "Are you trying to grow money safely, aggressively, or with balanced risk?"
+            return "Are you looking for safer returns, balanced growth, or aggressive upside?"
 
-        return "Can you give me a bit more detail about your goal?"
+        return "Can you clarify your goal?"
 
-    def extract_goal(self, message: str):
-        return message.strip()
+    def detect_business_subdomain(self, message: str):
+        return business_domain_engine.detect_subdomain(message)
 
-    def build_conversational_response(self, goal: str, best_strategy: dict, explanation: list):
-        strategy_name = best_strategy.get("name", "Unknown")
-        risk = best_strategy.get("risk", "unknown")
-        next_move = ""
+    def clean_goal_text(self, goal: str):
+        cleaned = goal.strip()
 
-        if strategy_name == "Aggressive":
-            next_move = "move quickly, invest in growth, and act before competitors react"
-        elif strategy_name == "Balanced":
-            next_move = "scale carefully, validate what works, and grow without losing control"
-        elif strategy_name == "Conservative":
-            next_move = "protect cash, reduce risk, and grow in a stable way"
+        prefixes = [
+            "I want to ",
+            "i want to ",
+            "I need to ",
+            "i need to ",
+            "I would like to ",
+            "i would like to ",
+        ]
 
-        summary = (
-            f"For your goal '{goal}', AURA recommends a {risk}-risk {strategy_name.lower()} strategy. "
-            f"The main idea is to {next_move}."
+        for prefix in prefixes:
+            if cleaned.startswith(prefix):
+                cleaned = cleaned.replace(prefix, "", 1).strip()
+
+        return cleaned
+
+    def extract_preferences(self, message: str):
+        m = message.lower()
+
+        preferences = {
+            "risk_tolerance": 0.5,
+            "budget": 10000,
+            "market": "normal"
+        }
+
+        if "low risk" in m or "safe" in m or "conservative" in m:
+            preferences["risk_tolerance"] = 0.2
+        elif "high risk" in m or "aggressive" in m or "fast growth" in m:
+            preferences["risk_tolerance"] = 0.8
+        elif "balanced" in m or "moderate risk" in m:
+            preferences["risk_tolerance"] = 0.5
+
+        if "competitive" in m:
+            preferences["market"] = "competitive"
+        elif "monopoly" in m:
+            preferences["market"] = "monopoly"
+
+        if "small budget" in m or "low budget" in m:
+            preferences["budget"] = 3000
+        elif "large budget" in m or "big budget" in m:
+            preferences["budget"] = 50000
+
+        return preferences
+
+    def build_conversational_response(
+        self,
+        goal: str,
+        best: dict,
+        explanation: list,
+        profile: dict | None = None
+    ):
+        name = best.get("name", "Balanced")
+        risk = best.get("risk", "medium")
+        action_plan = best.get("action_plan", [])
+        clean_goal = self.clean_goal_text(goal)
+
+        if name == "Conservative":
+            simple_advice = (
+                f"If you're trying to {clean_goal}, the safest approach is to start small and control your costs. "
+                "Test your idea with a few customers first before investing heavily. "
+                "This helps you learn what works without risking too much upfront."
+            )
+
+        elif name == "Aggressive":
+            simple_advice = (
+                f"If you're trying to {clean_goal}, a faster approach is to move quickly and push for growth early. "
+                "You can test and scale at the same time, but you need to be comfortable with higher risk."
+            )
+
+        else:
+            simple_advice = (
+                f"If you're trying to {clean_goal}, a balanced approach works best. "
+                "Grow steadily while testing demand, controlling costs, and improving step by step."
+            )
+
+        next_steps = action_plan if action_plan else [
+            "Start with one small test",
+            "Measure the result",
+            "Only scale after proof"
+        ]
+
+        memory_note = ""
+        if profile and profile.get("interaction_count", 0) >= 2:
+            preferred_risk = profile.get("preferred_risk")
+            if preferred_risk == "low":
+                memory_note = "Since you usually prefer safer decisions, "
+            elif preferred_risk == "high":
+                memory_note = "Since you usually prefer faster growth, "
+
+        summary = f"{memory_note}{simple_advice}"
+
+        detail = (
+            f"For your goal — {clean_goal} — AURA recommends a {name.lower()} approach."
         )
 
-        detail = explanation[0] if explanation else "AURA selected this based on overall risk-adjusted performance."
+        advanced_details = {
+            "strategy": name,
+            "risk": risk,
+            "final_score": best.get("final_score"),
+            "decision_score": best.get("decision_score"),
+            "trust_score": best.get("trust_score"),
+            "failure_probability": best.get("failure_probability"),
+            "explanation": explanation
+        }
 
         return {
             "summary": summary,
-            "detail": detail
+            "detail": detail,
+            "next_steps": next_steps,
+            "risk_profile": risk,
+            "caution": self._risk_caution(risk),
+            "advanced_details": advanced_details
         }
+
+    def _risk_caution(self, risk: str):
+        if risk == "high":
+            return "This path can grow fast, but it needs strong risk control."
+
+        if risk == "low":
+            return "This path is safer, but growth may be slower."
+
+        return "This path balances growth and risk."
 
 
 conversation_engine = ConversationEngine()
