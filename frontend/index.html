@@ -323,10 +323,18 @@ async function sendMessage() {
         }
 
         else if (data.type === "conversation") {
-            const r = data.response || {};
+    const r = data.response || {};
 
-            responseHTML = renderDecisionResponse(r, data.profile);
-        }
+    if (!r.decision_brief || Object.keys(r.decision_brief).length === 0) {
+        responseHTML = `
+            <b>${(r.summary || "").replace(/\n/g, "<br>")}</b>
+            <div class="section">${r.detail || ""}</div>
+            ${renderProfile(data.profile)}
+        `;
+    } else {
+        responseHTML = renderDecisionResponse(r, data.profile);
+    }
+}
 
         else if (data.summary) {
             responseHTML = `
