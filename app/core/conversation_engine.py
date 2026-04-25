@@ -138,6 +138,25 @@ class ConversationEngine:
 
         business_intent = business_domain_engine.detect_subdomain(goal)
 
+        # --------------------------
+# CONTEXT EXTRACTION
+# --------------------------
+        preferences = self.extract_preferences(goal)
+
+        missing = self.missing_context(preferences)
+
+# 🔥 SMART QUESTION TRIGGER
+        if missing:
+         return {
+        "summary": self.build_context_question(missing),
+        "detail": "AURA needs more information before making a decision.",
+        "next_steps": [],
+        "risk_profile": "unknown",
+        "business_intent": business_intent,
+        "caution": "",
+        "decision_brief": {},
+    }
+
         # CONTEXT
         preferences = self.extract_preferences(goal)
         budget = preferences.get("budget", 10000)
