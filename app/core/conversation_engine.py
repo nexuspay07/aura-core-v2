@@ -1,5 +1,6 @@
 from app.domains.business.business_domain_engine import business_domain_engine
 from app.domains.business.business_strategy_engine import business_strategy_engine
+from app.core.prediction_engine import prediction_engine
 
 
 class ConversationEngine:
@@ -113,6 +114,14 @@ class ConversationEngine:
             }
         )
 
+        prediction = prediction_engine.predict_outcome(
+            business_intent,
+            name,
+            {
+                "risk": risk
+            }
+        )
+
         simple_advice = business_strategy.get(
             "advice",
             "Start small, validate your idea, and grow based on real demand."
@@ -134,7 +143,11 @@ class ConversationEngine:
             ),
             "main_risk": self._main_risk_message(risk),
             "watch_metric": self._watch_metric(business_intent),
-            "fallback_move": self._fallback_move(name)
+            "fallback_move": self._fallback_move(name),
+            "expected_impact": prediction.get("impact"),
+            "tradeoff": prediction.get("tradeoff"),
+            "timeframe": prediction.get("timeframe"),
+            "confidence": prediction.get("confidence")
         }
 
         memory_note = ""
