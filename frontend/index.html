@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <head>
     <meta charset="UTF-8">
     <title>AURA AI Chat</title>
 
@@ -16,19 +15,9 @@
             margin: 0;
         }
 
-        .card {
-    background: #111827;
-    padding: 15px;
-    border-radius: 10px;
-    margin-top: 20px;
-}
-
         header {
             padding: 15px;
             background: #111827;
-            color: #4fd1c5;
-            font-size: 20px;
-            font-weight: bold;
         }
 
         #chat {
@@ -39,14 +28,14 @@
 
         .message {
             margin-bottom: 15px;
-            max-width: 70%;
+            max-width: 75%;
             padding: 12px;
             border-radius: 10px;
         }
 
         .user {
             background: #2563eb;
-            align-self: flex-end;
+            margin-left: auto;
         }
 
         .bot {
@@ -68,7 +57,7 @@
         }
 
         button {
-            margin-left: 10px;
+            margin-top: 10px;
             padding: 10px 15px;
             background: #16a34a;
             border: none;
@@ -77,17 +66,42 @@
             cursor: pointer;
         }
 
+        #send-button {
+            margin-top: 0;
+            margin-left: 10px;
+        }
+
         .section {
             margin-top: 10px;
             font-size: 14px;
             color: #9ca3af;
+        }
+
+        .card {
+            background: #111827;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            border: 1px solid #1f2937;
+        }
+
+        .examples {
+            background: #0b1220;
+            padding: 10px 20px;
+            color: #9ca3af;
+            font-size: 13px;
+            border-top: 1px solid #1f2937;
+        }
+
+        ul {
+            margin-top: 6px;
         }
     </style>
 </head>
 
 <body>
 
-<header style="padding:15px; background:#111827;">
+<header>
     <div style="font-size:22px; color:#4fd1c5; font-weight:bold;">
         🚀 AURA — AI Decision Assistant
     </div>
@@ -98,18 +112,18 @@
 
 <div id="chat"></div>
 
-<div id="input-area">
-    <input id="message" placeholder="e.g. I want to start a business with low risk..." />
-    <button onclick="sendMessage()">Send</button>
-</div>
-
-<div style="margin-top:10px; color:#9ca3af; font-size:13px;">
+<div class="examples">
     Try:
-    <ul style="margin:5px 0 0 15px;">
+    <ul>
         <li>Start a business with low risk</li>
         <li>Grow faster without losing money</li>
         <li>How should I price my product?</li>
     </ul>
+</div>
+
+<div id="input-area">
+    <input id="message" placeholder="e.g. I want to start a business with low risk..." />
+    <button id="send-button" onclick="sendMessage()">Send</button>
 </div>
 
 <script>
@@ -124,6 +138,32 @@ function addMessage(text, type) {
 
     chat.appendChild(msg);
     chat.scrollTop = chat.scrollHeight;
+}
+
+function renderProfile(profile) {
+    if (!profile) return "";
+
+    return `
+        <div class="card">
+            <h3>🧠 AURA Profile</h3>
+
+            <div class="section">
+                Preferred Risk: <b>${profile.preferred_risk ?? "unknown"}</b>
+            </div>
+
+            <div class="section">
+                Preferred Budget: <b>${profile.preferred_budget ?? "unknown"}</b>
+            </div>
+
+            <div class="section">
+                Preferred Domain: <b>${profile.preferred_domain ?? "unknown"}</b>
+            </div>
+
+            <div class="section">
+                Interactions: <b>${profile.interaction_count ?? 0}</b>
+            </div>
+        </div>
+    `;
 }
 
 async function sendMessage() {
@@ -155,73 +195,71 @@ async function sendMessage() {
         let responseHTML = "";
 
         if (data.type === "clarification") {
-            responseHTML = `<b>🤔 Clarification:</b><br>${data.response}`;
+            responseHTML = `
+                <b>🤔 Clarification</b><br>
+                <div class="section">${data.response}</div>
+            `;
         }
 
         else if (data.type === "conversation") {
-    const r = data.response;
-    const adv = r.advanced_details || {};
+            const r = data.response;
+            const adv = r.advanced_details || {};
+            const brief = r.decision_brief || {};
 
-    responseHTML = `
-        <b>${r.summary}</b>
+            responseHTML = `
+                <b>${r.summary}</b>
 
-        <div class="section">
-            ${r.detail}
-        </div>
+                <div class="section">
+                    ${r.detail}
+                </div>
 
-        <div class="section">
-            <b>What to do next:</b>
-            <ul>
-                ${(r.next_steps || []).map(s => `<li>${s}</li>`).join("")}
-            </ul>
-        </div>
+                <div class="section">
+                    <b>What to do next:</b>
+                    <ul>
+                        ${(r.next_steps || []).map(s => `<li>${s}</li>`).join("")}
+                    </ul>
+                </div>
 
-        <div class="section">
-            💡 ${r.caution}
-        </div>
+                <div class="section">
+                    💡 ${r.caution}
+                </div>
 
-        <button onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-            Show reasoning
-        </button>
+                <div class="card">
+                    <b>🧠 Decision Insight</b><br><br>
 
-        <div class="section" style="display:none; margin-top:10px;">
-            <b>Strategy:</b> ${adv.strategy}<br>
-            <b>Risk:</b> ${adv.risk}<br>
-            <b>Score:</b> ${adv.final_score}<br>
-            <b>Decision Score:</b> ${adv.decision_score}<br>
-            <b>Trust Score:</b> ${adv.trust_score}<br>
-            <b>Failure Probability:</b> ${adv.failure_probability}%<br>
-        </div>
-    `;
-}
+                    <b>Recommended Move:</b><br>
+                    ${brief.recommended_move || "N/A"}<br><br>
 
-        if (data.profile) {
-    const p = data.profile;
+                    <b>Why this works:</b><br>
+                    ${brief.why_this || "N/A"}<br><br>
 
-    const profileHTML = `
-        <div class="card" style="margin-top:15px;">
-            <h3>🧠 AURA Profile</h3>
+                    <b>Main Risk:</b><br>
+                    ${brief.main_risk || "N/A"}<br><br>
 
-            <div class="section">
-                Preferred Risk: <b>${p.preferred_risk ?? "unknown"}</b>
-            </div>
+                    <b>What to Watch:</b><br>
+                    ${brief.watch_metric || "N/A"}<br><br>
 
-            <div class="section">
-                Preferred Budget: <b>${p.preferred_budget ?? "unknown"}</b>
-            </div>
+                    <b>Fallback Plan:</b><br>
+                    ${brief.fallback_move || "N/A"}
+                </div>
 
-            <div class="section">
-                Preferred Domain: <b>${p.preferred_domain ?? "unknown"}</b>
-            </div>
+                <button onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                    Show reasoning
+                </button>
 
-            <div class="section">
-                Interactions: <b>${p.interaction_count ?? 0}</b>
-            </div>
-        </div>
-    `;
+                <div class="section" style="display:none; margin-top:10px;">
+                    <b>Strategy:</b> ${adv.strategy ?? "N/A"}<br>
+                    <b>Risk:</b> ${adv.risk ?? "N/A"}<br>
+                    <b>Business Intent:</b> ${adv.business_intent ?? "N/A"}<br>
+                    <b>Score:</b> ${adv.final_score ?? "N/A"}<br>
+                    <b>Decision Score:</b> ${adv.decision_score ?? "N/A"}<br>
+                    <b>Trust Score:</b> ${adv.trust_score ?? "N/A"}<br>
+                    <b>Failure Probability:</b> ${adv.failure_probability ?? "N/A"}%<br>
+                </div>
 
-    responseBox.innerHTML += profileHTML;;
-}
+                ${renderProfile(data.profile)}
+            `;
+        }
 
         else if (data.type === "healthcare") {
             const r = data.response;
@@ -243,9 +281,11 @@ async function sendMessage() {
                 <div class="section">
                     <b>Detected Symptoms:</b>
                     <ul>
-                        ${symptoms.length
+                        ${
+                            symptoms.length
                             ? symptoms.map(s => `<li>${s.name} (${s.urgency})</li>`).join("")
-                            : "<li>No specific symptom detected</li>"}
+                            : "<li>No specific symptom detected</li>"
+                        }
                     </ul>
                 </div>
 
@@ -259,6 +299,8 @@ async function sendMessage() {
                 <div class="section">
                     ${r.disclaimer}
                 </div>
+
+                ${renderProfile(data.profile)}
             `;
         }
 
@@ -267,6 +309,7 @@ async function sendMessage() {
         }
 
         responseBox.innerHTML = responseHTML;
+        document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
 
     } catch (err) {
         responseBox.innerHTML = "❌ Error connecting to AURA backend.";
