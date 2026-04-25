@@ -1,4 +1,5 @@
 from app.domains.business.business_domain_engine import business_domain_engine
+from app.domains.business.business_strategy_engine import business_strategy_engine
 
 
 class ConversationEngine:
@@ -14,7 +15,8 @@ class ConversationEngine:
 
         if any(x in m for x in [
             "grow", "startup", "business", "company", "scale",
-            "customers", "revenue", "pricing", "hire", "market"
+            "customers", "revenue", "pricing", "price", "hire",
+            "market", "cost", "expenses", "sales", "clients"
         ]):
             return "business_strategy"
 
@@ -30,7 +32,7 @@ class ConversationEngine:
 
     def build_clarification_question(self, intent: str):
         if intent == "business_strategy":
-            return "Do you want fast growth, low-risk growth, or long-term stability?"
+            return "Do you want fast growth, low-risk growth, pricing help, customer acquisition, or cost control?"
 
         if intent == "healthcare_strategy":
             return "What symptom are you experiencing and how severe is it?"
@@ -98,33 +100,28 @@ class ConversationEngine:
     ):
         name = best.get("name", "Balanced")
         risk = best.get("risk", "medium")
-        action_plan = best.get("action_plan", [])
         clean_goal = self.clean_goal_text(goal)
 
-        if name == "Conservative":
-            simple_advice = (
-                f"If you're trying to {clean_goal}, the safest approach is to start small and control your costs. "
-                "Test your idea with a few customers first before investing heavily. "
-                "This helps you learn what works without risking too much upfront."
-            )
+        business_intent = business_domain_engine.detect_business_intent(goal)
+        business_strategy = business_strategy_engine.generate_strategy(
+            business_intent,
+            {
+                "goal": goal,
+                "risk": risk,
+                "strategy": name
+            }
+        )
 
-        elif name == "Aggressive":
-            simple_advice = (
-                f"If you're trying to {clean_goal}, a faster approach is to move quickly and push for growth early. "
-                "You can test and scale at the same time, but you need to be comfortable with higher risk."
-            )
+        simple_advice = business_strategy.get(
+            "advice",
+            "Start small, validate your idea, and grow based on real demand."
+        )
 
-        else:
-            simple_advice = (
-                f"If you're trying to {clean_goal}, a balanced approach works best. "
-                "Grow steadily while testing demand, controlling costs, and improving step by step."
-            )
-
-        next_steps = action_plan if action_plan else [
+        next_steps = business_strategy.get("steps", [
             "Start with one small test",
             "Measure the result",
             "Only scale after proof"
-        ]
+        ])
 
         memory_note = ""
         if profile and profile.get("interaction_count", 0) >= 2:
@@ -143,6 +140,7 @@ class ConversationEngine:
         advanced_details = {
             "strategy": name,
             "risk": risk,
+            "business_intent": business_intent,
             "final_score": best.get("final_score"),
             "decision_score": best.get("decision_score"),
             "trust_score": best.get("trust_score"),
@@ -155,6 +153,7 @@ class ConversationEngine:
             "detail": detail,
             "next_steps": next_steps,
             "risk_profile": risk,
+            "business_intent": business_intent,
             "caution": self._risk_caution(risk),
             "advanced_details": advanced_details
         }
