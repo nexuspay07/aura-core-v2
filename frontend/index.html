@@ -326,12 +326,32 @@ async function sendMessage() {
     const r = data.response || {};
 
     if (!r.decision_brief || Object.keys(r.decision_brief).length === 0) {
-        responseHTML = `
-            <b>${(r.summary || "").replace(/\n/g, "<br>")}</b>
-            <div class="section">${r.detail || ""}</div>
-            ${renderProfile(data.profile)}
-        `;
-    } else {
+
+    let questions = (r.summary || "")
+        .replace("To give a more accurate answer, I need:", "")
+        .split("•")
+        .map(q => q.trim())
+        .filter(q => q.length > 0);
+
+    responseHTML = `
+        <div class="card">
+            <b>🤔 I need a bit more info</b>
+
+            <div class="section">
+                To give you a precise decision, answer:
+                <ul>
+                    ${questions.map(q => `<li>${q}</li>`).join("")}
+                </ul>
+            </div>
+
+            <div class="section" style="margin-top:10px;">
+                AURA will improve accuracy once this is provided.
+            </div>
+        </div>
+
+        ${renderProfile(data.profile)}
+    `;
+} else {
         responseHTML = renderDecisionResponse(r, data.profile);
     }
 }
