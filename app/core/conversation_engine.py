@@ -64,6 +64,7 @@ class ConversationEngine:
 
         return cleaned
 
+    # ✅ FIXED FUNCTION (this was broken before)
     def extract_preferences(self, message: str):
         m = message.lower()
 
@@ -73,21 +74,24 @@ class ConversationEngine:
             "market": "normal"
         }
 
-        if "low risk" in m or "safe" in m or "conservative" in m:
+        # RISK
+        if any(x in m for x in ["low risk", "safe", "conservative"]):
             preferences["risk_tolerance"] = 0.2
-        elif "high risk" in m or "aggressive" in m or "fast growth" in m:
+        elif any(x in m for x in ["high risk", "aggressive", "fast growth"]):
             preferences["risk_tolerance"] = 0.8
-        elif "balanced" in m or "moderate risk" in m:
+        elif any(x in m for x in ["balanced", "moderate risk"]):
             preferences["risk_tolerance"] = 0.5
 
-        if "competitive" in m:
+        # MARKET
+        if any(x in m for x in ["competitive", "competition", "crowded market"]):
             preferences["market"] = "competitive"
-        elif "monopoly" in m:
+        elif any(x in m for x in ["monopoly", "no competition"]):
             preferences["market"] = "monopoly"
 
-        if "small budget" in m or "low budget" in m:
+        # BUDGET
+        if any(x in m for x in ["low budget", "small budget", "cheap", "little money", "not much money"]):
             preferences["budget"] = 3000
-        elif "large budget" in m or "big budget" in m:
+        elif any(x in m for x in ["high budget", "big budget", "large budget", "a lot of money"]):
             preferences["budget"] = 50000
 
         return preferences
@@ -114,19 +118,20 @@ class ConversationEngine:
             }
         )
 
+        # ✅ CONTEXT-AWARE FIX
         preferences = self.extract_preferences(goal)
         budget = preferences.get("budget", 10000)
         market = preferences.get("market", "normal")
 
         prediction = prediction_engine.predict_outcome(
-    business_intent,
-    name,
-    {
-        "risk": risk,
-        "budget": budget,
-        "market": market
-    }
-)
+            business_intent,
+            name,
+            {
+                "risk": risk,
+                "budget": budget,
+                "market": market
+            }
+        )
 
         simple_advice = business_strategy.get(
             "advice",
@@ -153,36 +158,13 @@ class ConversationEngine:
             "expected_impact": prediction.get("impact"),
             "tradeoff": prediction.get("tradeoff"),
             "timeframe": prediction.get("timeframe"),
-            "confidence": prediction.get("confidence")
+            "confidence": prediction.get("confidence"),
+            "context_note": prediction.get("context_note")  # ✅ ADDED
         }
 
-        memory_note = ""
-        if profile and profile.get("interaction_count", 0) >= 2:
-            preferred_risk = profile.get("preferred_risk")
-            if preferred_risk == "low":
-                memory_note = "Since you usually prefer safer decisions, "
-            elif preferred_risk == "high":
-                memory_note = "Since you usually prefer faster growth, "
+        summary = f"{simple_advice}\n\n👉 Best move: {best_move}"
 
-        summary = (
-            f"{memory_note}{simple_advice}\n\n"
-            f"👉 Best move: {best_move}"
-        )
-
-        detail = (
-            f"For your goal — {clean_goal} — AURA recommends a {name.lower()} approach."
-        )
-
-        advanced_details = {
-            "strategy": name,
-            "risk": risk,
-            "business_intent": business_intent,
-            "final_score": best.get("final_score"),
-            "decision_score": best.get("decision_score"),
-            "trust_score": best.get("trust_score"),
-            "failure_probability": best.get("failure_probability"),
-            "explanation": explanation
-        }
+        detail = f"For your goal — {clean_goal} — AURA recommends a {name.lower()} approach."
 
         return {
             "summary": summary,
@@ -192,56 +174,37 @@ class ConversationEngine:
             "business_intent": business_intent,
             "caution": self._risk_caution(risk),
             "decision_brief": decision_brief,
-            "advanced_details": advanced_details
         }
 
     def _risk_caution(self, risk: str):
         if risk == "high":
             return "This path can grow fast, but it needs strong risk control."
-
         if risk == "low":
             return "This path is safer, but growth may be slower."
-
         return "This path balances growth and risk."
 
     def _main_risk_message(self, risk: str):
         if risk == "high":
-            return "You may spend too much or move too fast before proving that customers actually want it."
-
+            return "You may spend too much or move too fast before proving demand."
         if risk == "low":
-            return "You may grow too slowly and allow competitors or opportunities to pass you."
-
-        return "You may spend time and money before confirming real demand."
+            return "You may grow too slowly and miss opportunities."
+        return "You may spend time and money before confirming demand."
 
     def _watch_metric(self, business_intent: str):
         if business_intent == "pricing":
-            return "How many people actually buy after seeing your price"
-
+            return "How many people buy after seeing your price"
         if business_intent == "growth":
-            return "How much it costs to get one real customer"
-
+            return "Customer acquisition cost"
         if business_intent == "cost":
-            return "Whether monthly expenses are going down without hurting sales"
-
-        if business_intent == "acquisition":
-            return "How many qualified leads turn into real customers"
-
-        if business_intent == "hiring":
-            return "Whether the new hire increases output or revenue"
-
-        if business_intent == "market_entry":
-            return "Whether early customers show real demand"
-
-        return "Whether people show real interest or actually buy"
+            return "Monthly expenses"
+        return "Customer response"
 
     def _fallback_move(self, strategy_name: str):
         if strategy_name == "Aggressive":
-            return "If results are unstable, slow down and test with a smaller budget."
-
+            return "If unstable, slow down and test smaller."
         if strategy_name == "Conservative":
-            return "If progress is too slow, test one faster growth channel without risking too much money."
-
-        return "If results are unclear, reduce spending and run a smaller experiment."
+            return "If too slow, test one faster channel."
+        return "Reduce spending and run smaller tests."
 
 
 conversation_engine = ConversationEngine()
