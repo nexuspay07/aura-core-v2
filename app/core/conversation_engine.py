@@ -127,9 +127,9 @@ class ConversationEngine:
         decision_brief = {
             "recommended_move": next_steps[0] if next_steps else "Start with a small test",
             "why_this": (
-                f"AURA selected the {name.lower()} approach because it had the strongest balance "
-                f"between expected outcome, risk, trust, and failure probability."
-            ),
+    f"This approach works because it balances growth and risk.\n"
+    f"It gives you a higher chance of success without overcommitting resources early."
+),
             "main_risk": self._main_risk_message(risk),
             "watch_metric": self._watch_metric(business_intent),
             "fallback_move": self._fallback_move(name)
@@ -143,7 +143,10 @@ class ConversationEngine:
             elif preferred_risk == "high":
                 memory_note = "Since you usually prefer faster growth, "
 
-        summary = f"{memory_note}{simple_advice}"
+        summary = (
+    f"{memory_note}{simple_advice}\n\n"
+    f"👉 Best move: {next_steps[0] if next_steps else 'Start small and test'}"
+)
 
         detail = (
             f"For your goal — {clean_goal} — AURA recommends a {name.lower()} approach."
@@ -187,7 +190,7 @@ class ConversationEngine:
         if risk == "low":
             return "The main risk is growing too slowly and missing opportunities."
 
-        return "The main risk is spending time and money before the idea is clearly validated."
+        return "You may spend money before confirming real demand, which can lead to losses."
 
     def _watch_metric(self, business_intent: str):
         if business_intent == "pricing":
@@ -208,7 +211,7 @@ class ConversationEngine:
         if business_intent == "market_entry":
             return "early customer demand"
 
-        return "customer response"
+        return "how many people actually buy or show real interest"
 
     def _fallback_move(self, strategy_name: str):
         if strategy_name == "Aggressive":
