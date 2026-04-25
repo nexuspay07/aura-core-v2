@@ -141,7 +141,7 @@ async function sendMessage() {
     document.getElementById("chat").appendChild(responseBox);
 
     try {
-        const res = await fetch("http://localhost:8002/chat", {
+        const res = await fetch("https://aura-ai-core-oeae.onrender.com/chat", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
