@@ -28,9 +28,6 @@ class ConversationEngine:
 
         return "general"
 
-    # --------------------------
-    # SMART QUESTION SYSTEM
-    # --------------------------
     def missing_context(self, preferences: dict):
         missing = []
 
@@ -53,7 +50,6 @@ class ConversationEngine:
 
         return "To give a more accurate answer, I need:\n\n• " + "\n• ".join(questions)
 
-    # --------------------------
     def needs_clarification(self, message: str):
         return len(message.strip().split()) <= 3
 
@@ -90,9 +86,6 @@ class ConversationEngine:
 
         return cleaned
 
-    # --------------------------
-    # FIXED PREFERENCES
-    # --------------------------
     def extract_preferences(self, message: str):
         m = message.lower()
 
@@ -102,29 +95,25 @@ class ConversationEngine:
             "market": "normal"
         }
 
-        # RISK
         if any(x in m for x in ["low risk", "safe", "conservative"]):
             preferences["risk_tolerance"] = 0.2
         elif any(x in m for x in ["high risk", "aggressive", "fast growth"]):
             preferences["risk_tolerance"] = 0.8
 
-        # MARKET
         if any(x in m for x in ["competitive", "competition", "crowded market"]):
             preferences["market"] = "competitive"
         elif any(x in m for x in ["monopoly", "no competition"]):
             preferences["market"] = "monopoly"
 
-        # BUDGET
         if any(x in m for x in ["low budget", "small budget", "cheap", "little money"]):
             preferences["budget"] = 3000
+        elif any(x in m for x in ["medium budget", "normal budget", "average budget"]):
+            preferences["budget"] = 10000
         elif any(x in m for x in ["high budget", "big budget", "large budget"]):
             preferences["budget"] = 50000
 
         return preferences
 
-    # --------------------------
-    # MAIN RESPONSE ENGINE
-    # --------------------------
     def build_conversational_response(
         self,
         goal: str,
@@ -138,31 +127,10 @@ class ConversationEngine:
 
         business_intent = business_domain_engine.detect_subdomain(goal)
 
-        # --------------------------
-# CONTEXT EXTRACTION
-# --------------------------
-        preferences = self.extract_preferences(goal)
-
-        missing = self.missing_context(preferences)
-
-# 🔥 SMART QUESTION TRIGGER
-        if missing:
-         return {
-        "summary": self.build_context_question(missing),
-        "detail": "AURA needs more information before making a decision.",
-        "next_steps": [],
-        "risk_profile": "unknown",
-        "business_intent": business_intent,
-        "caution": "",
-        "decision_brief": {},
-    }
-
-        # CONTEXT
         preferences = self.extract_preferences(goal)
         budget = preferences.get("budget", 10000)
         market = preferences.get("market", "normal")
 
-        # 🔥 SMART QUESTIONS TRIGGER
         missing = self.missing_context(preferences)
         if missing:
             return {
@@ -175,17 +143,17 @@ class ConversationEngine:
                 "decision_brief": {},
             }
 
-        # STRATEGY
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
             {
                 "goal": goal,
                 "risk": risk,
-                "strategy": name
+                "strategy": name,
+                "budget": budget,
+                "market": market
             }
         )
 
-        # PREDICTION
         prediction = prediction_engine.predict_outcome(
             business_intent,
             name,
@@ -202,23 +170,46 @@ class ConversationEngine:
             "Scale if it works"
         ])
 
-        best_move = next_steps[0]
+        best_move = next_steps[0] if next_steps else "Start with a small test"
+
+        confidence = prediction.get("confidence", 0.6)
+        impact = prediction.get("impact", "Moderate impact expected")
+        tradeoff = prediction.get("tradeoff", "Balanced risk")
+        timeframe = prediction.get("timeframe", "Medium-term")
+        context_note = prediction.get("context_note", "General estimate")
+
+        if confidence < 0.6:
+            recommended_move = "Run a small test before committing"
+        elif confidence > 0.75:
+            recommended_move = "Execute confidently and scale faster"
+        else:
+            recommended_move = best_move
+
+        if confidence < 0.5:
+            fallback = "Reduce risk immediately and validate assumptions"
+        elif "competitive" in context_note.lower():
+            fallback = "Differentiate your offer or adjust pricing quickly if customers do not respond."
+        else:
+            fallback = self._fallback_move(name)
 
         decision_brief = {
-            "recommended_move": best_move,
-            "why_this": "This balances growth and risk.",
+            "expected_impact": impact,
+            "tradeoff": tradeoff,
+            "timeframe": timeframe,
+            "confidence": confidence,
+            "recommended_move": recommended_move,
+            "context_note": context_note,
+            "why_this": (
+                f"AURA selected the {name.lower()} approach based on your context "
+                f"and predicted outcome strength."
+            ),
             "main_risk": self._main_risk_message(risk),
             "watch_metric": self._watch_metric(business_intent),
-            "fallback_move": self._fallback_move(name),
-            "expected_impact": prediction.get("impact"),
-            "tradeoff": prediction.get("tradeoff"),
-            "timeframe": prediction.get("timeframe"),
-            "confidence": prediction.get("confidence"),
-            "context_note": prediction.get("context_note")
+            "fallback_move": fallback
         }
 
         return {
-            "summary": f"👉 Best move: {best_move}",
+            "summary": f"👉 Best move: {recommended_move}",
             "detail": f"For your goal — {clean_goal}",
             "next_steps": next_steps,
             "risk_profile": risk,
@@ -227,34 +218,53 @@ class ConversationEngine:
             "decision_brief": decision_brief,
         }
 
-    # --------------------------
     def _risk_caution(self, risk: str):
         if risk == "high":
-            return "High growth but risky."
+            return "High growth potential, but this needs strong risk control."
+
         if risk == "low":
-            return "Safer but slower."
-        return "Balanced."
+            return "Safer path, but growth may be slower."
+
+        return "Balanced path between growth and risk."
 
     def _main_risk_message(self, risk: str):
         if risk == "high":
-            return "You may move too fast."
+            return "You may move too fast before proving real demand."
+
         if risk == "low":
-            return "You may move too slow."
-        return "Execution uncertainty."
+            return "You may move too slowly and miss opportunities."
+
+        return "Execution uncertainty and weak validation."
 
     def _watch_metric(self, business_intent: str):
         if business_intent == "pricing":
             return "Conversion rate"
+
         if business_intent == "growth":
             return "Customer acquisition cost"
+
+        if business_intent == "cost":
+            return "Monthly expenses"
+
+        if business_intent == "customer_acquisition":
+            return "Lead-to-customer conversion"
+
+        if business_intent == "hiring":
+            return "Revenue or output per employee"
+
+        if business_intent == "market_entry":
+            return "Early customer demand"
+
         return "Customer response"
 
     def _fallback_move(self, strategy_name: str):
         if strategy_name == "Aggressive":
-            return "Slow down and test smaller."
+            return "Slow down and test with a smaller budget."
+
         if strategy_name == "Conservative":
-            return "Try one faster channel."
-        return "Reduce risk and test again."
+            return "Try one faster growth channel without risking too much money."
+
+        return "Reduce risk, validate assumptions, and test again."
 
 
 conversation_engine = ConversationEngine()
