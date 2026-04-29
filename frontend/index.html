@@ -86,6 +86,14 @@
             border: 1px solid #1f2937;
         }
 
+        .strategy-card {
+            margin-bottom: 12px;
+            padding: 10px;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            background: #0b1220;
+        }
+
         ul {
             margin-top: 6px;
         }
@@ -160,8 +168,35 @@ function renderProfile(profile) {
     `;
 }
 
+function renderStrategyComparison(brief) {
+    const sc = brief.strategy_comparison;
+
+    if (!sc || !sc.comparisons) return "";
+
+    return `
+        <div style="margin-top:20px;">
+            <b>📊 Strategy Comparison:</b><br><br>
+
+            ${
+                sc.comparisons.map(s => `
+                    <div class="strategy-card">
+                        <b>${s.strategy}</b><br>
+                        Risk: ${s.risk}<br>
+                        Score: ${s.score}<br>
+                        <span style="opacity:0.85;">${s.reason}</span>
+                    </div>
+                `).join("")
+            }
+
+            <div style="margin-top:10px;">
+                <b>🏆 Best Strategy:</b><br>
+                ${sc.best_strategy?.strategy || "N/A"}
+            </div>
+        </div>
+    `;
+}
+
 function renderDecisionResponse(r, profile) {
-    const adv = r.advanced_details || {};
     const brief = r.decision_brief || {};
 
     return `
@@ -224,44 +259,9 @@ function renderDecisionResponse(r, profile) {
                     ${brief.watch_metric || "N/A"}<br><br>
 
                     <b>Fallback Plan:</b><br>
-${brief.fallback_move || "N/A"}<br><br>
+                    ${brief.fallback_move || "N/A"}<br><br>
 
-${
-    brief.strategy_comparison
-    ? `
-        <b>📊 Strategy Comparison:</b><br><br>
-
-        ${
-            (brief.strategy_comparison.comparisons || [])
-            .map(s => `
-                <div style="margin-bottom:10px;">
-                    <b>${s.strategy}</b><br>
-                    Risk: ${s.risk}<br>
-                    Score: ${s.score}<br>
-                    Reason: ${s.reason}
-                </div>
-            `).join("")
-        }
-
-        <b>🏆 Best Strategy:</b><br>
-        ${brief.strategy_comparison.best_strategy?.strategy || "N/A"}
-    `
-    : ""
-}}
-                </div>
-
-                <button onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-                    Show reasoning
-                </button>
-
-                <div class="section" style="display:none; margin-top:10px;">
-                    <b>Strategy:</b> ${adv.strategy ?? "N/A"}<br>
-                    <b>Risk:</b> ${adv.risk ?? "N/A"}<br>
-                    <b>Business Intent:</b> ${adv.business_intent ?? "N/A"}<br>
-                    <b>Score:</b> ${adv.final_score ?? "N/A"}<br>
-                    <b>Decision Score:</b> ${adv.decision_score ?? "N/A"}<br>
-                    <b>Trust Score:</b> ${adv.trust_score ?? "N/A"}<br>
-                    <b>Failure Probability:</b> ${adv.failure_probability ?? "N/A"}%<br>
+                    ${renderStrategyComparison(brief)}
                 </div>
             `
             : ""
@@ -274,14 +274,15 @@ ${
 async function sendMessage() {
     const input = document.getElementById("message");
     const text = input.value.trim();
-    let messageToSend = text;
-
-if (pendingGoal) {
-    messageToSend = pendingGoal + " " + text;
-    pendingGoal = null;
-}
 
     if (!text) return;
+
+    let messageToSend = text;
+
+    if (pendingGoal) {
+        messageToSend = pendingGoal + " " + text;
+        pendingGoal = null;
+    }
 
     addMessage(text, "user");
     input.value = "";
@@ -293,9 +294,9 @@ if (pendingGoal) {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
-    message: messageToSend,
-    session_id: sessionId
-})
+                message: messageToSend,
+                session_id: sessionId
+            })
         });
 
         const data = await res.json();
@@ -353,39 +354,39 @@ if (pendingGoal) {
         }
 
         else if (data.type === "conversation") {
-    const r = data.response || {};
+            const r = data.response || {};
 
-    if (!r.decision_brief || Object.keys(r.decision_brief).length === 0) {
-    pendingGoal = text;
+            if (!r.decision_brief || Object.keys(r.decision_brief).length === 0) {
+                pendingGoal = text;
 
-    let questions = (r.summary || "")
-        .replace("To give a more accurate answer, I need:", "")
-        .split("•")
-        .map(q => q.trim())
-        .filter(q => q.length > 0);
+                let questions = (r.summary || "")
+                    .replace("To give a more accurate answer, I need:", "")
+                    .split("•")
+                    .map(q => q.trim())
+                    .filter(q => q.length > 0);
 
-    responseHTML = `
-        <div class="card">
-            <b>🤔 I need a bit more info</b>
+                responseHTML = `
+                    <div class="card">
+                        <b>🤔 I need a bit more info</b>
 
-            <div class="section">
-                To give you a precise decision, answer:
-                <ul>
-                    ${questions.map(q => `<li>${q}</li>`).join("")}
-                </ul>
-            </div>
+                        <div class="section">
+                            To give you a precise decision, answer:
+                            <ul>
+                                ${questions.map(q => `<li>${q}</li>`).join("")}
+                            </ul>
+                        </div>
 
-            <div class="section" style="margin-top:10px;">
-                AURA will improve accuracy once this is provided.
-            </div>
-        </div>
+                        <div class="section" style="margin-top:10px;">
+                            AURA will improve accuracy once this is provided.
+                        </div>
+                    </div>
 
-        ${renderProfile(data.profile)}
-    `;
-} else {
-        responseHTML = renderDecisionResponse(r, data.profile);
-    }
-}
+                    ${renderProfile(data.profile)}
+                `;
+            } else {
+                responseHTML = renderDecisionResponse(r, data.profile);
+            }
+        }
 
         else if (data.summary) {
             responseHTML = `
