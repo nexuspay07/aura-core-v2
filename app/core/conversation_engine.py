@@ -1,7 +1,7 @@
 from app.domains.business.business_domain_engine import business_domain_engine
 from app.domains.business.business_strategy_engine import business_strategy_engine
 from app.core.prediction_engine import prediction_engine
-
+from app.core.strategy_comparison_engine import strategy_comparison_engine
 
 class ConversationEngine:
 
@@ -142,6 +142,8 @@ class ConversationEngine:
                 "caution": "",
                 "decision_brief": {},
             }
+        
+        
 
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
@@ -163,6 +165,15 @@ class ConversationEngine:
                 "market": market
             }
         )
+
+        strategy_comparison = strategy_comparison_engine.compare(
+    business_intent,
+    {
+        "risk": risk,
+        "budget": budget,
+        "market": market
+    }
+)
 
         next_steps = business_strategy.get("steps", [
             "Start small",
@@ -211,6 +222,7 @@ class ConversationEngine:
             "tradeoff": tradeoff,
             "timeframe": timeframe,
             "confidence": confidence,
+            "strategy_comparison": strategy_comparison,
             "recommended_move": recommended_move,
             "context_note": context_note,
             "why_this": (
