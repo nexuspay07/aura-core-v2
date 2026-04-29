@@ -262,6 +262,7 @@ function renderProReport(report) {
 }
 
 async function unlockReport() {
+localStorage.setItem("aura_last_decision", JSON.stringify(lastDecision));
     try {
         const res = await fetch("https://aura-ai-core-oeae.onrender.com/create-checkout-session", {
             method: "POST",
@@ -442,6 +443,47 @@ function renderDecisionResponse(r, profile) {
     `;
 }
 
+async function generatePaidReportAfterSuccess() {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("payment") !== "success") return;
+
+    const saved = localStorage.getItem("aura_last_decision");
+
+    if (!saved) {
+        addMessage("✅ Payment successful, but no saved decision was found. Please run AURA again.", "bot");
+        return;
+    }
+
+    const decision = JSON.parse(saved);
+
+    const loadingBox = addMessage("<b>🔓 Payment successful. Generating Pro Report...</b>", "bot");
+
+    try {
+        const res = await fetch("https://aura-ai-core-oeae.onrender.com/pro-report", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                goal: decision.goal,
+                decision_brief: decision.decision_brief,
+                strategy_comparison: decision.decision_brief?.strategy_comparison || {}
+            })
+        });
+
+        const data = await res.json();
+
+        loadingBox.innerHTML = renderProReport(data.report);
+
+        localStorage.removeItem("aura_last_decision");
+
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+    } catch (err) {
+        loadingBox.innerHTML = "❌ Payment worked, but Pro Report generation failed.";
+        console.error(err);
+    }
+}
+
 async function sendMessage() {
     const input = document.getElementById("message");
     const text = input.value.trim();
@@ -587,6 +629,7 @@ async function sendMessage() {
         console.error(err);
     }
 }
+window.addEventListener("load", generatePaidReportAfterSuccess);
 </script>
 
 </body>
