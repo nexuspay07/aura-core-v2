@@ -119,6 +119,7 @@
 
 <script>
 let sessionId = "session_" + Math.random().toString(36).substring(7);
+let pendingGoal = null;
 
 function addMessage(text, type) {
     const chat = document.getElementById("chat");
@@ -250,6 +251,12 @@ function renderDecisionResponse(r, profile) {
 async function sendMessage() {
     const input = document.getElementById("message");
     const text = input.value.trim();
+    let messageToSend = text;
+
+if (pendingGoal) {
+    messageToSend = pendingGoal + " " + text;
+    pendingGoal = null;
+}
 
     if (!text) return;
 
@@ -263,9 +270,9 @@ async function sendMessage() {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
-                message: text,
-                session_id: sessionId
-            })
+    message: messageToSend,
+    session_id: sessionId
+})
         });
 
         const data = await res.json();
@@ -326,6 +333,7 @@ async function sendMessage() {
     const r = data.response || {};
 
     if (!r.decision_brief || Object.keys(r.decision_brief).length === 0) {
+    pendingGoal = text;
 
     let questions = (r.summary || "")
         .replace("To give a more accurate answer, I need:", "")
