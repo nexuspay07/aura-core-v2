@@ -178,17 +178,31 @@ class ConversationEngine:
         timeframe = prediction.get("timeframe", "Medium-term")
         context_note = prediction.get("context_note", "General estimate")
 
-        if confidence < 0.6:
+        # -------------------------
+        # CONTEXT-AWARE DECISION LOGIC
+        # -------------------------
+        if market == "competitive" and budget <= 5000:
+            recommended_move = "Start with a niche offer and test pricing on a small audience"
+        elif market == "competitive":
+            recommended_move = "Differentiate your offer and test pricing against competitors"
+        elif market == "monopoly":
+            recommended_move = "Set value-based pricing and maximize margins"
+        elif confidence < 0.6:
             recommended_move = "Run a small test before committing"
         elif confidence > 0.75:
             recommended_move = "Execute confidently and scale faster"
         else:
             recommended_move = best_move
 
-        if confidence < 0.5:
+        # -------------------------
+        # CONTEXT-AWARE FALLBACK
+        # -------------------------
+        if market == "competitive" and budget <= 5000:
+            fallback = "If traction is low, narrow your niche further or improve your offer"
+        elif market == "competitive":
+            fallback = "If customers don’t convert, adjust positioning or pricing quickly"
+        elif confidence < 0.5:
             fallback = "Reduce risk immediately and validate assumptions"
-        elif "competitive" in context_note.lower():
-            fallback = "Differentiate your offer or adjust pricing quickly if customers do not respond."
         else:
             fallback = self._fallback_move(name)
 
