@@ -8,3 +8,4 @@ python-dotenv
 passlib[bcrypt]
 python-jose
 psutil
+stripe
