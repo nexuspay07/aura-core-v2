@@ -224,7 +224,30 @@ function renderDecisionResponse(r, profile) {
                     ${brief.watch_metric || "N/A"}<br><br>
 
                     <b>Fallback Plan:</b><br>
-                    ${brief.fallback_move || "N/A"}
+${brief.fallback_move || "N/A"}<br><br>
+
+${
+    brief.strategy_comparison
+    ? `
+        <b>📊 Strategy Comparison:</b><br><br>
+
+        ${
+            (brief.strategy_comparison.comparisons || [])
+            .map(s => `
+                <div style="margin-bottom:10px;">
+                    <b>${s.strategy}</b><br>
+                    Risk: ${s.risk}<br>
+                    Score: ${s.score}<br>
+                    Reason: ${s.reason}
+                </div>
+            `).join("")
+        }
+
+        <b>🏆 Best Strategy:</b><br>
+        ${brief.strategy_comparison.best_strategy?.strategy || "N/A"}
+    `
+    : ""
+}}
                 </div>
 
                 <button onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
