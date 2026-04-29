@@ -180,11 +180,68 @@ function renderProfile(profile) {
     `;
 }
 
+function renderProReport(report) {
+    if (!report) return "";
+
+    return `
+        <div class="card">
+            <h2>🔓 ${report.title || "AURA Pro Decision Report"}</h2>
+
+            <div class="section">
+                <b>Summary:</b><br>
+                ${report.summary || "N/A"}
+            </div>
+
+            <div class="section">
+                <b>📊 Strategy Breakdown:</b>
+                <ul>
+                    ${(report.strategy_breakdown || []).map(s => `
+                        <li>
+                            <b>${s.strategy}</b> — ${s.why_it_works}
+                            <br>Risk: ${s.risk}
+                        </li>
+                    `).join("")}
+                </ul>
+            </div>
+
+            <div class="section">
+                <b>🔮 Scenarios:</b><br>
+                <b>Best case:</b> ${report.scenarios?.best_case || "N/A"}<br>
+                <b>Expected case:</b> ${report.scenarios?.expected_case || "N/A"}<br>
+                <b>Worst case:</b> ${report.scenarios?.worst_case || "N/A"}
+            </div>
+
+            <div class="section">
+                <b>⚠️ Risk Analysis:</b><br>
+                Main risk: ${report.risk_analysis?.main_risk || "N/A"}<br>
+                Mitigation: ${report.risk_analysis?.mitigation || "N/A"}
+            </div>
+
+            <div class="section">
+                <b>🛠️ Execution Plan:</b>
+                <ul>
+                    ${(report.execution_plan || []).map(step => `<li>${step}</li>`).join("")}
+                </ul>
+            </div>
+
+            <div class="section">
+                <b>📅 30-Day Plan:</b><br>
+                <b>Week 1:</b> ${report["30_day_plan"]?.week_1 || "N/A"}<br>
+                <b>Week 2:</b> ${report["30_day_plan"]?.week_2 || "N/A"}<br>
+                <b>Week 3:</b> ${report["30_day_plan"]?.week_3 || "N/A"}<br>
+                <b>Week 4:</b> ${report["30_day_plan"]?.week_4 || "N/A"}
+            </div>
+        </div>
+    `;
+}
+
 async function unlockReport() {
     if (!lastDecision) {
         alert("Run a decision first before unlocking a report.");
         return;
     }
+
+    const loadingBox = addMessage("<b>🔓 Generating Pro Report...</b>", "bot");
 
     try {
         const res = await fetch("https://aura-ai-core-oeae.onrender.com/pro-report", {
@@ -199,19 +256,13 @@ async function unlockReport() {
 
         const data = await res.json();
 
-        addMessage(`
-            <div class="card">
-                <b>🔓 Pro Report Generated</b>
-                <div class="section">
-                    Display UI coming next. Check console for full report.
-                </div>
-            </div>
-        `, "bot");
+        loadingBox.innerHTML = renderProReport(data.report);
 
-        console.log("AURA Pro Report:", data);
+        document.getElementById("chat").scrollTop =
+            document.getElementById("chat").scrollHeight;
 
     } catch (err) {
-        alert("Could not generate report yet.");
+        loadingBox.innerHTML = "❌ Could not generate Pro Report.";
         console.error(err);
     }
 }
