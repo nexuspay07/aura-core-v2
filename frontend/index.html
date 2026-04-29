@@ -184,85 +184,100 @@ function renderProReport(report) {
     if (!report) return "";
 
     return `
-        <div class="card">
-            <h2>🔓 ${report.title || "AURA Pro Decision Report"}</h2>
+        <div class="card" style="border:1px solid #4fd1c5;">
 
-            <div class="section">
-                <b>Summary:</b><br>
+            <h2 style="color:#4fd1c5;">🔓 AURA Pro Decision Report</h2>
+
+            <div class="section" style="font-size:16px;">
+                <b>🚀 Recommended Move:</b><br>
                 ${report.summary || "N/A"}
             </div>
 
+            <hr style="margin:15px 0; border-color:#1f2937;">
+
             <div class="section">
-                <b>📊 Strategy Breakdown:</b>
+                <b>📊 Strategy Comparison</b>
                 <ul>
                     ${(report.strategy_breakdown || []).map(s => `
-                        <li>
-                            <b>${s.strategy}</b> — ${s.why_it_works}
-                            <br>Risk: ${s.risk}
+                        <li style="margin-bottom:8px;">
+                            <b>${s.strategy}</b><br>
+                            ${s.why_it_works}<br>
+                            <span style="color:#9ca3af;">Risk: ${s.risk}</span>
                         </li>
                     `).join("")}
                 </ul>
             </div>
 
             <div class="section">
-                <b>🔮 Scenarios:</b><br>
-                <b>Best case:</b> ${report.scenarios?.best_case || "N/A"}<br>
-                <b>Expected case:</b> ${report.scenarios?.expected_case || "N/A"}<br>
-                <b>Worst case:</b> ${report.scenarios?.worst_case || "N/A"}
+                <b>🔮 Outcome Simulation</b><br><br>
+
+                <b style="color:#16a34a;">Best Case:</b><br>
+                ${report.scenarios?.best_case || "N/A"}<br><br>
+
+                <b style="color:#f59e0b;">Expected:</b><br>
+                ${report.scenarios?.expected_case || "N/A"}<br><br>
+
+                <b style="color:#dc2626;">Worst Case:</b><br>
+                ${report.scenarios?.worst_case || "N/A"}
             </div>
 
             <div class="section">
-                <b>⚠️ Risk Analysis:</b><br>
-                Main risk: ${report.risk_analysis?.main_risk || "N/A"}<br>
-                Mitigation: ${report.risk_analysis?.mitigation || "N/A"}
+                <b>⚠️ Risk Breakdown</b><br>
+                <b>Main Risk:</b> ${report.risk_analysis?.main_risk || "N/A"}<br><br>
+                <b>How to reduce risk:</b><br>
+                ${report.risk_analysis?.mitigation || "N/A"}
             </div>
 
             <div class="section">
-                <b>🛠️ Execution Plan:</b>
-                <ul>
+                <b>🛠️ Execution Plan</b>
+                <ol>
                     ${(report.execution_plan || []).map(step => `<li>${step}</li>`).join("")}
-                </ul>
+                </ol>
             </div>
 
-            <div class="section">
-                <b>📅 30-Day Plan:</b><br>
+            <div class="section" style="background:#0b1220; padding:10px; border-radius:8px;">
+                <b>📅 30-Day Action Plan</b><br><br>
+
                 <b>Week 1:</b> ${report["30_day_plan"]?.week_1 || "N/A"}<br>
                 <b>Week 2:</b> ${report["30_day_plan"]?.week_2 || "N/A"}<br>
                 <b>Week 3:</b> ${report["30_day_plan"]?.week_3 || "N/A"}<br>
                 <b>Week 4:</b> ${report["30_day_plan"]?.week_4 || "N/A"}
             </div>
+
+            <div style="
+                margin-top:20px;
+                padding:12px;
+                border-radius:8px;
+                background:#111827;
+                border:1px solid #1f2937;
+                color:#9ca3af;
+                font-size:13px;
+            ">
+                💡 This report is generated using AURA’s multi-strategy analysis,
+                prediction modeling, and risk evaluation system.
+            </div>
+
         </div>
     `;
 }
 
 async function unlockReport() {
-    if (!lastDecision) {
-        alert("Run a decision first before unlocking a report.");
-        return;
-    }
-
-    const loadingBox = addMessage("<b>🔓 Generating Pro Report...</b>", "bot");
-
     try {
-        const res = await fetch("https://aura-ai-core-oeae.onrender.com/pro-report", {
+        const res = await fetch("https://aura-ai-core-oeae.onrender.com/create-checkout-session", {
             method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-                goal: lastDecision.goal,
-                decision_brief: lastDecision.decision_brief,
-                strategy_comparison: lastDecision.decision_brief?.strategy_comparison || {}
-            })
+            headers: {"Content-Type": "application/json"}
         });
 
         const data = await res.json();
 
-        loadingBox.innerHTML = renderProReport(data.report);
-
-        document.getElementById("chat").scrollTop =
-            document.getElementById("chat").scrollHeight;
+        if (data.checkout_url) {
+            window.location.href = data.checkout_url;
+        } else {
+            alert("Could not start payment.");
+        }
 
     } catch (err) {
-        loadingBox.innerHTML = "❌ Could not generate Pro Report.";
+        alert("Payment error.");
         console.error(err);
     }
 }
