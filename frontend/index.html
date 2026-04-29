@@ -88,10 +88,21 @@
 
         .strategy-card {
             margin-bottom: 12px;
-            padding: 10px;
+            padding: 12px;
             border: 1px solid #374151;
             border-radius: 8px;
             background: #0b1220;
+        }
+
+        .unlock-button {
+            background: #f59e0b;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #111827;
+            margin-top: 15px;
         }
 
         ul {
@@ -128,6 +139,7 @@
 <script>
 let sessionId = "session_" + Math.random().toString(36).substring(7);
 let pendingGoal = null;
+let lastDecision = null;
 
 function addMessage(text, type) {
     const chat = document.getElementById("chat");
@@ -168,6 +180,42 @@ function renderProfile(profile) {
     `;
 }
 
+async function unlockReport() {
+    if (!lastDecision) {
+        alert("Run a decision first before unlocking a report.");
+        return;
+    }
+
+    try {
+        const res = await fetch("https://aura-ai-core-oeae.onrender.com/pro-report", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                goal: lastDecision.goal,
+                decision_brief: lastDecision.decision_brief,
+                strategy_comparison: lastDecision.decision_brief?.strategy_comparison || {}
+            })
+        });
+
+        const data = await res.json();
+
+        addMessage(`
+            <div class="card">
+                <b>🔓 Pro Report Generated</b>
+                <div class="section">
+                    Display UI coming next. Check console for full report.
+                </div>
+            </div>
+        `, "bot");
+
+        console.log("AURA Pro Report:", data);
+
+    } catch (err) {
+        alert("Could not generate report yet.");
+        console.error(err);
+    }
+}
+
 function renderStrategyComparison(brief) {
     const sc = brief.strategy_comparison;
 
@@ -175,22 +223,50 @@ function renderStrategyComparison(brief) {
 
     return `
         <div style="margin-top:20px;">
-            <b>📊 Strategy Comparison:</b><br><br>
+            <b style="font-size:16px;">📊 Strategy Comparison</b><br><br>
 
             ${
-                sc.comparisons.map(s => `
-                    <div class="strategy-card">
-                        <b>${s.strategy}</b><br>
-                        Risk: ${s.risk}<br>
-                        Score: ${s.score}<br>
-                        <span style="opacity:0.85;">${s.reason}</span>
-                    </div>
-                `).join("")
+                sc.comparisons.map(s => {
+                    let color = "#6b7280";
+
+                    if (s.risk === "low") color = "#16a34a";
+                    if (s.risk === "medium") color = "#f59e0b";
+                    if (s.risk === "high") color = "#dc2626";
+
+                    return `
+                        <div class="strategy-card">
+                            <div style="font-size:15px; font-weight:bold;">
+                                ${s.strategy}
+                            </div>
+
+                            <div style="margin-top:6px;">
+                                Risk:
+                                <span style="color:${color}; font-weight:bold;">
+                                    ${s.risk}
+                                </span>
+                            </div>
+
+                            <div>Score: <b>${s.score}</b></div>
+
+                            <div style="margin-top:6px; color:#9ca3af;">
+                                ${s.reason}
+                            </div>
+                        </div>
+                    `;
+                }).join("")
             }
 
-            <div style="margin-top:10px;">
-                <b>🏆 Best Strategy:</b><br>
-                ${sc.best_strategy?.strategy || "N/A"}
+            <div style="
+                margin-top:15px;
+                padding:12px;
+                border-radius:8px;
+                background:#111827;
+                border:1px solid #4fd1c5;
+            ">
+                🏆 <b>Best Strategy:</b>
+                <span style="color:#4fd1c5;">
+                    ${sc.best_strategy?.strategy || "N/A"}
+                </span>
             </div>
         </div>
     `;
@@ -200,6 +276,15 @@ function renderDecisionResponse(r, profile) {
     const brief = r.decision_brief || {};
 
     return `
+        <div style="
+            font-size:18px;
+            font-weight:bold;
+            margin-bottom:10px;
+            color:#4fd1c5;
+        ">
+            👉 ${brief.recommended_move || "No clear move yet"}
+        </div>
+
         <b>${r.summary || ""}</b>
 
         <div class="section">
@@ -231,8 +316,9 @@ function renderDecisionResponse(r, profile) {
                 <div class="card">
                     <b>🧠 Decision Insight</b><br><br>
 
-                    <b>Expected Impact:</b><br>
-                    ${brief.expected_impact || "N/A"}<br><br>
+                    <div style="font-size:18px; font-weight:bold; margin-bottom:10px;">
+                        📈 ${brief.expected_impact || "N/A"}
+                    </div>
 
                     <b>Trade-off:</b><br>
                     ${brief.tradeoff || "N/A"}<br><br>
@@ -252,6 +338,21 @@ function renderDecisionResponse(r, profile) {
                     <b>Why this works:</b><br>
                     ${brief.why_this || "N/A"}<br><br>
 
+                    <div style="
+                        margin-top:12px;
+                        padding:10px;
+                        border-radius:8px;
+                        background:#0b1220;
+                        border:1px solid #1f2937;
+                        color:#9ca3af;
+                    ">
+                        <b>🔍 Why you can trust this:</b><br>
+                        AURA compared multiple strategies using your budget, market conditions,
+                        risk level, and predicted outcomes to select the strongest option.
+                    </div>
+
+                    <br>
+
                     <b>Main Risk:</b><br>
                     ${brief.main_risk || "N/A"}<br><br>
 
@@ -262,6 +363,10 @@ function renderDecisionResponse(r, profile) {
                     ${brief.fallback_move || "N/A"}<br><br>
 
                     ${renderStrategyComparison(brief)}
+
+                    <button class="unlock-button" onclick="unlockReport()">
+                        🔓 Unlock Full Analysis ($5)
+                    </button>
                 </div>
             `
             : ""
@@ -384,6 +489,11 @@ async function sendMessage() {
                     ${renderProfile(data.profile)}
                 `;
             } else {
+                lastDecision = {
+                    goal: messageToSend,
+                    decision_brief: r.decision_brief
+                };
+
                 responseHTML = renderDecisionResponse(r, data.profile);
             }
         }

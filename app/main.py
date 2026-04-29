@@ -44,6 +44,9 @@ from app.domains.healthcare.healthcare_engine import healthcare_engine
 from app.core.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
 from app.core.causal_reasoning_engine import causal_reasoning_engine
+from app.api.pro_routes import router as pro_router
+
+app.include_router(pro_router)
 
 app.include_router(strategy_router)
 app.include_router(marketplace_router)
