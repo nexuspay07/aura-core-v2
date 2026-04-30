@@ -187,11 +187,30 @@ function renderProReport(report) {
         <div class="card" style="border:1px solid #4fd1c5;">
 
             <h2 style="color:#4fd1c5;">🔓 AURA Pro Decision Report</h2>
+            <div style="
+    margin-bottom:15px;
+    padding:12px;
+    border-radius:8px;
+    background:#0b1220;
+    border:1px solid #1f2937;
+    color:#9ca3af;
+">
+    💰 Businesses pay consultants $50–$300 for this level of analysis.
+    You just generated it instantly with AURA.
+</div>
 
             <div class="section" style="font-size:16px;">
-                <b>🚀 Recommended Move:</b><br>
-                ${report.summary || "N/A"}
-            </div>
+                <div style="
+    font-size:18px;
+    font-weight:bold;
+    margin:15px 0;
+    padding:12px;
+    border-radius:8px;
+    background:#111827;
+    border-left:4px solid #4fd1c5;
+">
+    🚀 ${report.summary}
+</div>
 
             <hr style="margin:15px 0; border-color:#1f2937;">
 
@@ -220,6 +239,12 @@ function renderProReport(report) {
                 <b style="color:#dc2626;">Worst Case:</b><br>
                 ${report.scenarios?.worst_case || "N/A"}
             </div>
+
+            <div class="section">
+    <b>📊 Confidence Level:</b><br>
+    This recommendation is based on your budget, market conditions,
+    and multi-strategy simulation.
+</div>
 
             <div class="section">
                 <b>⚠️ Risk Breakdown</b><br>
@@ -628,6 +653,14 @@ async function sendMessage() {
         responseBox.innerHTML = "❌ Error connecting to AURA backend.";
         console.error(err);
     }
+
+    <div style="
+    margin-top:15px;
+    font-size:13px;
+    color:#6b7280;
+">
+    ⚡ Early version pricing. This report may cost more as AURA evolves.
+</div>
 }
 window.addEventListener("load", generatePaidReportAfterSuccess);
 </script>
