@@ -8,7 +8,7 @@
         body {
             background: #0b1220;
             color: white;
-            font-family: Arial;
+            font-family: Arial, sans-serif;
             display: flex;
             flex-direction: column;
             height: 100vh;
@@ -105,7 +105,17 @@
             margin-top: 15px;
         }
 
-        ul {
+        .blue-button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            background: #2563eb;
+            color: white;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+
+        ul, ol {
             margin-top: 6px;
         }
     </style>
@@ -143,8 +153,8 @@ let lastDecision = null;
 
 function addMessage(text, type) {
     const chat = document.getElementById("chat");
-
     const msg = document.createElement("div");
+
     msg.className = "message " + type;
     msg.innerHTML = text;
 
@@ -152,6 +162,42 @@ function addMessage(text, type) {
     chat.scrollTop = chat.scrollHeight;
 
     return msg;
+}
+
+function saveHistory(item) {
+    const key = "aura_history";
+    const existing = JSON.parse(localStorage.getItem(key) || "[]");
+
+    existing.unshift(item);
+    localStorage.setItem(key, JSON.stringify(existing.slice(0, 10)));
+}
+
+function renderHistory() {
+    const h = JSON.parse(localStorage.getItem("aura_history") || "[]");
+
+    if (!h.length) return "";
+
+    return `
+        <div class="card">
+            <b>📌 Recent Decisions</b>
+            <ul>
+                ${h.map(x => `
+                    <li>
+                        ${x.move || "Decision saved"}
+                        <span style="color:#6b7280;">
+                            (${new Date(x.time).toLocaleDateString()})
+                        </span>
+                    </li>
+                `).join("")}
+            </ul>
+        </div>
+    `;
+}
+
+function getUsageCount() {
+    const c = Number(localStorage.getItem("aura_usage") || "0") + 1;
+    localStorage.setItem("aura_usage", c);
+    return c;
 }
 
 function renderProfile(profile) {
@@ -178,134 +224,6 @@ function renderProfile(profile) {
             </div>
         </div>
     `;
-}
-
-function renderProReport(report) {
-    if (!report) return "";
-
-    return `
-        <div class="card" style="border:1px solid #4fd1c5;">
-
-            <h2 style="color:#4fd1c5;">🔓 AURA Pro Decision Report</h2>
-            <div style="
-    margin-bottom:15px;
-    padding:12px;
-    border-radius:8px;
-    background:#0b1220;
-    border:1px solid #1f2937;
-    color:#9ca3af;
-">
-    💰 Businesses pay consultants $50–$300 for this level of analysis.
-    You just generated it instantly with AURA.
-</div>
-
-            <div class="section" style="font-size:16px;">
-                <div style="
-    font-size:18px;
-    font-weight:bold;
-    margin:15px 0;
-    padding:12px;
-    border-radius:8px;
-    background:#111827;
-    border-left:4px solid #4fd1c5;
-">
-    🚀 ${report.summary}
-</div>
-
-            <hr style="margin:15px 0; border-color:#1f2937;">
-
-            <div class="section">
-                <b>📊 Strategy Comparison</b>
-                <ul>
-                    ${(report.strategy_breakdown || []).map(s => `
-                        <li style="margin-bottom:8px;">
-                            <b>${s.strategy}</b><br>
-                            ${s.why_it_works}<br>
-                            <span style="color:#9ca3af;">Risk: ${s.risk}</span>
-                        </li>
-                    `).join("")}
-                </ul>
-            </div>
-
-            <div class="section">
-                <b>🔮 Outcome Simulation</b><br><br>
-
-                <b style="color:#16a34a;">Best Case:</b><br>
-                ${report.scenarios?.best_case || "N/A"}<br><br>
-
-                <b style="color:#f59e0b;">Expected:</b><br>
-                ${report.scenarios?.expected_case || "N/A"}<br><br>
-
-                <b style="color:#dc2626;">Worst Case:</b><br>
-                ${report.scenarios?.worst_case || "N/A"}
-            </div>
-
-            <div class="section">
-    <b>📊 Confidence Level:</b><br>
-    This recommendation is based on your budget, market conditions,
-    and multi-strategy simulation.
-</div>
-
-            <div class="section">
-                <b>⚠️ Risk Breakdown</b><br>
-                <b>Main Risk:</b> ${report.risk_analysis?.main_risk || "N/A"}<br><br>
-                <b>How to reduce risk:</b><br>
-                ${report.risk_analysis?.mitigation || "N/A"}
-            </div>
-
-            <div class="section">
-                <b>🛠️ Execution Plan</b>
-                <ol>
-                    ${(report.execution_plan || []).map(step => `<li>${step}</li>`).join("")}
-                </ol>
-            </div>
-
-            <div class="section" style="background:#0b1220; padding:10px; border-radius:8px;">
-                <b>📅 30-Day Action Plan</b><br><br>
-
-                <b>Week 1:</b> ${report["30_day_plan"]?.week_1 || "N/A"}<br>
-                <b>Week 2:</b> ${report["30_day_plan"]?.week_2 || "N/A"}<br>
-                <b>Week 3:</b> ${report["30_day_plan"]?.week_3 || "N/A"}<br>
-                <b>Week 4:</b> ${report["30_day_plan"]?.week_4 || "N/A"}
-            </div>
-
-            <div style="
-                margin-top:20px;
-                padding:12px;
-                border-radius:8px;
-                background:#111827;
-                border:1px solid #1f2937;
-                color:#9ca3af;
-                font-size:13px;
-            ">
-                💡 This report is generated using AURA’s multi-strategy analysis,
-                prediction modeling, and risk evaluation system.
-            </div>
-
-        </div>
-    `;
-}
-
-async function unlockReport() {
-localStorage.setItem("aura_last_decision", JSON.stringify(lastDecision));
-    try {
-        const res = await fetch("https://aura-ai-core-oeae.onrender.com/create-checkout-session", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"}
-        });
-
-        const data = await res.json();
-
-        if (data.checkout_url) {
-            window.location.href = data.checkout_url;
-        } else {
-            alert("Could not start payment.");
-        }
-
-    } catch (err) {
-        alert("Payment error.");
-        console.error(err);
-    }
 }
 
 function renderStrategyComparison(brief) {
@@ -364,8 +282,126 @@ function renderStrategyComparison(brief) {
     `;
 }
 
+function renderProReport(report) {
+    if (!report) return "";
+
+    return `
+        <div class="card" style="border:1px solid #4fd1c5;">
+            <h2 style="color:#4fd1c5;">🔓 AURA Pro Decision Report</h2>
+
+            <div style="
+                margin-bottom:15px;
+                padding:12px;
+                border-radius:8px;
+                background:#0b1220;
+                border:1px solid #1f2937;
+                color:#9ca3af;
+            ">
+                💰 Businesses pay consultants $50–$300 for this level of analysis.
+                You just generated it instantly with AURA.
+            </div>
+
+            <div style="
+                font-size:18px;
+                font-weight:bold;
+                margin:15px 0;
+                padding:12px;
+                border-radius:8px;
+                background:#111827;
+                border-left:4px solid #4fd1c5;
+            ">
+                🚀 ${report.summary || "N/A"}
+            </div>
+
+            <hr style="margin:15px 0; border-color:#1f2937;">
+
+            <div class="section">
+                <b>📊 Strategy Comparison</b>
+                <ul>
+                    ${(report.strategy_breakdown || []).map(s => `
+                        <li style="margin-bottom:8px;">
+                            <b>${s.strategy}</b><br>
+                            ${s.why_it_works}<br>
+                            <span style="color:#9ca3af;">Risk: ${s.risk}</span>
+                        </li>
+                    `).join("")}
+                </ul>
+            </div>
+
+            <div class="section">
+                <b>🔮 Outcome Simulation</b><br><br>
+
+                <b style="color:#16a34a;">Best Case:</b><br>
+                ${report.scenarios?.best_case || "N/A"}<br><br>
+
+                <b style="color:#f59e0b;">Expected:</b><br>
+                ${report.scenarios?.expected_case || "N/A"}<br><br>
+
+                <b style="color:#dc2626;">Worst Case:</b><br>
+                ${report.scenarios?.worst_case || "N/A"}
+            </div>
+
+            <div class="section">
+                <b>📊 Confidence Level:</b><br>
+                This recommendation is based on your budget, market conditions,
+                and multi-strategy simulation.
+            </div>
+
+            <div class="section">
+                <b>⚠️ Risk Breakdown</b><br>
+                <b>Main Risk:</b> ${report.risk_analysis?.main_risk || "N/A"}<br><br>
+                <b>How to reduce risk:</b><br>
+                ${report.risk_analysis?.mitigation || "N/A"}
+            </div>
+
+            <div class="section">
+                <b>🛠️ Execution Plan</b>
+                <ol>
+                    ${(report.execution_plan || []).map(step => `<li>${step}</li>`).join("")}
+                </ol>
+            </div>
+
+            <div class="section" style="background:#0b1220; padding:10px; border-radius:8px;">
+                <b>📅 30-Day Action Plan</b><br><br>
+
+                <b>Week 1:</b> ${report["30_day_plan"]?.week_1 || "N/A"}<br>
+                <b>Week 2:</b> ${report["30_day_plan"]?.week_2 || "N/A"}<br>
+                <b>Week 3:</b> ${report["30_day_plan"]?.week_3 || "N/A"}<br>
+                <b>Week 4:</b> ${report["30_day_plan"]?.week_4 || "N/A"}
+            </div>
+
+            <div class="section" style="margin-top:12px;">
+                <b>🧪 After you try this:</b><br>
+                Tell AURA what happened, for example “conversion was low,” and it will adjust your strategy.
+            </div>
+
+            <div style="
+                margin-top:20px;
+                padding:12px;
+                border-radius:8px;
+                background:#111827;
+                border:1px solid #1f2937;
+                color:#9ca3af;
+                font-size:13px;
+            ">
+                💡 This report is generated using AURA’s multi-strategy analysis,
+                prediction modeling, and risk evaluation system.
+            </div>
+
+            <div style="
+                margin-top:15px;
+                font-size:13px;
+                color:#6b7280;
+            ">
+                ⚡ Early version pricing. This report may cost more as AURA evolves.
+            </div>
+        </div>
+    `;
+}
+
 function renderDecisionResponse(r, profile) {
     const brief = r.decision_brief || {};
+    const usage = getUsageCount();
 
     return `
         <div style="
@@ -375,6 +411,10 @@ function renderDecisionResponse(r, profile) {
             color:#4fd1c5;
         ">
             👉 ${brief.recommended_move || "No clear move yet"}
+        </div>
+
+        <div style="margin-top:10px; color:#4fd1c5;">
+            🔥 Session streak: ${usage} decisions analyzed
         </div>
 
         <b>${r.summary || ""}</b>
@@ -459,13 +499,46 @@ function renderDecisionResponse(r, profile) {
                     <button class="unlock-button" onclick="unlockReport()">
                         🔓 Unlock Full Analysis ($5)
                     </button>
+
+                    <button class="blue-button" onclick="runNextAction()">
+                        ▶️ Run Next Action
+                    </button>
                 </div>
             `
             : ""
         }
 
         ${renderProfile(profile)}
+        ${renderHistory()}
     `;
+}
+
+async function unlockReport() {
+    if (!lastDecision) {
+        alert("Run a decision first before unlocking a report.");
+        return;
+    }
+
+    localStorage.setItem("aura_last_decision", JSON.stringify(lastDecision));
+
+    try {
+        const res = await fetch("https://aura-ai-core-oeae.onrender.com/create-checkout-session", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"}
+        });
+
+        const data = await res.json();
+
+        if (data.checkout_url) {
+            window.location.href = data.checkout_url;
+        } else {
+            alert("Could not start payment.");
+        }
+
+    } catch (err) {
+        alert("Payment error.");
+        console.error(err);
+    }
 }
 
 async function generatePaidReportAfterSuccess() {
@@ -481,7 +554,6 @@ async function generatePaidReportAfterSuccess() {
     }
 
     const decision = JSON.parse(saved);
-
     const loadingBox = addMessage("<b>🔓 Payment successful. Generating Pro Report...</b>", "bot");
 
     try {
@@ -500,13 +572,23 @@ async function generatePaidReportAfterSuccess() {
         loadingBox.innerHTML = renderProReport(data.report);
 
         localStorage.removeItem("aura_last_decision");
-
         window.history.replaceState({}, document.title, window.location.pathname);
 
     } catch (err) {
         loadingBox.innerHTML = "❌ Payment worked, but Pro Report generation failed.";
         console.error(err);
     }
+}
+
+function runNextAction() {
+    if (!lastDecision) return;
+
+    const next =
+        lastDecision.decision_brief?.recommended_move ||
+        "Refine strategy based on results";
+
+    document.getElementById("message").value = next;
+    sendMessage();
 }
 
 async function sendMessage() {
@@ -627,6 +709,12 @@ async function sendMessage() {
                     decision_brief: r.decision_brief
                 };
 
+                saveHistory({
+                    goal: messageToSend,
+                    move: r.decision_brief?.recommended_move,
+                    time: new Date().toISOString()
+                });
+
                 responseHTML = renderDecisionResponse(r, data.profile);
             }
         }
@@ -653,15 +741,8 @@ async function sendMessage() {
         responseBox.innerHTML = "❌ Error connecting to AURA backend.";
         console.error(err);
     }
-
-    <div style="
-    margin-top:15px;
-    font-size:13px;
-    color:#6b7280;
-">
-    ⚡ Early version pricing. This report may cost more as AURA evolves.
-</div>
 }
+
 window.addEventListener("load", generatePaidReportAfterSuccess);
 </script>
 
