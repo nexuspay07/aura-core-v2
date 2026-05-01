@@ -1,3 +1,6 @@
+from app.core.prediction_engine import get_market_context
+
+
 class PredictionEngine:
 
     def simulate_strategy(self, strategy, world_state):
