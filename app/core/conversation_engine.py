@@ -38,6 +38,8 @@ class ConversationEngine:
             missing.append("market")
 
         return missing
+    
+    
 
     def build_context_question(self, missing: list):
         questions = []
@@ -121,6 +123,7 @@ class ConversationEngine:
         explanation: list,
         profile: dict | None = None
     ):
+        from app.core.prediction_engine import get_market_context
         name = best.get("name", "Balanced")
         risk = best.get("risk", "medium")
         clean_goal = self.clean_goal_text(goal)
@@ -130,6 +133,14 @@ class ConversationEngine:
         preferences = self.extract_preferences(goal)
         budget = preferences.get("budget", 10000)
         market = preferences.get("market", "normal")
+
+        market = get_market_context()
+
+        decision_brief["market_context"] = (
+        f"Current market shows {market['economy']} with "
+        f"{market['consumer_behavior']} consumers. "
+        f"Businesses must focus on value, efficiency, and survival strategies."
+)
 
         missing = self.missing_context(preferences)
         if missing:

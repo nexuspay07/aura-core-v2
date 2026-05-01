@@ -423,6 +423,22 @@ function renderDecisionResponse(r, profile) {
             ${r.detail || ""}
         </div>
 
+        <div class="section">
+  <b>🌍 Market Reality:</b><br>
+  ${brief.market_context || "General market conditions assumed"}
+</div>
+
+<div class="section" style="
+    margin-top:12px;
+    padding:10px;
+    border-radius:8px;
+    background:#0b1220;
+    border:1px solid #1f2937;
+">
+  <b>🧠 AURA Insight:</b><br>
+  ${brief.why_this}
+</div>
+
         ${
             (r.next_steps || []).length
             ? `

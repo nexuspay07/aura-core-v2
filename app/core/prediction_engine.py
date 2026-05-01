@@ -20,6 +20,14 @@ class PredictionEngine:
             self.simulate_strategy(strategy, world_state)
             for strategy in strategies
         ]
+    
+    def get_market_context():
+     return {
+        "economy": "high inflation",
+        "consumer_behavior": "price sensitive",
+        "risk_level": "high uncertainty",
+        "trend": "reduced discretionary spending"
+    }
 
     def predict_outcome(self, intent: str, strategy: str, scenario: dict):
         intent = intent.lower()
