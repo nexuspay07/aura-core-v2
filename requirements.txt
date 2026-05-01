@@ -8,4 +8,4 @@ python-dotenv
 passlib[bcrypt]
 python-jose
 psutil
-stripe
+stripe==10.0.0
