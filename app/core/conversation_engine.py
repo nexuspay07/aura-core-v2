@@ -2,6 +2,7 @@ from app.domains.business.business_domain_engine import business_domain_engine
 from app.domains.business.business_strategy_engine import business_strategy_engine
 from app.core.prediction_engine import prediction_engine
 from app.core.strategy_comparison_engine import strategy_comparison_engine
+from app.core.prediction_engine import prediction_engine, get_market_context
 
 class ConversationEngine:
 

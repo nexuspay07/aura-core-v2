@@ -1,5 +1,10 @@
-from app.core.prediction_engine import get_market_context
-
+def get_market_context():
+     return {
+        "economy": "high inflation",
+        "consumer_behavior": "price sensitive",
+        "risk_level": "high uncertainty",
+        "trend": "reduced discretionary spending"
+    }
 
 class PredictionEngine:
 
@@ -24,13 +29,6 @@ class PredictionEngine:
             for strategy in strategies
         ]
     
-    def get_market_context():
-     return {
-        "economy": "high inflation",
-        "consumer_behavior": "price sensitive",
-        "risk_level": "high uncertainty",
-        "trend": "reduced discretionary spending"
-    }
 
     def predict_outcome(self, intent: str, strategy: str, scenario: dict):
         intent = intent.lower()
