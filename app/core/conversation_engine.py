@@ -1,8 +1,8 @@
 from app.domains.business.business_domain_engine import business_domain_engine
 from app.domains.business.business_strategy_engine import business_strategy_engine
-from app.core.prediction_engine import prediction_engine
-from app.core.strategy_comparison_engine import strategy_comparison_engine
 from app.core.prediction_engine import prediction_engine, get_market_context
+from app.core.strategy_comparison_engine import strategy_comparison_engine
+
 
 class ConversationEngine:
 
@@ -39,8 +39,6 @@ class ConversationEngine:
             missing.append("market")
 
         return missing
-    
-    
 
     def build_context_question(self, missing: list):
         questions = []
@@ -124,7 +122,6 @@ class ConversationEngine:
         explanation: list,
         profile: dict | None = None
     ):
-        from app.core.prediction_engine import get_market_context
         name = best.get("name", "Balanced")
         risk = best.get("risk", "medium")
         clean_goal = self.clean_goal_text(goal)
@@ -134,14 +131,6 @@ class ConversationEngine:
         preferences = self.extract_preferences(goal)
         budget = preferences.get("budget", 10000)
         market = preferences.get("market", "normal")
-
-        market = get_market_context()
-
-        decision_brief["market_context"] = (
-        f"Current market shows {market['economy']} with "
-        f"{market['consumer_behavior']} consumers. "
-        f"Businesses must focus on value, efficiency, and survival strategies."
-)
 
         missing = self.missing_context(preferences)
         if missing:
@@ -154,8 +143,8 @@ class ConversationEngine:
                 "caution": "",
                 "decision_brief": {},
             }
-        
-        
+
+        market_context = get_market_context()
 
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
@@ -179,13 +168,13 @@ class ConversationEngine:
         )
 
         strategy_comparison = strategy_comparison_engine.compare(
-    business_intent,
-    {
-        "risk": risk,
-        "budget": budget,
-        "market": market
-    }
-)
+            business_intent,
+            {
+                "risk": risk,
+                "budget": budget,
+                "market": market
+            }
+        )
 
         next_steps = business_strategy.get("steps", [
             "Start small",
@@ -201,9 +190,6 @@ class ConversationEngine:
         timeframe = prediction.get("timeframe", "Medium-term")
         context_note = prediction.get("context_note", "General estimate")
 
-        # -------------------------
-        # CONTEXT-AWARE DECISION LOGIC
-        # -------------------------
         if market == "competitive" and budget <= 5000:
             recommended_move = "Start with a niche offer and test pricing on a small audience"
         elif market == "competitive":
@@ -217,9 +203,6 @@ class ConversationEngine:
         else:
             recommended_move = best_move
 
-        # -------------------------
-        # CONTEXT-AWARE FALLBACK
-        # -------------------------
         if market == "competitive" and budget <= 5000:
             fallback = "If traction is low, narrow your niche further or improve your offer"
         elif market == "competitive":
@@ -240,6 +223,11 @@ class ConversationEngine:
             "why_this": (
                 f"AURA selected the {name.lower()} approach based on your context "
                 f"and predicted outcome strength."
+            ),
+            "market_context": (
+                f"Current market shows {market_context['economy']} with "
+                f"{market_context['consumer_behavior']} consumers. "
+                f"Businesses must focus on value, efficiency, and survival strategies."
             ),
             "main_risk": self._main_risk_message(risk),
             "watch_metric": self._watch_metric(business_intent),
