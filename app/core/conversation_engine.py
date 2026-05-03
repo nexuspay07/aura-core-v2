@@ -2,7 +2,7 @@ from app.domains.business.business_domain_engine import business_domain_engine
 from app.domains.business.business_strategy_engine import business_strategy_engine
 from app.core.prediction_engine import prediction_engine, get_market_context
 from app.core.strategy_comparison_engine import strategy_comparison_engine
-
+from app.core.market_intelligence_engine import market_intelligence_engine
 
 class ConversationEngine:
 
@@ -146,6 +146,15 @@ class ConversationEngine:
 
         market_context = get_market_context()
 
+        market_intelligence = market_intelligence_engine.analyze(
+    business_intent,
+    {
+        "budget": budget,
+        "market": market,
+        "risk": risk
+    }
+)
+
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
             {
@@ -213,6 +222,10 @@ class ConversationEngine:
             fallback = self._fallback_move(name)
 
         decision_brief = {
+            "market_pressure": market_intelligence.get("market_pressure"),
+"survival_strategy": market_intelligence.get("survival_strategy"),
+"growth_angle": market_intelligence.get("growth_angle"),
+"premium_insight": market_intelligence.get("premium_insight"),
             "expected_impact": impact,
             "tradeoff": tradeoff,
             "timeframe": timeframe,
