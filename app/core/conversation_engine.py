@@ -3,6 +3,8 @@ from app.domains.business.business_strategy_engine import business_strategy_engi
 from app.core.prediction_engine import prediction_engine, get_market_context
 from app.core.strategy_comparison_engine import strategy_comparison_engine
 from app.core.market_intelligence_engine import market_intelligence_engine
+from app.core.decision_depth_engine import decision_depth_engine
+
 
 class ConversationEngine:
 
@@ -115,6 +117,24 @@ class ConversationEngine:
 
         return preferences
 
+    def build_profile_note(self, profile: dict | None):
+        if not profile:
+            return ""
+
+        preferred_risk = profile.get("preferred_risk")
+        interaction_count = profile.get("interaction_count", 0)
+
+        if interaction_count < 2:
+            return ""
+
+        if preferred_risk == "low":
+            return "AURA adjusted this response toward safer execution because your profile shows lower risk preference."
+
+        if preferred_risk == "high":
+            return "AURA adjusted this response toward faster execution because your profile shows higher growth preference."
+
+        return "AURA used your previous interaction profile to keep the recommendation balanced."
+
     def build_conversational_response(
         self,
         goal: str,
@@ -142,18 +162,31 @@ class ConversationEngine:
                 "business_intent": business_intent,
                 "caution": "",
                 "decision_brief": {},
+                "advanced_details": {
+                    "explanation": explanation or [],
+                    "profile_note": self.build_profile_note(profile),
+                }
             }
 
         market_context = get_market_context()
 
         market_intelligence = market_intelligence_engine.analyze(
-    business_intent,
-    {
-        "budget": budget,
-        "market": market,
-        "risk": risk
-    }
-)
+            business_intent,
+            {
+                "budget": budget,
+                "market": market,
+                "risk": risk
+            }
+        )
+
+        decision_depth = decision_depth_engine.analyze(
+            business_intent,
+            {
+                "budget": budget,
+                "market": market,
+                "risk": risk
+            }
+        )
 
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
@@ -221,11 +254,21 @@ class ConversationEngine:
         else:
             fallback = self._fallback_move(name)
 
+        profile_note = self.build_profile_note(profile)
+
         decision_brief = {
             "market_pressure": market_intelligence.get("market_pressure"),
-"survival_strategy": market_intelligence.get("survival_strategy"),
-"growth_angle": market_intelligence.get("growth_angle"),
-"premium_insight": market_intelligence.get("premium_insight"),
+            "survival_strategy": market_intelligence.get("survival_strategy"),
+            "growth_angle": market_intelligence.get("growth_angle"),
+            "premium_insight": market_intelligence.get("premium_insight"),
+
+            "personalized_reality": decision_depth.get("personalized_reality"),
+            "consequence_simulation": decision_depth.get("consequence_simulation"),
+            "competitor_threat": decision_depth.get("competitor_threat"),
+            "hidden_opportunity": decision_depth.get("hidden_opportunity"),
+            "failure_triggers": decision_depth.get("failure_triggers"),
+            "numbers_to_watch": decision_depth.get("numbers_to_watch"),
+
             "expected_impact": impact,
             "tradeoff": tradeoff,
             "timeframe": timeframe,
@@ -234,9 +277,10 @@ class ConversationEngine:
             "recommended_move": recommended_move,
             "context_note": context_note,
             "why_this": (
-                f"AURA selected the {name.lower()} approach based on your context "
-                f"and predicted outcome strength."
+                f"AURA selected the {name.lower()} approach because it best fits your "
+                f"budget, market condition, risk level, and predicted outcome strength."
             ),
+            "profile_note": profile_note,
             "market_context": (
                 f"Current market shows {market_context.get('economy', 'uncertain conditions')} with "
                 f"{market_context.get('consumer_behavior', 'changing')} consumers. "
@@ -247,6 +291,21 @@ class ConversationEngine:
             "fallback_move": fallback
         }
 
+        advanced_details = {
+            "strategy": name,
+            "risk": risk,
+            "business_intent": business_intent,
+            "budget": budget,
+            "market": market,
+            "final_score": best.get("final_score"),
+            "decision_score": best.get("decision_score"),
+            "trust_score": best.get("trust_score"),
+            "failure_probability": best.get("failure_probability"),
+            "explanation": explanation or [],
+            "profile_note": profile_note,
+            "preferences": preferences,
+        }
+
         return {
             "summary": f"👉 Best move: {recommended_move}",
             "detail": f"For your goal — {clean_goal}",
@@ -255,6 +314,7 @@ class ConversationEngine:
             "business_intent": business_intent,
             "caution": self._risk_caution(risk),
             "decision_brief": decision_brief,
+            "advanced_details": advanced_details,
         }
 
     def _risk_caution(self, risk: str):
