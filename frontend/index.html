@@ -543,6 +543,44 @@ function renderDecisionResponse(r, profile) {
                         risk level, and predicted outcomes to select the strongest option.
                     </div>
 
+                    <div class="section" style="padding:10px; border:1px solid #4fd1c5; border-radius:8px; background:#0b1220;">
+    <b>🎯 Personalized Reality:</b><br>
+    ${brief.personalized_reality || "No personalized reality available."}
+</div>
+
+<div class="section" style="padding:10px; border:1px solid #1f2937; border-radius:8px; background:#0b1220;">
+    <b>⏳ If You Follow This Plan:</b><br>
+    <b>Week 1:</b> ${brief.consequence_simulation?.week_1 || "N/A"}<br>
+    <b>Week 2:</b> ${brief.consequence_simulation?.week_2 || "N/A"}<br>
+    <b>Week 3:</b> ${brief.consequence_simulation?.week_3 || "N/A"}<br>
+    <b>Week 4:</b> ${brief.consequence_simulation?.week_4 || "N/A"}
+</div>
+
+<div class="section" style="padding:10px; border:1px solid #1f2937; border-radius:8px; background:#0b1220;">
+    <b>⚔️ Competitor Threat:</b><br>
+    ${brief.competitor_threat || "No competitor threat analysis available."}
+</div>
+
+<div class="section" style="padding:10px; border:1px solid #4fd1c5; border-radius:8px; background:#111827;">
+    <b>💎 Hidden Opportunity:</b><br>
+    ${brief.hidden_opportunity || "No hidden opportunity available."}
+</div>
+
+<div class="section">
+    <b>🚨 Failure Triggers:</b>
+    <ul>
+        ${(brief.failure_triggers || []).map(x => `<li>${x}</li>`).join("")}
+    </ul>
+</div>
+
+<div class="section">
+    <b>📊 Numbers to Watch:</b><br>
+    Minimum test size: ${brief.numbers_to_watch?.minimum_test_size || "N/A"}<br>
+    Healthy conversion: ${brief.numbers_to_watch?.healthy_conversion || "N/A"}<br>
+    Warning conversion: ${brief.numbers_to_watch?.warning_conversion || "N/A"}<br>
+    Budget guardrail: ${brief.numbers_to_watch?.budget_guardrail || "N/A"}
+</div>
+
                     <br>
 
                     <b>Main Risk:</b><br>
