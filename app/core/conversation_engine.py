@@ -225,8 +225,8 @@ class ConversationEngine:
                 f"and predicted outcome strength."
             ),
             "market_context": (
-                f"Current market shows {market_context['economy']} with "
-                f"{market_context['consumer_behavior']} consumers. "
+                f"Current market shows {market_context.get('economy', 'uncertain conditions')} with "
+                f"{market_context.get('consumer_behavior', 'changing')} consumers. "
                 f"Businesses must focus on value, efficiency, and survival strategies."
             ),
             "main_risk": self._main_risk_message(risk),
