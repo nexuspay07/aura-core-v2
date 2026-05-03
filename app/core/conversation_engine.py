@@ -4,7 +4,7 @@ from app.core.prediction_engine import prediction_engine, get_market_context
 from app.core.strategy_comparison_engine import strategy_comparison_engine
 from app.core.market_intelligence_engine import market_intelligence_engine
 from app.core.decision_depth_engine import decision_depth_engine
-
+from app.core.reality_engine import reality_engine
 
 class ConversationEngine:
 
@@ -188,6 +188,15 @@ class ConversationEngine:
             }
         )
 
+        reality = reality_engine.analyze(
+    business_intent,
+    {
+        "budget": budget,
+        "market": market,
+        "risk": risk
+    }
+)
+
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
             {
@@ -261,6 +270,11 @@ class ConversationEngine:
             "survival_strategy": market_intelligence.get("survival_strategy"),
             "growth_angle": market_intelligence.get("growth_angle"),
             "premium_insight": market_intelligence.get("premium_insight"),
+            "reality_check": reality.get("reality_check"),
+"brutal_truth": reality.get("brutal_truth"),
+"why_not_aggressive": reality.get("why_not_aggressive"),
+"why_not_balanced": reality.get("why_not_balanced"),
+"why_this_strategy_wins": reality.get("why_this_strategy_wins"),
 
             "personalized_reality": decision_depth.get("personalized_reality"),
             "consequence_simulation": decision_depth.get("consequence_simulation"),
