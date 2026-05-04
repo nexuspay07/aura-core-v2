@@ -6,7 +6,10 @@ class ProReportEngine:
         report = {
             "title": "AURA Pro Decision Report",
 
-            "summary": decision_brief.get("recommended_move", "No recommendation available."),
+            "summary": decision_brief.get(
+                "recommended_move",
+                "No recommendation available."
+            ),
 
             "market_reality": decision_brief.get("market_context"),
             "market_pressure": decision_brief.get("market_pressure"),
@@ -42,9 +45,9 @@ class ProReportEngine:
             ],
 
             "scenarios": {
-                "best_case": "Strong traction if the niche is clear and the offer solves a painful problem.",
-                "expected_case": "Moderate growth through small tests, customer feedback, and focused execution.",
-                "worst_case": "Low traction if positioning is weak, trust is low, or the offer is too broad."
+                "best_case": "Strong traction if the niche is clear, the offer solves a painful problem, and trust is built early.",
+                "expected_case": "Moderate growth through small tests, direct customer feedback, and focused execution.",
+                "worst_case": "Low traction if positioning is weak, trust is low, pricing is unclear, or the offer is too broad."
             },
 
             "risk_analysis": {
@@ -56,18 +59,29 @@ class ProReportEngine:
             },
 
             "execution_plan": [
-                "Define one specific customer segment",
-                "Clarify the painful problem you solve",
-                "Test the offer with a small audience",
-                "Measure response and objections",
-                "Improve positioning before scaling"
+                "Day 1–2: Define a narrow customer segment with a clear problem",
+                "Day 3–5: Create a simple offer and message",
+                "Day 6–10: Test with 20–50 real prospects",
+                "Day 11–15: Identify objections and refine positioning",
+                "Day 16–30: Scale only the message that converts"
             ],
 
             "30_day_plan": {
-                "week_1": "Define niche, offer, and customer problem",
-                "week_2": "Test with real prospects and collect objections",
+                "week_1": "Define niche and test demand through conversations",
+                "week_2": "Run small tests and collect real feedback",
                 "week_3": "Improve pricing, message, and trust signals",
-                "week_4": "Scale the strongest channel or pivot if traction is weak"
+                "week_4": "Scale or pivot based on conversion data"
+            },
+
+            "failure_prediction": [
+                "If conversion is below 3%, the offer is not strong enough",
+                "If customers hesitate, trust or clarity is missing",
+                "If interest is high but no sales, pricing or value mismatch exists"
+            ],
+
+            "financial_guardrails": {
+                "max_test_spend": "Do not spend more than 10–15% of your budget before validation",
+                "safe_budget_usage": "Protect at least 70% of capital until demand is proven"
             }
         }
 
