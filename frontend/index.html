@@ -384,6 +384,59 @@ function renderProReport(report) {
                 and multi-strategy simulation.
             </div>
 
+            <div class="card">
+    <b>🌍 Market Intelligence</b>
+
+    <div class="section">
+        <b>Market Reality:</b><br>
+        ${report.market_reality || "N/A"}
+    </div>
+
+    <div class="insight-box">
+        <b>Market Pressure:</b><br>
+        ${report.market_pressure || "N/A"}
+    </div>
+
+    <div class="insight-box">
+        <b>Survival Strategy:</b><br>
+        ${report.survival_strategy || "N/A"}
+    </div>
+
+    <div class="highlight-box">
+        <b>Premium Insight:</b><br>
+        ${report.premium_insight || "N/A"}
+    </div>
+</div>
+
+<div class="card">
+    <b>🧠 Reality Engine</b>
+
+    <div class="highlight-box">
+        <b>Reality Check:</b><br>
+        ${report.reality_engine?.reality_check || "N/A"}
+    </div>
+
+    <div class="warning-box">
+        <b>Brutal Truth:</b><br>
+        ${report.reality_engine?.brutal_truth || "N/A"}
+    </div>
+
+    <div class="insight-box">
+        <b>Why NOT Aggressive:</b><br>
+        ${report.reality_engine?.why_not_aggressive || "N/A"}
+    </div>
+
+    <div class="insight-box">
+        <b>Why NOT Balanced:</b><br>
+        ${report.reality_engine?.why_not_balanced || "N/A"}
+    </div>
+
+    <div class="success-box">
+        <b>Why This Strategy Wins:</b><br>
+        ${report.reality_engine?.why_this_strategy_wins || "N/A"}
+    </div>
+</div>
+
             <div class="section">
                 <b>⚠️ Risk Breakdown</b><br>
                 <b>Main Risk:</b> ${report.risk_analysis?.main_risk || "N/A"}<br><br>
