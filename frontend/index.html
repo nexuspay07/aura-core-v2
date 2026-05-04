@@ -28,7 +28,7 @@
 
         .message {
             margin-bottom: 15px;
-            max-width: 75%;
+            max-width: 78%;
             padding: 12px;
             border-radius: 10px;
         }
@@ -86,6 +86,42 @@
             border: 1px solid #1f2937;
         }
 
+        .insight-box {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #0b1220;
+            border: 1px solid #1f2937;
+            color: #cbd5e1;
+        }
+
+        .highlight-box {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #111827;
+            border: 1px solid #4fd1c5;
+            color: #cbd5e1;
+        }
+
+        .warning-box {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #111827;
+            border: 1px solid #ef4444;
+            color: #cbd5e1;
+        }
+
+        .success-box {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #022c22;
+            border: 1px solid #10b981;
+            color: #d1fae5;
+        }
+
         .strategy-card {
             margin-bottom: 12px;
             padding: 12px;
@@ -117,6 +153,20 @@
 
         ul, ol {
             margin-top: 6px;
+        }
+
+        @media (max-width: 768px) {
+            .message {
+                max-width: 95%;
+            }
+
+            header {
+                padding: 12px;
+            }
+
+            #chat {
+                padding: 12px;
+            }
         }
     </style>
 </head>
@@ -266,13 +316,7 @@ function renderStrategyComparison(brief) {
                 }).join("")
             }
 
-            <div style="
-                margin-top:15px;
-                padding:12px;
-                border-radius:8px;
-                background:#111827;
-                border:1px solid #4fd1c5;
-            ">
+            <div class="highlight-box">
                 🏆 <b>Best Strategy:</b>
                 <span style="color:#4fd1c5;">
                     ${sc.best_strategy?.strategy || "N/A"}
@@ -289,14 +333,7 @@ function renderProReport(report) {
         <div class="card" style="border:1px solid #4fd1c5;">
             <h2 style="color:#4fd1c5;">🔓 AURA Pro Decision Report</h2>
 
-            <div style="
-                margin-bottom:15px;
-                padding:12px;
-                border-radius:8px;
-                background:#0b1220;
-                border:1px solid #1f2937;
-                color:#9ca3af;
-            ">
+            <div class="insight-box">
                 💰 Businesses pay consultants $50–$300 for this level of analysis.
                 You just generated it instantly with AURA.
             </div>
@@ -375,24 +412,12 @@ function renderProReport(report) {
                 Tell AURA what happened, for example “conversion was low,” and it will adjust your strategy.
             </div>
 
-            <div style="
-                margin-top:20px;
-                padding:12px;
-                border-radius:8px;
-                background:#111827;
-                border:1px solid #1f2937;
-                color:#9ca3af;
-                font-size:13px;
-            ">
+            <div class="insight-box">
                 💡 This report is generated using AURA’s multi-strategy analysis,
                 prediction modeling, and risk evaluation system.
             </div>
 
-            <div style="
-                margin-top:15px;
-                font-size:13px;
-                color:#6b7280;
-            ">
+            <div style="margin-top:15px; font-size:13px; color:#6b7280;">
                 ⚡ Early version pricing. This report may cost more as AURA evolves.
             </div>
         </div>
@@ -423,70 +448,110 @@ function renderDecisionResponse(r, profile) {
             ${r.detail || ""}
         </div>
 
-        <div class="section">
-  <b>🌍 Market Reality:</b><br>
-  ${brief.market_context || "General market conditions assumed"}
-</div>
+        <div class="card">
+            <b>🌍 Market Intelligence</b>
 
-<div class="section" style="
-    margin-top:12px;
-    padding:10px;
-    border-radius:8px;
-    background:#0b1220;
-    border:1px solid #1f2937;
-">
-    <b>🌍 Market Pressure:</b><br>
-    ${brief.market_pressure || "No market pressure analysis available."}
-</div>
+            <div class="section">
+                <b>Market Reality:</b><br>
+                ${brief.market_context || "General market conditions assumed."}
+            </div>
 
-<div class="section" style="
-    margin-top:12px;
-    padding:10px;
-    border-radius:8px;
-    background:#0b1220;
-    border:1px solid #1f2937;
-">
-    <b>🛡️ Survival Strategy:</b><br>
-    ${brief.survival_strategy || "No survival strategy available."}
-</div>
+            <div class="insight-box">
+                <b>Market Pressure:</b><br>
+                ${brief.market_pressure || "No market pressure analysis available."}
+            </div>
 
-<div class="section" style="
-    margin-top:12px;
-    padding:10px;
-    border-radius:8px;
-    background:#0b1220;
-    border:1px solid #1f2937;
-">
-    <b>📈 Growth Angle:</b><br>
-    ${brief.growth_angle || "No growth angle available."}
-</div>
+            <div class="insight-box">
+                <b>Survival Strategy:</b><br>
+                ${brief.survival_strategy || "No survival strategy available."}
+            </div>
 
-<div class="section" style="
-    margin-top:12px;
-    padding:10px;
-    border-radius:8px;
-    background:#111827;
-    border:1px solid #4fd1c5;
-">
-    <b>🧠 Premium AURA Insight:</b><br>
-    ${brief.premium_insight || "No premium insight available."}
-</div>
+            <div class="insight-box">
+                <b>Growth Angle:</b><br>
+                ${brief.growth_angle || "No growth angle available."}
+            </div>
 
-<div class="section" style="
-    margin-top:12px;
-    padding:10px;
-    border-radius:8px;
-    background:#0b1220;
-    border:1px solid #1f2937;
-">
-  <b>🧠 AURA Insight:</b><br>
-  ${brief.why_this}
-</div>
+            <div class="highlight-box">
+                <b>Premium AURA Insight:</b><br>
+                ${brief.premium_insight || "No premium insight available."}
+            </div>
+        </div>
+
+        <div class="card">
+            <b>🧠 Reality Engine</b>
+
+            <div class="highlight-box">
+                <b>Reality Check:</b><br>
+                ${brief.reality_check || "No reality insight available."}
+            </div>
+
+            <div class="warning-box">
+                <b>Brutal Truth:</b><br>
+                ${brief.brutal_truth || "No brutal truth available."}
+            </div>
+
+            <div class="insight-box">
+                <b>Why NOT Aggressive:</b><br>
+                ${brief.why_not_aggressive || "N/A"}
+            </div>
+
+            <div class="insight-box">
+                <b>Why NOT Balanced:</b><br>
+                ${brief.why_not_balanced || "N/A"}
+            </div>
+
+            <div class="success-box">
+                <b>Why This Strategy Wins:</b><br>
+                ${brief.why_this_strategy_wins || "N/A"}
+            </div>
+        </div>
+
+        <div class="card">
+            <b>🎯 Decision Depth</b>
+
+            <div class="highlight-box">
+                <b>Personalized Reality:</b><br>
+                ${brief.personalized_reality || "No personalized reality available."}
+            </div>
+
+            <div class="insight-box">
+                <b>If You Follow This Plan:</b><br>
+                <b>Week 1:</b> ${brief.consequence_simulation?.week_1 || "N/A"}<br>
+                <b>Week 2:</b> ${brief.consequence_simulation?.week_2 || "N/A"}<br>
+                <b>Week 3:</b> ${brief.consequence_simulation?.week_3 || "N/A"}<br>
+                <b>Week 4:</b> ${brief.consequence_simulation?.week_4 || "N/A"}
+            </div>
+
+            <div class="insight-box">
+                <b>Competitor Threat:</b><br>
+                ${brief.competitor_threat || "No competitor threat analysis available."}
+            </div>
+
+            <div class="highlight-box">
+                <b>Hidden Opportunity:</b><br>
+                ${brief.hidden_opportunity || "No hidden opportunity available."}
+            </div>
+
+            <div class="section">
+                <b>Failure Triggers:</b>
+                <ul>
+                    ${(brief.failure_triggers || []).map(x => `<li>${x}</li>`).join("")}
+                </ul>
+            </div>
+
+            <div class="section">
+                <b>Numbers to Watch:</b><br>
+                Minimum test size: ${brief.numbers_to_watch?.minimum_test_size || "N/A"}<br>
+                Healthy conversion: ${brief.numbers_to_watch?.healthy_conversion || "N/A"}<br>
+                Warning conversion: ${brief.numbers_to_watch?.warning_conversion || "N/A"}<br>
+                Budget guardrail: ${brief.numbers_to_watch?.budget_guardrail || "N/A"}
+            </div>
+        </div>
 
         ${
             (r.next_steps || []).length
             ? `
-                <div class="section">
+                <div class="card">
                     <b>What to do next:</b>
                     <ul>
                         ${(r.next_steps || []).map(s => `<li>${s}</li>`).join("")}
@@ -530,56 +595,22 @@ function renderDecisionResponse(r, profile) {
                     <b>Why this works:</b><br>
                     ${brief.why_this || "N/A"}<br><br>
 
-                    <div style="
-                        margin-top:12px;
-                        padding:10px;
-                        border-radius:8px;
-                        background:#0b1220;
-                        border:1px solid #1f2937;
-                        color:#9ca3af;
-                    ">
-                        <b>🔍 Why you can trust this:</b><br>
+                    ${
+                        brief.profile_note
+                        ? `
+                            <div class="insight-box">
+                                <b>Profile Note:</b><br>
+                                ${brief.profile_note}
+                            </div>
+                        `
+                        : ""
+                    }
+
+                    <div class="insight-box">
+                        <b>Why you can trust this:</b><br>
                         AURA compared multiple strategies using your budget, market conditions,
                         risk level, and predicted outcomes to select the strongest option.
                     </div>
-
-                    <div class="section" style="padding:10px; border:1px solid #4fd1c5; border-radius:8px; background:#0b1220;">
-    <b>🎯 Personalized Reality:</b><br>
-    ${brief.personalized_reality || "No personalized reality available."}
-</div>
-
-<div class="section" style="padding:10px; border:1px solid #1f2937; border-radius:8px; background:#0b1220;">
-    <b>⏳ If You Follow This Plan:</b><br>
-    <b>Week 1:</b> ${brief.consequence_simulation?.week_1 || "N/A"}<br>
-    <b>Week 2:</b> ${brief.consequence_simulation?.week_2 || "N/A"}<br>
-    <b>Week 3:</b> ${brief.consequence_simulation?.week_3 || "N/A"}<br>
-    <b>Week 4:</b> ${brief.consequence_simulation?.week_4 || "N/A"}
-</div>
-
-<div class="section" style="padding:10px; border:1px solid #1f2937; border-radius:8px; background:#0b1220;">
-    <b>⚔️ Competitor Threat:</b><br>
-    ${brief.competitor_threat || "No competitor threat analysis available."}
-</div>
-
-<div class="section" style="padding:10px; border:1px solid #4fd1c5; border-radius:8px; background:#111827;">
-    <b>💎 Hidden Opportunity:</b><br>
-    ${brief.hidden_opportunity || "No hidden opportunity available."}
-</div>
-
-<div class="section">
-    <b>🚨 Failure Triggers:</b>
-    <ul>
-        ${(brief.failure_triggers || []).map(x => `<li>${x}</li>`).join("")}
-    </ul>
-</div>
-
-<div class="section">
-    <b>📊 Numbers to Watch:</b><br>
-    Minimum test size: ${brief.numbers_to_watch?.minimum_test_size || "N/A"}<br>
-    Healthy conversion: ${brief.numbers_to_watch?.healthy_conversion || "N/A"}<br>
-    Warning conversion: ${brief.numbers_to_watch?.warning_conversion || "N/A"}<br>
-    Budget guardrail: ${brief.numbers_to_watch?.budget_guardrail || "N/A"}
-</div>
 
                     <br>
 
