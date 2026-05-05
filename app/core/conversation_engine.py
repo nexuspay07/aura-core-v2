@@ -15,12 +15,10 @@ def extract_user_context(message: str):
     budget = None
     market = None
 
-    # Extract budget like $3000, 3000, 5000 dollars
     budget_match = re.search(r"\$?\s?(\d{3,7})", m)
     if budget_match:
         budget = int(budget_match.group(1))
 
-    # Budget words
     if any(x in m for x in ["low budget", "small budget", "little money", "cheap", "limited budget"]):
         budget = budget or 3000
     elif any(x in m for x in ["medium budget", "average budget", "normal budget"]):
@@ -28,21 +26,26 @@ def extract_user_context(message: str):
     elif any(x in m for x in ["high budget", "big budget", "large budget"]):
         budget = budget or 50000
 
-    # Human-friendly market language
     if any(x in m for x in [
         "competitive",
         "competition",
         "crowded",
-        "crowded market",
         "saturated",
         "many competitors",
         "lots of competition",
         "too many businesses",
         "many businesses",
         "many similar businesses",
-        "many people selling",
-        "many stores",
-        "many companies"
+        "similar businesses",
+        "similar business",
+        "bigger competitors",
+        "big competitors",
+        "larger competitors",
+        "established competitors",
+        "other businesses like mine",
+        "people doing the same thing",
+        "stores like mine",
+        "companies like mine"
     ]):
         market = "competitive"
 
@@ -215,20 +218,16 @@ class ConversationEngine:
         market = preferences.get("market")
 
         missing = self.missing_context(preferences)
+
         if missing:
-            return {
-                "summary": self.build_context_question(missing),
-                "detail": "AURA needs more information before making a decision.",
-                "next_steps": [],
-                "risk_profile": "unknown",
-                "business_intent": business_intent,
-                "caution": "",
-                "decision_brief": {},
-                "advanced_details": {
-                    "explanation": explanation or [],
-                    "profile_note": self.build_profile_note(profile),
-                }
-            }
+          if not budget:
+            budget = profile.get("preferred_budget") or 10000
+
+        if not market:
+            market = profile.get("market") or "competitive"
+
+        preferences["budget"] = budget
+        preferences["market"] = market
 
         market_context = get_market_context()
 
