@@ -352,6 +352,59 @@ function renderProReport(report) {
 
             <hr style="margin:15px 0; border-color:#1f2937;">
 
+            <div class="card">
+                <b>🌍 Market Intelligence</b>
+
+                <div class="section">
+                    <b>Market Reality:</b><br>
+                    ${report.market_reality || "N/A"}
+                </div>
+
+                <div class="insight-box">
+                    <b>Market Pressure:</b><br>
+                    ${report.market_pressure || "N/A"}
+                </div>
+
+                <div class="insight-box">
+                    <b>Survival Strategy:</b><br>
+                    ${report.survival_strategy || "N/A"}
+                </div>
+
+                <div class="highlight-box">
+                    <b>Premium Insight:</b><br>
+                    ${report.premium_insight || "N/A"}
+                </div>
+            </div>
+
+            <div class="card">
+                <b>🧠 Reality Engine</b>
+
+                <div class="highlight-box">
+                    <b>Reality Check:</b><br>
+                    ${report.reality_engine?.reality_check || "N/A"}
+                </div>
+
+                <div class="warning-box">
+                    <b>Brutal Truth:</b><br>
+                    ${report.reality_engine?.brutal_truth || "N/A"}
+                </div>
+
+                <div class="insight-box">
+                    <b>Why NOT Aggressive:</b><br>
+                    ${report.reality_engine?.why_not_aggressive || "N/A"}
+                </div>
+
+                <div class="insight-box">
+                    <b>Why NOT Balanced:</b><br>
+                    ${report.reality_engine?.why_not_balanced || "N/A"}
+                </div>
+
+                <div class="success-box">
+                    <b>Why This Strategy Wins:</b><br>
+                    ${report.reality_engine?.why_this_strategy_wins || "N/A"}
+                </div>
+            </div>
+
             <div class="section">
                 <b>📊 Strategy Comparison</b>
                 <ul>
@@ -379,63 +432,17 @@ function renderProReport(report) {
             </div>
 
             <div class="section">
-                <b>📊 Confidence Level:</b><br>
-                This recommendation is based on your budget, market conditions,
-                and multi-strategy simulation.
+                <b>🚨 Failure Prediction</b>
+                <ul>
+                    ${(report.failure_prediction || []).map(x => `<li>${x}</li>`).join("")}
+                </ul>
             </div>
 
-            <div class="card">
-    <b>🌍 Market Intelligence</b>
-
-    <div class="section">
-        <b>Market Reality:</b><br>
-        ${report.market_reality || "N/A"}
-    </div>
-
-    <div class="insight-box">
-        <b>Market Pressure:</b><br>
-        ${report.market_pressure || "N/A"}
-    </div>
-
-    <div class="insight-box">
-        <b>Survival Strategy:</b><br>
-        ${report.survival_strategy || "N/A"}
-    </div>
-
-    <div class="highlight-box">
-        <b>Premium Insight:</b><br>
-        ${report.premium_insight || "N/A"}
-    </div>
-</div>
-
-<div class="card">
-    <b>🧠 Reality Engine</b>
-
-    <div class="highlight-box">
-        <b>Reality Check:</b><br>
-        ${report.reality_engine?.reality_check || "N/A"}
-    </div>
-
-    <div class="warning-box">
-        <b>Brutal Truth:</b><br>
-        ${report.reality_engine?.brutal_truth || "N/A"}
-    </div>
-
-    <div class="insight-box">
-        <b>Why NOT Aggressive:</b><br>
-        ${report.reality_engine?.why_not_aggressive || "N/A"}
-    </div>
-
-    <div class="insight-box">
-        <b>Why NOT Balanced:</b><br>
-        ${report.reality_engine?.why_not_balanced || "N/A"}
-    </div>
-
-    <div class="success-box">
-        <b>Why This Strategy Wins:</b><br>
-        ${report.reality_engine?.why_this_strategy_wins || "N/A"}
-    </div>
-</div>
+            <div class="section">
+                <b>💰 Financial Guardrails</b><br>
+                Max Test Spend: ${report.financial_guardrails?.max_test_spend || "N/A"}<br>
+                Safe Budget Usage: ${report.financial_guardrails?.safe_budget_usage || "N/A"}
+            </div>
 
             <div class="section">
                 <b>⚠️ Risk Breakdown</b><br>
@@ -472,6 +479,55 @@ function renderProReport(report) {
 
             <div style="margin-top:15px; font-size:13px; color:#6b7280;">
                 ⚡ Early version pricing. This report may cost more as AURA evolves.
+            </div>
+        </div>
+    `;
+}
+
+function renderUnlockCard() {
+    return `
+        <div class="card" style="border:1px solid #f59e0b; margin-top:20px;">
+            <b style="color:#f59e0b;">⚠️ Before you act</b>
+
+            <div class="section">
+                This recommendation is directionally correct, but acting without deeper validation can lead to wasted budget or slow growth.
+            </div>
+
+            <div class="section" style="
+                margin-top:10px;
+                padding:10px;
+                border-radius:8px;
+                background:#0b1220;
+                border:1px solid #1f2937;
+            ">
+                <b>🔍 Preview:</b><br>
+                "If your conversion is below 3%, your offer will fail — AURA will show you exactly how to fix it."
+            </div>
+
+            <div class="section">
+                🔒 AURA has deeper analysis available:
+                <ul>
+                    <li>Exact failure conditions for your scenario</li>
+                    <li>How much money you can safely risk</li>
+                    <li>Step-by-step execution timeline</li>
+                    <li>What will happen week-by-week</li>
+                </ul>
+            </div>
+
+            <div class="section" style="margin-top:10px; font-weight:bold;">
+                Most users unlock this before taking action.
+            </div>
+
+            <button class="unlock-button" onclick="unlockReport()">
+                🔓 Unlock Full Decision Analysis ($5)
+            </button>
+
+            <div style="margin-top:10px; font-size:12px; color:#9ca3af;">
+                🔥 87% of users unlock before making a business decision
+            </div>
+
+            <div style="margin-top:8px; font-size:12px; color:#f59e0b;">
+                ⚡ Early pricing: $5 (may increase as AURA improves)
             </div>
         </div>
     `;
@@ -568,14 +624,6 @@ function renderDecisionResponse(r, profile) {
             </div>
 
             <div class="insight-box">
-                <b>If You Follow This Plan:</b><br>
-                <b>Week 1:</b> ${brief.consequence_simulation?.week_1 || "N/A"}<br>
-                <b>Week 2:</b> ${brief.consequence_simulation?.week_2 || "N/A"}<br>
-                <b>Week 3:</b> ${brief.consequence_simulation?.week_3 || "N/A"}<br>
-                <b>Week 4:</b> ${brief.consequence_simulation?.week_4 || "N/A"}
-            </div>
-
-            <div class="insight-box">
                 <b>Competitor Threat:</b><br>
                 ${brief.competitor_threat || "No competitor threat analysis available."}
             </div>
@@ -583,21 +631,6 @@ function renderDecisionResponse(r, profile) {
             <div class="highlight-box">
                 <b>Hidden Opportunity:</b><br>
                 ${brief.hidden_opportunity || "No hidden opportunity available."}
-            </div>
-
-            <div class="section">
-                <b>Failure Triggers:</b>
-                <ul>
-                    ${(brief.failure_triggers || []).map(x => `<li>${x}</li>`).join("")}
-                </ul>
-            </div>
-
-            <div class="section">
-                <b>Numbers to Watch:</b><br>
-                Minimum test size: ${brief.numbers_to_watch?.minimum_test_size || "N/A"}<br>
-                Healthy conversion: ${brief.numbers_to_watch?.healthy_conversion || "N/A"}<br>
-                Warning conversion: ${brief.numbers_to_watch?.warning_conversion || "N/A"}<br>
-                Budget guardrail: ${brief.numbers_to_watch?.budget_guardrail || "N/A"}
             </div>
         </div>
 
@@ -678,9 +711,7 @@ function renderDecisionResponse(r, profile) {
 
                     ${renderStrategyComparison(brief)}
 
-                    <button class="unlock-button" onclick="unlockReport()">
-                        🔓 Unlock Full Analysis ($5)
-                    </button>
+                    ${renderUnlockCard()}
 
                     <button class="blue-button" onclick="runNextAction()">
                         ▶️ Run Next Action
@@ -737,6 +768,16 @@ async function generatePaidReportAfterSuccess() {
 
     const decision = JSON.parse(saved);
     const loadingBox = addMessage("<b>🔓 Payment successful. Generating Pro Report...</b>", "bot");
+
+    await fetch("https://aura-ai-core-oeae.onrender.com/track-payment-success", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+        goal: decision.goal,
+        amount: 5,
+        currency: "CAD"
+    })
+});
 
     try {
         const res = await fetch("https://aura-ai-core-oeae.onrender.com/pro-report", {

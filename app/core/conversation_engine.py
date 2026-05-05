@@ -275,14 +275,9 @@ class ConversationEngine:
 "why_not_aggressive": reality.get("why_not_aggressive"),
 "why_not_balanced": reality.get("why_not_balanced"),
 "why_this_strategy_wins": reality.get("why_this_strategy_wins"),
-
             "personalized_reality": decision_depth.get("personalized_reality"),
-            "consequence_simulation": decision_depth.get("consequence_simulation"),
             "competitor_threat": decision_depth.get("competitor_threat"),
             "hidden_opportunity": decision_depth.get("hidden_opportunity"),
-            "failure_triggers": decision_depth.get("failure_triggers"),
-            "numbers_to_watch": decision_depth.get("numbers_to_watch"),
-
             "expected_impact": impact,
             "tradeoff": tradeoff,
             "timeframe": timeframe,
