@@ -1,199 +1,390 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>AURA AI Chat</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AURA AI</title>
 
     <style>
-        body {
-            background: #0b1220;
-            color: white;
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            margin: 0;
+        :root {
+            --bg: #070d1a;
+            --panel: #0f172a;
+            --panel2: #111827;
+            --card: #0b1220;
+            --border: #1f2937;
+            --muted: #94a3b8;
+            --text: #f8fafc;
+            --accent: #4fd1c5;
+            --blue: #2563eb;
+            --green: #16a34a;
+            --yellow: #f59e0b;
+            --red: #ef4444;
         }
 
-        header {
-            padding: 15px;
-            background: #111827;
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top left, #10233f 0%, var(--bg) 35%, #030712 100%);
+            color: var(--text);
+            font-family: Arial, sans-serif;
+        }
+
+        .app {
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+        }
+
+        .sidebar {
+            background: rgba(15, 23, 42, 0.95);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .brand {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+
+        .tagline {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+        }
+
+        .nav-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        .nav-title {
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .nav-small {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .main {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            height: 100vh;
+        }
+
+        .topbar {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(7, 13, 26, 0.75);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .topbar p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 14px;
         }
 
         #chat {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 24px;
+        }
+
+        .welcome {
+            max-width: 980px;
+            margin: 0 auto 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+
+        .prompt-card {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px;
+            cursor: pointer;
+            color: var(--muted);
+            transition: 0.2s;
+        }
+
+        .prompt-card:hover {
+            border-color: var(--accent);
+            color: var(--text);
+            transform: translateY(-2px);
         }
 
         .message {
-            margin-bottom: 15px;
-            max-width: 78%;
-            padding: 12px;
-            border-radius: 10px;
+            max-width: 980px;
+            margin: 0 auto 16px;
+            padding: 16px;
+            border-radius: 16px;
+            line-height: 1.55;
         }
 
         .user {
-            background: #2563eb;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
             margin-left: auto;
+            max-width: 760px;
         }
 
         .bot {
-            background: #111827;
-            border: 1px solid #1f2937;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid var(--border);
+        }
+
+        .card {
+            background: rgba(11, 18, 32, 0.95);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 18px;
+            margin-top: 16px;
+        }
+
+        .card h2, .card h3 {
+            margin-top: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+
+        .box {
+            padding: 14px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.75);
+            color: #cbd5e1;
+            margin-top: 12px;
+        }
+
+        .box.accent { border-color: var(--accent); }
+        .box.warn { border-color: var(--yellow); }
+        .box.danger { border-color: var(--red); }
+        .box.success { border-color: var(--green); background: rgba(2, 44, 34, 0.35); }
+
+        .section {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.6;
+            margin-top: 12px;
+        }
+
+        .hero-decision {
+            border-left: 4px solid var(--accent);
+            background: rgba(79, 209, 197, 0.08);
+            padding: 16px;
+            border-radius: 14px;
+            margin-bottom: 16px;
+        }
+
+        .hero-decision strong {
+            color: var(--accent);
+            font-size: 18px;
+        }
+
+        .strategy-card {
+            border: 1px solid var(--border);
+            background: rgba(7, 13, 26, 0.8);
+            padding: 14px;
+            border-radius: 14px;
+            margin-top: 10px;
+        }
+
+        .cta-card {
+            border: 1px solid var(--yellow);
+            background: rgba(245, 158, 11, 0.08);
+        }
+
+        button {
+            border: none;
+            border-radius: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            font-weight: 700;
+            color: white;
+        }
+
+        .unlock-button {
+            background: linear-gradient(135deg, #f59e0b, #f97316);
+            color: #111827;
+            width: 100%;
+            margin-top: 14px;
+        }
+
+        .blue-button {
+            background: var(--blue);
+            margin-top: 12px;
         }
 
         #input-area {
             display: flex;
-            padding: 10px;
-            background: #111827;
+            gap: 10px;
+            padding: 16px 24px;
+            background: rgba(15, 23, 42, 0.95);
+            border-top: 1px solid var(--border);
         }
 
-        input {
+        #message {
             flex: 1;
-            padding: 10px;
-            border-radius: 6px;
-            border: none;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: #020617;
+            color: white;
+            outline: none;
+            font-size: 15px;
         }
 
-        button {
-            margin-top: 10px;
-            padding: 10px 15px;
-            background: #16a34a;
-            border: none;
-            border-radius: 6px;
-            color: white;
-            cursor: pointer;
+        #message:focus {
+            border-color: var(--accent);
         }
 
         #send-button {
-            margin-top: 0;
-            margin-left: 10px;
+            background: var(--green);
+            min-width: 90px;
         }
 
-        .section {
-            margin-top: 15px;
-            font-size: 14px;
-            color: #9ca3af;
-            line-height: 1.5;
-        }
+        ul, ol { margin-top: 8px; }
 
-        .card {
-            background: #111827;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 15px;
-            border: 1px solid #1f2937;
-        }
-
-        .insight-box {
-            margin-top: 12px;
-            padding: 12px;
-            border-radius: 8px;
-            background: #0b1220;
-            border: 1px solid #1f2937;
-            color: #cbd5e1;
-        }
-
-        .highlight-box {
-            margin-top: 12px;
-            padding: 12px;
-            border-radius: 8px;
-            background: #111827;
-            border: 1px solid #4fd1c5;
-            color: #cbd5e1;
-        }
-
-        .warning-box {
-            margin-top: 12px;
-            padding: 12px;
-            border-radius: 8px;
-            background: #111827;
-            border: 1px solid #ef4444;
-            color: #cbd5e1;
-        }
-
-        .success-box {
-            margin-top: 12px;
-            padding: 12px;
-            border-radius: 8px;
-            background: #022c22;
-            border: 1px solid #10b981;
-            color: #d1fae5;
-        }
-
-        .strategy-card {
-            margin-bottom: 12px;
-            padding: 12px;
-            border: 1px solid #374151;
-            border-radius: 8px;
-            background: #0b1220;
-        }
-
-        .unlock-button {
-            background: #f59e0b;
-            padding: 10px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            color: #111827;
-            margin-top: 15px;
-        }
-
-        .blue-button {
-            padding: 10px 14px;
-            border: none;
-            border-radius: 6px;
-            background: #2563eb;
-            color: white;
-            cursor: pointer;
-            margin-top: 12px;
-        }
-
-        ul, ol {
-            margin-top: 6px;
-        }
-
-        @media (max-width: 768px) {
-            .message {
-                max-width: 95%;
+        @media (max-width: 900px) {
+            .app {
+                grid-template-columns: 1fr;
             }
 
-            header {
-                padding: 12px;
+            .sidebar {
+                position: relative;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .main {
+                height: auto;
+                min-height: 100vh;
+            }
+
+            .welcome {
+                grid-template-columns: 1fr;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .message {
+                max-width: 100%;
+            }
+
+            .user {
+                max-width: 92%;
             }
 
             #chat {
-                padding: 12px;
+                padding: 14px;
+                padding-bottom: 110px;
+            }
+
+            #input-area {
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                padding: 10px;
+                z-index: 20;
+            }
+
+            #message {
+                font-size: 14px;
+            }
+
+            #send-button {
+                min-width: 72px;
             }
         }
     </style>
 </head>
 
 <body>
+<div class="app">
+    <aside class="sidebar">
+        <div class="brand">🚀 AURA AI</div>
+        <div class="tagline">
+            Universal decision assistant for users, founders, and future business/domain intelligence.
+        </div>
 
-<header>
-    <div style="font-size:22px; color:#4fd1c5; font-weight:bold;">
-        🚀 AURA — Business Decision Assistant
-    </div>
+        <div class="nav-card">
+            <div class="nav-title">👤 User Dashboard</div>
+            <div class="nav-small">Ask normal questions and get simple decision guidance.</div>
+        </div>
 
-    <div style="color:#9ca3af; font-size:14px; margin-top:5px;">
-        Get clear, actionable advice for your business decisions.
+        <div class="nav-card">
+            <div class="nav-title">💼 Business Intelligence</div>
+            <div class="nav-small">Strategy, market pressure, risks, and paid Pro Reports.</div>
+        </div>
 
-        <br><br>
-        Try asking:
-        <br>• How should I price my product?
-        <br>• What is the safest way to start a business?
-        <br>• How do I grow without losing money?
-    </div>
-</header>
+        <div class="nav-card">
+            <div class="nav-title">🔒 Pro Reports</div>
+            <div class="nav-small">Execution plans, failure prediction, guardrails, and deeper simulations.</div>
+        </div>
 
-<div id="chat"></div>
+        <div class="nav-card">
+            <div class="nav-title">🌍 Future Domains</div>
+            <div class="nav-small">Healthcare, education, finance, and more domain dashboards later.</div>
+        </div>
+    </aside>
 
-<div id="input-area">
-    <input id="message" placeholder="e.g. I want to start a business with low risk..." />
-    <button id="send-button" onclick="sendMessage()">Send</button>
+    <main class="main">
+        <div class="topbar">
+            <h1>AURA — Decision Intelligence Dashboard</h1>
+            <p>Ask a question. Get a decision. Unlock deeper reports when the decision matters.</p>
+        </div>
+
+        <div id="chat">
+            <div class="welcome">
+                <div class="prompt-card" onclick="usePrompt('I want to start a business online with a low budget and many similar competitors')">
+                    💼 Start a business with low budget
+                </div>
+                <div class="prompt-card" onclick="usePrompt('Should I open an online business first or offline business first? My budget is $3000 and there are bigger competitors')">
+                    🌐 Online vs offline business
+                </div>
+                <div class="prompt-card" onclick="usePrompt('How should I price my product if customers are price sensitive and there are many competitors?')">
+                    💰 Pricing strategy
+                </div>
+            </div>
+        </div>
+
+        <div id="input-area">
+            <input id="message" placeholder="Ask AURA anything... e.g. Should I start online or offline with $3000?" />
+            <button id="send-button" onclick="sendMessage()">Send</button>
+        </div>
+    </main>
 </div>
 
 <script>
@@ -201,47 +392,26 @@ let sessionId = "session_" + Math.random().toString(36).substring(7);
 let pendingGoal = null;
 let lastDecision = null;
 
+function usePrompt(text) {
+    document.getElementById("message").value = text;
+    sendMessage();
+}
+
 function addMessage(text, type) {
     const chat = document.getElementById("chat");
     const msg = document.createElement("div");
-
     msg.className = "message " + type;
     msg.innerHTML = text;
-
     chat.appendChild(msg);
     chat.scrollTop = chat.scrollHeight;
-
     return msg;
 }
 
 function saveHistory(item) {
     const key = "aura_history";
     const existing = JSON.parse(localStorage.getItem(key) || "[]");
-
     existing.unshift(item);
     localStorage.setItem(key, JSON.stringify(existing.slice(0, 10)));
-}
-
-function renderHistory() {
-    const h = JSON.parse(localStorage.getItem("aura_history") || "[]");
-
-    if (!h.length) return "";
-
-    return `
-        <div class="card">
-            <b>📌 Recent Decisions</b>
-            <ul>
-                ${h.map(x => `
-                    <li>
-                        ${x.move || "Decision saved"}
-                        <span style="color:#6b7280;">
-                            (${new Date(x.time).toLocaleDateString()})
-                        </span>
-                    </li>
-                `).join("")}
-            </ul>
-        </div>
-    `;
 }
 
 function getUsageCount() {
@@ -256,229 +426,53 @@ function renderProfile(profile) {
     return `
         <div class="card">
             <h3>🧠 AURA Profile</h3>
-
-            <div class="section">
-                Preferred Risk: <b>${profile.preferred_risk ?? "unknown"}</b>
+            <div class="grid">
+                <div class="box">Preferred Risk:<br><b>${profile.preferred_risk ?? "unknown"}</b></div>
+                <div class="box">Preferred Budget:<br><b>${profile.preferred_budget ?? "unknown"}</b></div>
+                <div class="box">Preferred Domain:<br><b>${profile.preferred_domain ?? "unknown"}</b></div>
+                <div class="box">Interactions:<br><b>${profile.interaction_count ?? 0}</b></div>
             </div>
+        </div>
+    `;
+}
 
-            <div class="section">
-                Preferred Budget: <b>${profile.preferred_budget ?? "unknown"}</b>
-            </div>
+function renderHistory() {
+    const h = JSON.parse(localStorage.getItem("aura_history") || "[]");
+    if (!h.length) return "";
 
-            <div class="section">
-                Preferred Domain: <b>${profile.preferred_domain ?? "unknown"}</b>
-            </div>
-
-            <div class="section">
-                Interactions: <b>${profile.interaction_count ?? 0}</b>
-            </div>
+    return `
+        <div class="card">
+            <h3>📌 Recent Decisions</h3>
+            <ul>
+                ${h.map(x => `
+                    <li>
+                        ${x.move || "Decision saved"}
+                        <span style="color:#64748b;">(${new Date(x.time).toLocaleDateString()})</span>
+                    </li>
+                `).join("")}
+            </ul>
         </div>
     `;
 }
 
 function renderStrategyComparison(brief) {
     const sc = brief.strategy_comparison;
-
     if (!sc || !sc.comparisons) return "";
 
     return `
-        <div style="margin-top:20px;">
-            <b style="font-size:16px;">📊 Strategy Comparison</b><br><br>
-
-            ${
-                sc.comparisons.map(s => {
-                    let color = "#6b7280";
-
-                    if (s.risk === "low") color = "#16a34a";
-                    if (s.risk === "medium") color = "#f59e0b";
-                    if (s.risk === "high") color = "#dc2626";
-
-                    return `
-                        <div class="strategy-card">
-                            <div style="font-size:15px; font-weight:bold;">
-                                ${s.strategy}
-                            </div>
-
-                            <div style="margin-top:6px;">
-                                Risk:
-                                <span style="color:${color}; font-weight:bold;">
-                                    ${s.risk}
-                                </span>
-                            </div>
-
-                            <div>Score: <b>${s.score}</b></div>
-
-                            <div style="margin-top:6px; color:#9ca3af;">
-                                ${s.reason}
-                            </div>
-                        </div>
-                    `;
-                }).join("")
-            }
-
-            <div class="highlight-box">
-                🏆 <b>Best Strategy:</b>
-                <span style="color:#4fd1c5;">
-                    ${sc.best_strategy?.strategy || "N/A"}
-                </span>
-            </div>
-        </div>
-    `;
-}
-
-function renderProReport(report) {
-    if (!report) return "";
-
-    return `
-        <div class="card" style="border:1px solid #4fd1c5;">
-            <h2 style="color:#4fd1c5;">🔓 AURA Pro Decision Report</h2>
-
-            <div class="insight-box">
-                💰 Businesses pay consultants $50–$300 for this level of analysis.
-                You just generated it instantly with AURA.
-            </div>
-
-            <div style="
-                font-size:18px;
-                font-weight:bold;
-                margin:15px 0;
-                padding:12px;
-                border-radius:8px;
-                background:#111827;
-                border-left:4px solid #4fd1c5;
-            ">
-                🚀 ${report.summary || "N/A"}
-            </div>
-
-            <hr style="margin:15px 0; border-color:#1f2937;">
-
-            <div class="card">
-                <b>🌍 Market Intelligence</b>
-
-                <div class="section">
-                    <b>Market Reality:</b><br>
-                    ${report.market_reality || "N/A"}
+        <div class="card">
+            <h3>📊 Strategy Options</h3>
+            ${sc.comparisons.map(s => `
+                <div class="strategy-card">
+                    <b>${s.strategy}</b><br>
+                    Risk: <b>${s.risk}</b><br>
+                    Score: <b>${s.score}</b>
+                    <div class="section">${s.reason}</div>
                 </div>
+            `).join("")}
 
-                <div class="insight-box">
-                    <b>Market Pressure:</b><br>
-                    ${report.market_pressure || "N/A"}
-                </div>
-
-                <div class="insight-box">
-                    <b>Survival Strategy:</b><br>
-                    ${report.survival_strategy || "N/A"}
-                </div>
-
-                <div class="highlight-box">
-                    <b>Premium Insight:</b><br>
-                    ${report.premium_insight || "N/A"}
-                </div>
-            </div>
-
-            <div class="card">
-                <b>🧠 Reality Engine</b>
-
-                <div class="highlight-box">
-                    <b>Reality Check:</b><br>
-                    ${report.reality_engine?.reality_check || "N/A"}
-                </div>
-
-                <div class="warning-box">
-                    <b>Brutal Truth:</b><br>
-                    ${report.reality_engine?.brutal_truth || "N/A"}
-                </div>
-
-                <div class="insight-box">
-                    <b>Why NOT Aggressive:</b><br>
-                    ${report.reality_engine?.why_not_aggressive || "N/A"}
-                </div>
-
-                <div class="insight-box">
-                    <b>Why NOT Balanced:</b><br>
-                    ${report.reality_engine?.why_not_balanced || "N/A"}
-                </div>
-
-                <div class="success-box">
-                    <b>Why This Strategy Wins:</b><br>
-                    ${report.reality_engine?.why_this_strategy_wins || "N/A"}
-                </div>
-            </div>
-
-            <div class="section">
-                <b>📊 Strategy Comparison</b>
-                <ul>
-                    ${(report.strategy_breakdown || []).map(s => `
-                        <li style="margin-bottom:8px;">
-                            <b>${s.strategy}</b><br>
-                            ${s.why_it_works}<br>
-                            <span style="color:#9ca3af;">Risk: ${s.risk}</span>
-                        </li>
-                    `).join("")}
-                </ul>
-            </div>
-
-            <div class="section">
-                <b>🔮 Outcome Simulation</b><br><br>
-
-                <b style="color:#16a34a;">Best Case:</b><br>
-                ${report.scenarios?.best_case || "N/A"}<br><br>
-
-                <b style="color:#f59e0b;">Expected:</b><br>
-                ${report.scenarios?.expected_case || "N/A"}<br><br>
-
-                <b style="color:#dc2626;">Worst Case:</b><br>
-                ${report.scenarios?.worst_case || "N/A"}
-            </div>
-
-            <div class="section">
-                <b>🚨 Failure Prediction</b>
-                <ul>
-                    ${(report.failure_prediction || []).map(x => `<li>${x}</li>`).join("")}
-                </ul>
-            </div>
-
-            <div class="section">
-                <b>💰 Financial Guardrails</b><br>
-                Max Test Spend: ${report.financial_guardrails?.max_test_spend || "N/A"}<br>
-                Safe Budget Usage: ${report.financial_guardrails?.safe_budget_usage || "N/A"}
-            </div>
-
-            <div class="section">
-                <b>⚠️ Risk Breakdown</b><br>
-                <b>Main Risk:</b> ${report.risk_analysis?.main_risk || "N/A"}<br><br>
-                <b>How to reduce risk:</b><br>
-                ${report.risk_analysis?.mitigation || "N/A"}
-            </div>
-
-            <div class="section">
-                <b>🛠️ Execution Plan</b>
-                <ol>
-                    ${(report.execution_plan || []).map(step => `<li>${step}</li>`).join("")}
-                </ol>
-            </div>
-
-            <div class="section" style="background:#0b1220; padding:10px; border-radius:8px;">
-                <b>📅 30-Day Action Plan</b><br><br>
-
-                <b>Week 1:</b> ${report["30_day_plan"]?.week_1 || "N/A"}<br>
-                <b>Week 2:</b> ${report["30_day_plan"]?.week_2 || "N/A"}<br>
-                <b>Week 3:</b> ${report["30_day_plan"]?.week_3 || "N/A"}<br>
-                <b>Week 4:</b> ${report["30_day_plan"]?.week_4 || "N/A"}
-            </div>
-
-            <div class="section" style="margin-top:12px;">
-                <b>🧪 After you try this:</b><br>
-                Tell AURA what happened, for example “conversion was low,” and it will adjust your strategy.
-            </div>
-
-            <div class="insight-box">
-                💡 This report is generated using AURA’s multi-strategy analysis,
-                prediction modeling, and risk evaluation system.
-            </div>
-
-            <div style="margin-top:15px; font-size:13px; color:#6b7280;">
-                ⚡ Early version pricing. This report may cost more as AURA evolves.
+            <div class="box accent">
+                🏆 <b>Best Strategy:</b> ${sc.best_strategy?.strategy || "N/A"}
             </div>
         </div>
     `;
@@ -486,48 +480,31 @@ function renderProReport(report) {
 
 function renderUnlockCard() {
     return `
-        <div class="card" style="border:1px solid #f59e0b; margin-top:20px;">
-            <b style="color:#f59e0b;">⚠️ Before you act</b>
-
+        <div class="card cta-card">
+            <h3 style="color:#f59e0b;">⚠️ Before you act</h3>
             <div class="section">
-                This recommendation is directionally correct, but acting without deeper validation can lead to wasted budget or slow growth.
+                This free answer gives direction. The Pro Report gives the execution system:
+                what to do, what can fail, how much to risk, and what to track.
             </div>
 
-            <div class="section" style="
-                margin-top:10px;
-                padding:10px;
-                border-radius:8px;
-                background:#0b1220;
-                border:1px solid #1f2937;
-            ">
+            <div class="box">
                 <b>🔍 Preview:</b><br>
-                "If your conversion is below 3%, your offer will fail — AURA will show you exactly how to fix it."
+                “If conversion is below 3%, your offer may fail — AURA will show you how to fix it.”
             </div>
 
-            <div class="section">
-                🔒 AURA has deeper analysis available:
-                <ul>
-                    <li>Exact failure conditions for your scenario</li>
-                    <li>How much money you can safely risk</li>
-                    <li>Step-by-step execution timeline</li>
-                    <li>What will happen week-by-week</li>
-                </ul>
-            </div>
-
-            <div class="section" style="margin-top:10px; font-weight:bold;">
-                Most users unlock this before taking action.
-            </div>
+            <ul class="section">
+                <li>4-week execution simulation</li>
+                <li>Failure prediction triggers</li>
+                <li>Financial guardrails</li>
+                <li>Step-by-step action plan</li>
+            </ul>
 
             <button class="unlock-button" onclick="unlockReport()">
                 🔓 Unlock Full Decision Analysis ($5)
             </button>
 
-            <div style="margin-top:10px; font-size:12px; color:#9ca3af;">
-                🔥 87% of users unlock before making a business decision
-            </div>
-
-            <div style="margin-top:8px; font-size:12px; color:#f59e0b;">
-                ⚡ Early pricing: $5 (may increase as AURA improves)
+            <div class="section">
+                ⚡ Early pricing: $5. This may increase as AURA improves.
             </div>
         </div>
     `;
@@ -538,191 +515,140 @@ function renderDecisionResponse(r, profile) {
     const usage = getUsageCount();
 
     return `
-        <div style="
-            font-size:18px;
-            font-weight:bold;
-            margin-bottom:10px;
-            color:#4fd1c5;
-        ">
-            👉 ${brief.recommended_move || "No clear move yet"}
-        </div>
-
-        <div style="margin-top:10px; color:#4fd1c5;">
-            🔥 Session streak: ${usage} decisions analyzed
-        </div>
-
-        <b>${r.summary || ""}</b>
-
-        <div class="section">
-            ${r.detail || ""}
+        <div class="hero-decision">
+            <strong>${brief.recommended_move || "No clear move yet"}</strong>
+            <div class="section">${r.detail || ""}</div>
+            <div class="section">🔥 Session streak: ${usage} decisions analyzed</div>
         </div>
 
         <div class="card">
-            <b>🌍 Market Intelligence</b>
+            <h3>🆓 Free Decision Summary</h3>
 
-            <div class="section">
-                <b>Market Reality:</b><br>
-                ${brief.market_context || "General market conditions assumed."}
+            <div class="grid">
+                <div class="box accent">
+                    <b>Best Move</b><br>
+                    ${brief.recommended_move || "N/A"}
+                </div>
+
+                <div class="box">
+                    <b>Expected Impact</b><br>
+                    ${brief.expected_impact || "N/A"}
+                </div>
+
+                <div class="box">
+                    <b>Main Risk</b><br>
+                    ${brief.main_risk || "N/A"}
+                </div>
+
+                <div class="box">
+                    <b>What to Watch</b><br>
+                    ${brief.watch_metric || "N/A"}
+                </div>
             </div>
 
-            <div class="insight-box">
-                <b>Market Pressure:</b><br>
-                ${brief.market_pressure || "No market pressure analysis available."}
-            </div>
-
-            <div class="insight-box">
-                <b>Survival Strategy:</b><br>
-                ${brief.survival_strategy || "No survival strategy available."}
-            </div>
-
-            <div class="insight-box">
-                <b>Growth Angle:</b><br>
-                ${brief.growth_angle || "No growth angle available."}
-            </div>
-
-            <div class="highlight-box">
-                <b>Premium AURA Insight:</b><br>
-                ${brief.premium_insight || "No premium insight available."}
+            <div class="box">
+                <b>Why this works:</b><br>
+                ${brief.why_this || "AURA selected this based on your context."}
             </div>
         </div>
 
         <div class="card">
-            <b>🧠 Reality Engine</b>
-
-            <div class="highlight-box">
-                <b>Reality Check:</b><br>
-                ${brief.reality_check || "No reality insight available."}
-            </div>
-
-            <div class="warning-box">
-                <b>Brutal Truth:</b><br>
-                ${brief.brutal_truth || "No brutal truth available."}
-            </div>
-
-            <div class="insight-box">
-                <b>Why NOT Aggressive:</b><br>
-                ${brief.why_not_aggressive || "N/A"}
-            </div>
-
-            <div class="insight-box">
-                <b>Why NOT Balanced:</b><br>
-                ${brief.why_not_balanced || "N/A"}
-            </div>
-
-            <div class="success-box">
-                <b>Why This Strategy Wins:</b><br>
-                ${brief.why_this_strategy_wins || "N/A"}
-            </div>
+            <h3>🌍 Market Snapshot</h3>
+            <div class="box">${brief.market_pressure || "No market pressure available."}</div>
+            <div class="box accent">${brief.premium_insight || "No premium insight available."}</div>
         </div>
 
-        <div class="card">
-            <b>🎯 Decision Depth</b>
-
-            <div class="highlight-box">
-                <b>Personalized Reality:</b><br>
-                ${brief.personalized_reality || "No personalized reality available."}
-            </div>
-
-            <div class="insight-box">
-                <b>Competitor Threat:</b><br>
-                ${brief.competitor_threat || "No competitor threat analysis available."}
-            </div>
-
-            <div class="highlight-box">
-                <b>Hidden Opportunity:</b><br>
-                ${brief.hidden_opportunity || "No hidden opportunity available."}
-            </div>
-        </div>
+        ${renderStrategyComparison(brief)}
 
         ${
             (r.next_steps || []).length
             ? `
                 <div class="card">
-                    <b>What to do next:</b>
-                    <ul>
-                        ${(r.next_steps || []).map(s => `<li>${s}</li>`).join("")}
-                    </ul>
+                    <h3>✅ Next Steps</h3>
+                    <ol>
+                        ${(r.next_steps || []).slice(0, 3).map(s => `<li>${s}</li>`).join("")}
+                    </ol>
                 </div>
             `
             : ""
         }
 
-        ${
-            r.caution
-            ? `<div class="section">💡 ${r.caution}</div>`
-            : ""
-        }
-
-        ${
-            Object.keys(brief).length
-            ? `
-                <div class="card">
-                    <b>🧠 Decision Insight</b><br><br>
-
-                    <div style="font-size:18px; font-weight:bold; margin-bottom:10px;">
-                        📈 ${brief.expected_impact || "N/A"}
-                    </div>
-
-                    <b>Trade-off:</b><br>
-                    ${brief.tradeoff || "N/A"}<br><br>
-
-                    <b>Timeframe:</b><br>
-                    ${brief.timeframe || "N/A"}<br><br>
-
-                    <b>Confidence:</b><br>
-                    ${Math.round((brief.confidence || 0) * 100)}%<br><br>
-
-                    <b>Recommended Move:</b><br>
-                    ${brief.recommended_move || "N/A"}<br><br>
-
-                    <b>Context:</b><br>
-                    ${brief.context_note || "General estimate"}<br><br>
-
-                    <b>Why this works:</b><br>
-                    ${brief.why_this || "N/A"}<br><br>
-
-                    ${
-                        brief.profile_note
-                        ? `
-                            <div class="insight-box">
-                                <b>Profile Note:</b><br>
-                                ${brief.profile_note}
-                            </div>
-                        `
-                        : ""
-                    }
-
-                    <div class="insight-box">
-                        <b>Why you can trust this:</b><br>
-                        AURA compared multiple strategies using your budget, market conditions,
-                        risk level, and predicted outcomes to select the strongest option.
-                    </div>
-
-                    <br>
-
-                    <b>Main Risk:</b><br>
-                    ${brief.main_risk || "N/A"}<br><br>
-
-                    <b>What to Watch:</b><br>
-                    ${brief.watch_metric || "N/A"}<br><br>
-
-                    <b>Fallback Plan:</b><br>
-                    ${brief.fallback_move || "N/A"}<br><br>
-
-                    ${renderStrategyComparison(brief)}
-
-                    ${renderUnlockCard()}
-
-                    <button class="blue-button" onclick="runNextAction()">
-                        ▶️ Run Next Action
-                    </button>
-                </div>
-            `
-            : ""
-        }
-
+        ${renderUnlockCard()}
         ${renderProfile(profile)}
         ${renderHistory()}
+
+        <button class="blue-button" onclick="runNextAction()">▶️ Run Next Action</button>
+    `;
+}
+
+function renderProReport(report) {
+    if (!report) return "";
+
+    return `
+        <div class="card" style="border-color:#4fd1c5;">
+            <h2 style="color:#4fd1c5;">🔓 AURA Pro Decision Report</h2>
+
+            <div class="hero-decision">
+                <strong>${report.summary || "N/A"}</strong>
+                <div class="section">Premium execution report for this decision.</div>
+            </div>
+
+            <div class="grid">
+                <div class="box accent">
+                    <b>Market Pressure</b><br>
+                    ${report.market_pressure || "N/A"}
+                </div>
+
+                <div class="box warn">
+                    <b>Survival Strategy</b><br>
+                    ${report.survival_strategy || "N/A"}
+                </div>
+
+                <div class="box">
+                    <b>Premium Insight</b><br>
+                    ${report.premium_insight || "N/A"}
+                </div>
+
+                <div class="box danger">
+                    <b>Brutal Truth</b><br>
+                    ${report.reality_engine?.brutal_truth || "N/A"}
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🔮 Outcome Simulation</h3>
+                <div class="grid">
+                    <div class="box success"><b>Best Case</b><br>${report.scenarios?.best_case || "N/A"}</div>
+                    <div class="box warn"><b>Expected</b><br>${report.scenarios?.expected_case || "N/A"}</div>
+                    <div class="box danger"><b>Worst Case</b><br>${report.scenarios?.worst_case || "N/A"}</div>
+                    <div class="box"><b>Financial Guardrails</b><br>${report.financial_guardrails?.max_test_spend || "N/A"}<br>${report.financial_guardrails?.safe_budget_usage || ""}</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🚨 Failure Prediction</h3>
+                <ul>${(report.failure_prediction || []).map(x => `<li>${x}</li>`).join("")}</ul>
+            </div>
+
+            <div class="card">
+                <h3>🛠️ Execution Plan</h3>
+                <ol>${(report.execution_plan || []).map(x => `<li>${x}</li>`).join("")}</ol>
+            </div>
+
+            <div class="card">
+                <h3>📅 30-Day Plan</h3>
+                <div class="grid">
+                    <div class="box"><b>Week 1</b><br>${report["30_day_plan"]?.week_1 || "N/A"}</div>
+                    <div class="box"><b>Week 2</b><br>${report["30_day_plan"]?.week_2 || "N/A"}</div>
+                    <div class="box"><b>Week 3</b><br>${report["30_day_plan"]?.week_3 || "N/A"}</div>
+                    <div class="box"><b>Week 4</b><br>${report["30_day_plan"]?.week_4 || "N/A"}</div>
+                </div>
+            </div>
+
+            <div class="box accent">
+                🧪 After you try this, tell AURA what happened, for example “conversion was low,” and it will adjust your strategy.
+            </div>
+        </div>
     `;
 }
 
@@ -747,7 +673,6 @@ async function unlockReport() {
         } else {
             alert("Could not start payment.");
         }
-
     } catch (err) {
         alert("Payment error.");
         console.error(err);
@@ -756,7 +681,6 @@ async function unlockReport() {
 
 async function generatePaidReportAfterSuccess() {
     const params = new URLSearchParams(window.location.search);
-
     if (params.get("payment") !== "success") return;
 
     const saved = localStorage.getItem("aura_last_decision");
@@ -769,17 +693,17 @@ async function generatePaidReportAfterSuccess() {
     const decision = JSON.parse(saved);
     const loadingBox = addMessage("<b>🔓 Payment successful. Generating Pro Report...</b>", "bot");
 
-    await fetch("https://aura-ai-core-oeae.onrender.com/track-payment-success", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-        goal: decision.goal,
-        amount: 5,
-        currency: "CAD"
-    })
-});
-
     try {
+        await fetch("https://aura-ai-core-oeae.onrender.com/track-payment-success", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                goal: decision.goal,
+                amount: 5,
+                currency: "CAD"
+            })
+        });
+
         const res = await fetch("https://aura-ai-core-oeae.onrender.com/pro-report", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -791,12 +715,10 @@ async function generatePaidReportAfterSuccess() {
         });
 
         const data = await res.json();
-
         loadingBox.innerHTML = renderProReport(data.report);
 
         localStorage.removeItem("aura_last_decision");
         window.history.replaceState({}, document.title, window.location.pathname);
-
     } catch (err) {
         loadingBox.innerHTML = "❌ Payment worked, but Pro Report generation failed.";
         console.error(err);
@@ -806,10 +728,7 @@ async function generatePaidReportAfterSuccess() {
 function runNextAction() {
     if (!lastDecision) return;
 
-    const next =
-        lastDecision.decision_brief?.recommended_move ||
-        "Refine strategy based on results";
-
+    const next = lastDecision.decision_brief?.recommended_move || "Refine strategy based on results";
     document.getElementById("message").value = next;
     sendMessage();
 }
@@ -830,7 +749,7 @@ async function sendMessage() {
     addMessage(text, "user");
     input.value = "";
 
-    const responseBox = addMessage("<b>🧠 AURA is thinking...</b><br>", "bot");
+    const responseBox = addMessage("<b>🧠 AURA is thinking...</b>", "bot");
 
     try {
         const res = await fetch("https://aura-ai-core-oeae.onrender.com/chat", {
@@ -843,55 +762,26 @@ async function sendMessage() {
         });
 
         const data = await res.json();
-
         let responseHTML = "";
 
         if (data.type === "clarification") {
             responseHTML = `
-                <b>🤔 Clarification</b><br>
-                <div class="section">${data.response}</div>
+                <div class="card">
+                    <h3>🤔 AURA needs a little more context</h3>
+                    <div class="section">${data.response}</div>
+                </div>
             `;
         }
 
         else if (data.type === "healthcare") {
             const r = data.response;
-            const symptoms = r.symptoms || [];
-            const guidance = r.guidance || [];
-
             responseHTML = `
-                <b>🩺 AURA Healthcare</b>
-
-                <div class="section">
-                    <b>Summary:</b><br>
-                    ${r.summary}
+                <div class="card">
+                    <h3>🩺 AURA Healthcare</h3>
+                    <div class="section"><b>Summary:</b><br>${r.summary}</div>
+                    <div class="section"><b>Urgency:</b> ${r.urgency}</div>
+                    <div class="section">${r.disclaimer}</div>
                 </div>
-
-                <div class="section">
-                    <b>Urgency:</b> ${r.urgency}
-                </div>
-
-                <div class="section">
-                    <b>Detected Symptoms:</b>
-                    <ul>
-                        ${
-                            symptoms.length
-                            ? symptoms.map(s => `<li>${s.name} (${s.urgency})</li>`).join("")
-                            : "<li>No specific symptom detected</li>"
-                        }
-                    </ul>
-                </div>
-
-                <div class="section">
-                    <b>Guidance:</b>
-                    <ul>
-                        ${guidance.map(g => `<li>${g}</li>`).join("")}
-                    </ul>
-                </div>
-
-                <div class="section">
-                    ${r.disclaimer}
-                </div>
-
                 ${renderProfile(data.profile)}
             `;
         }
@@ -903,6 +793,7 @@ async function sendMessage() {
                 pendingGoal = text;
 
                 let questions = (r.summary || "")
+                    .replace("To give a better decision, I need:", "")
                     .replace("To give a more accurate answer, I need:", "")
                     .split("•")
                     .map(q => q.trim())
@@ -910,20 +801,12 @@ async function sendMessage() {
 
                 responseHTML = `
                     <div class="card">
-                        <b>🤔 I need a bit more info</b>
-
+                        <h3>🤔 AURA needs a little more context</h3>
                         <div class="section">
-                            To give you a precise decision, answer:
-                            <ul>
-                                ${questions.map(q => `<li>${q}</li>`).join("")}
-                            </ul>
-                        </div>
-
-                        <div class="section" style="margin-top:10px;">
-                            AURA will improve accuracy once this is provided.
+                            Answer these in simple words:
+                            <ul>${questions.map(q => `<li>${q}</li>`).join("")}</ul>
                         </div>
                     </div>
-
                     ${renderProfile(data.profile)}
                 `;
             } else {
@@ -942,24 +825,12 @@ async function sendMessage() {
             }
         }
 
-        else if (data.summary) {
-            responseHTML = `
-                <b>${data.summary.replace(/\n/g, "<br>")}</b>
-                ${
-                    data.detail
-                    ? `<div class="section">${data.detail}</div>`
-                    : ""
-                }
-            `;
-        }
-
         else {
             responseHTML = "⚠️ Unexpected response from AURA.";
         }
 
         responseBox.innerHTML = responseHTML;
         document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
-
     } catch (err) {
         responseBox.innerHTML = "❌ Error connecting to AURA backend.";
         console.error(err);
