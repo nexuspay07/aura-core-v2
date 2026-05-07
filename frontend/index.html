@@ -545,6 +545,8 @@ function renderDecisionDashboard(r, profile) {
 function renderProReport(report) {
     if (!report) return "";
 
+    const adaptive = report.adaptive_intelligence || {};
+
     return `
         <div class="hero">
             <h2>🔓 AURA Pro Decision Report</h2>
@@ -565,6 +567,54 @@ function renderProReport(report) {
                 <div class="box danger"><b>Brutal Truth</b><br>${report.reality_engine?.brutal_truth || "N/A"}</div>
             </div>
         </div>
+
+        <div class="card">
+    <h3>🧠 Adaptive Intelligence</h3>
+
+    <div class="grid-4">
+        <div class="box accent">
+            <b>Industry Detected</b><br>
+            ${adaptive.industry || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Business Stage</b><br>
+            ${adaptive.business_stage || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Execution Style</b><br>
+            ${adaptive.execution_style || "N/A"}
+        </div>
+
+        <div class="box warn">
+            <b>Avoid This</b><br>
+            ${adaptive.avoid_this || "N/A"}
+        </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:14px;">
+        <div class="box">
+            <b>Customer Psychology</b><br>
+            ${adaptive.customer_psychology || "N/A"}
+        </div>
+
+        <div class="box accent">
+            <b>Dominant Advantage</b><br>
+            ${adaptive.dominant_advantage || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Growth Style</b><br>
+            ${adaptive.growth_style || "N/A"}
+        </div>
+
+        <div class="box success">
+            <b>Communication Strategy</b><br>
+            ${adaptive.communication_strategy || "N/A"}
+        </div>
+    </div>
+</div>
 
         <div class="card">
             <h3>🔮 Outcome Simulation</h3>
