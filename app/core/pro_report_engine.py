@@ -3,6 +3,8 @@ class ProReportEngine:
     def generate(self, goal: str, decision_brief: dict, comparison: dict):
         strategies = comparison.get("comparisons", [])
 
+        adaptive = decision_brief.get("adaptive_intelligence", {})
+
         recommended_move = decision_brief.get(
             "recommended_move",
             "No recommendation available."
@@ -43,6 +45,17 @@ class ProReportEngine:
                     "Your advantage is focus, speed, customer learning, and sharper positioning."
                 )
             },
+
+            "adaptive_intelligence": {
+    "industry": adaptive.get("industry"),
+    "business_stage": adaptive.get("business_stage"),
+    "customer_psychology": adaptive.get("customer_psychology"),
+    "dominant_advantage": adaptive.get("dominant_advantage"),
+    "execution_style": adaptive.get("execution_style"),
+    "growth_style": adaptive.get("growth_style"),
+    "communication_strategy": adaptive.get("communication_strategy"),
+    "avoid_this": adaptive.get("avoid_this"),
+},
 
             # -----------------------------
             # MARKET INTELLIGENCE
