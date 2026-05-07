@@ -7,7 +7,7 @@ from app.core.strategy_comparison_engine import strategy_comparison_engine
 from app.core.market_intelligence_engine import market_intelligence_engine
 from app.core.decision_depth_engine import decision_depth_engine
 from app.core.reality_engine import reality_engine
-
+from app.core.adaptive_intelligence_engine import adaptive_intelligence_engine
 
 def extract_user_context(message: str):
     m = message.lower()
@@ -258,6 +258,15 @@ class ConversationEngine:
             }
         )
 
+        adaptive = adaptive_intelligence_engine.analyze(
+    goal,
+    {
+        "budget": budget,
+        "market": market,
+        "risk": risk
+    }
+)
+
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
             {
@@ -337,6 +346,15 @@ class ConversationEngine:
             "why_not_aggressive": reality.get("why_not_aggressive"),
             "why_not_balanced": reality.get("why_not_balanced"),
             "why_this_strategy_wins": reality.get("why_this_strategy_wins"),
+            "adaptive_intelligence": adaptive,
+"industry": adaptive.get("industry"),
+"business_stage": adaptive.get("business_stage"),
+"customer_psychology": adaptive.get("customer_psychology"),
+"dominant_advantage": adaptive.get("dominant_advantage"),
+"execution_style": adaptive.get("execution_style"),
+"growth_style": adaptive.get("growth_style"),
+"communication_strategy": adaptive.get("communication_strategy"),
+"avoid_this": adaptive.get("avoid_this"),
 
             "personalized_reality": decision_depth.get("personalized_reality"),
             "competitor_threat": decision_depth.get("competitor_threat"),
