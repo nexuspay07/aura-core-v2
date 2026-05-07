@@ -547,6 +547,9 @@ function renderProReport(report) {
 
     const adaptive = report.adaptive_intelligence || {};
 
+    const visual = report.visual_intelligence || {};
+const matrix = visual.competitor_matrix || {};
+
     return `
         <div class="hero">
             <h2>🔓 AURA Pro Decision Report</h2>
@@ -557,6 +560,58 @@ function renderProReport(report) {
             <h3>Executive Decision</h3>
             <div class="box accent">${report.summary || "N/A"}</div>
         </div>
+
+        <div class="card">
+    <h3>📊 Visual Intelligence</h3>
+
+    <div class="grid-4">
+        <div class="box accent">
+            <b>Decision Strength</b><br>
+            ${visual.decision_strength || 0}%<br>
+            ${visual.decision_strength_label || "N/A"}
+        </div>
+
+        <div class="box warn">
+            <b>Risk Level</b><br>
+            ${visual.risk_score || 0}%<br>
+            ${visual.risk_label || "N/A"}
+        </div>
+
+        <div class="box danger">
+            <b>Market Pressure</b><br>
+            ${visual.market_pressure_score || 0}%<br>
+            ${visual.market_pressure_label || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Execution Difficulty</b><br>
+            ${visual.execution_difficulty || 0}%<br>
+            ${visual.execution_label || "N/A"}
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+        <h3>⚔️ Competitor Pressure Matrix</h3>
+
+        <div class="grid-2">
+            <div class="box accent">
+                <b>You</b><br>
+                Trust: ${matrix.you?.trust || "N/A"}<br>
+                Speed: ${matrix.you?.speed || "N/A"}<br>
+                Brand: ${matrix.you?.brand || "N/A"}<br>
+                Flexibility: ${matrix.you?.flexibility || "N/A"}
+            </div>
+
+            <div class="box danger">
+                <b>Competitors</b><br>
+                Trust: ${matrix.competitors?.trust || "N/A"}<br>
+                Speed: ${matrix.competitors?.speed || "N/A"}<br>
+                Brand: ${matrix.competitors?.brand || "N/A"}<br>
+                Flexibility: ${matrix.competitors?.flexibility || "N/A"}
+            </div>
+        </div>
+    </div>
+</div>
 
         <div class="card">
             <h3>🌍 Strategic Intelligence</h3>

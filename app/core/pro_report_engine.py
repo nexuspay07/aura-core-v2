@@ -1,3 +1,5 @@
+
+from app.core.visual_intelligence_engine import visual_intelligence_engine
 class ProReportEngine:
 
     def generate(self, goal: str, decision_brief: dict, comparison: dict):
@@ -25,8 +27,12 @@ class ProReportEngine:
             "Start small, validate early, and adjust quickly."
         )
 
+        visual_intelligence = visual_intelligence_engine.analyze(decision_brief)
+
         report = {
             "title": "AURA Pro Decision Report",
+
+            "visual_intelligence": visual_intelligence,
 
             # -----------------------------
             # EXECUTIVE SUMMARY
