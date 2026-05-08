@@ -9,6 +9,7 @@ from app.core.decision_depth_engine import decision_depth_engine
 from app.core.reality_engine import reality_engine
 from app.core.adaptive_intelligence_engine import adaptive_intelligence_engine
 
+
 def extract_user_context(message: str):
     m = message.lower()
 
@@ -82,7 +83,8 @@ class ConversationEngine:
             "grow", "startup", "business", "company", "scale",
             "customers", "revenue", "pricing", "price", "hire",
             "market", "cost", "expenses", "sales", "clients",
-            "offline", "online", "shop", "store", "service"
+            "offline", "online", "shop", "store", "service",
+            "restaurant", "food", "building materials", "construction"
         ]):
             return "business_strategy"
 
@@ -157,7 +159,6 @@ class ConversationEngine:
 
     def extract_preferences(self, message: str):
         m = message.lower()
-
         context = extract_user_context(message)
 
         preferences = {
@@ -205,6 +206,7 @@ class ConversationEngine:
         clean_goal = self.clean_goal_text(goal)
 
         business_intent = business_domain_engine.detect_subdomain(goal)
+        print("[AURA INTENT]", business_intent)
 
         preferences = self.extract_preferences(goal)
 
@@ -220,14 +222,14 @@ class ConversationEngine:
         missing = self.missing_context(preferences)
 
         if missing:
-          if not budget:
-            budget = profile.get("preferred_budget") or 10000
+            if not budget:
+                budget = profile.get("preferred_budget") or 10000
 
-        if not market:
-            market = profile.get("market") or "competitive"
+            if not market:
+                market = profile.get("market") or "competitive"
 
-        preferences["budget"] = budget
-        preferences["market"] = market
+            preferences["budget"] = budget
+            preferences["market"] = market
 
         market_context = get_market_context()
 
@@ -259,13 +261,13 @@ class ConversationEngine:
         )
 
         adaptive = adaptive_intelligence_engine.analyze(
-    goal,
-    {
-        "budget": budget,
-        "market": market,
-        "risk": risk
-    }
-)
+            goal,
+            {
+                "budget": budget,
+                "market": market,
+                "risk": risk
+            }
+        )
 
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
@@ -311,25 +313,37 @@ class ConversationEngine:
         timeframe = prediction.get("timeframe", "Medium-term")
         context_note = prediction.get("context_note", "General estimate")
 
-        if market == "competitive" and budget <= 5000:
-            recommended_move = "Start with a niche offer and test pricing on a small audience"
-        elif market == "competitive":
-            recommended_move = "Differentiate your offer and test pricing against competitors"
-        elif market == "monopoly":
-            recommended_move = "Set value-based pricing and maximize margins"
-        elif confidence < 0.6:
-            recommended_move = "Run a small test before committing"
-        elif confidence > 0.75:
-            recommended_move = "Execute confidently and scale faster"
-        else:
-            recommended_move = best_move
+        # IMPORTANT:
+        # This now uses the actual goal-specific strategy instead of forcing
+        # the same static competitive-market answer every time.
+        recommended_move = business_strategy.get("advice", best_move)
 
-        if market == "competitive" and budget <= 5000:
-            fallback = "If traction is low, narrow your niche further or improve your offer"
-        elif market == "competitive":
-            fallback = "If customers don’t convert, adjust positioning or pricing quickly"
-        elif confidence < 0.5:
-            fallback = "Reduce risk immediately and validate assumptions"
+        if business_intent == "online_vs_offline":
+            fallback = (
+                "If online traction stays weak after testing, shift toward local offline trust-building "
+                "such as partnerships, physical visibility, or direct referrals."
+            )
+
+        elif business_intent == "restaurant_strategy":
+            fallback = (
+                "If repeat orders stay low, improve taste consistency, speed, pricing, or customer experience."
+            )
+
+        elif business_intent == "building_materials":
+            fallback = (
+                "If contractors do not return, improve delivery speed, stock reliability, or trust."
+            )
+
+        elif business_intent == "pricing":
+            fallback = (
+                "If conversion stays low, customers may not see enough value at the current price."
+            )
+
+        elif business_intent == "growth":
+            fallback = (
+                "If growth stalls, focus on one customer acquisition channel instead of many."
+            )
+
         else:
             fallback = self._fallback_move(name)
 
@@ -346,15 +360,16 @@ class ConversationEngine:
             "why_not_aggressive": reality.get("why_not_aggressive"),
             "why_not_balanced": reality.get("why_not_balanced"),
             "why_this_strategy_wins": reality.get("why_this_strategy_wins"),
+
             "adaptive_intelligence": adaptive,
-"industry": adaptive.get("industry"),
-"business_stage": adaptive.get("business_stage"),
-"customer_psychology": adaptive.get("customer_psychology"),
-"dominant_advantage": adaptive.get("dominant_advantage"),
-"execution_style": adaptive.get("execution_style"),
-"growth_style": adaptive.get("growth_style"),
-"communication_strategy": adaptive.get("communication_strategy"),
-"avoid_this": adaptive.get("avoid_this"),
+            "industry": adaptive.get("industry"),
+            "business_stage": adaptive.get("business_stage"),
+            "customer_psychology": adaptive.get("customer_psychology"),
+            "dominant_advantage": adaptive.get("dominant_advantage"),
+            "execution_style": adaptive.get("execution_style"),
+            "growth_style": adaptive.get("growth_style"),
+            "communication_strategy": adaptive.get("communication_strategy"),
+            "avoid_this": adaptive.get("avoid_this"),
 
             "personalized_reality": decision_depth.get("personalized_reality"),
             "competitor_threat": decision_depth.get("competitor_threat"),
@@ -368,7 +383,7 @@ class ConversationEngine:
             "recommended_move": recommended_move,
             "context_note": context_note,
             "why_this": (
-                f"AURA selected the {name.lower()} approach because it best fits your "
+                f"AURA selected this recommendation because it matches the specific goal, "
                 f"budget, market condition, risk level, and predicted outcome strength."
             ),
             "profile_note": profile_note,
@@ -447,6 +462,12 @@ class ConversationEngine:
 
         if business_intent == "online_vs_offline":
             return "Cost per customer"
+
+        if business_intent == "restaurant_strategy":
+            return "Repeat order rate"
+
+        if business_intent == "building_materials":
+            return "Repeat contractor orders"
 
         return "Customer response"
 
