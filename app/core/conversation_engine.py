@@ -7,6 +7,7 @@ from app.core.strategy_comparison_engine import strategy_comparison_engine
 from app.core.market_intelligence_engine import market_intelligence_engine
 from app.core.decision_depth_engine import decision_depth_engine
 from app.core.reality_engine import reality_engine
+from app.core.dynamic_reasoning_engine import dynamic_reasoning_engine
 from app.core.adaptive_intelligence_engine import adaptive_intelligence_engine
 
 
@@ -279,6 +280,7 @@ class ConversationEngine:
        )
 
         business_dna = business_understanding.get("business_dna", {})
+        dynamic_reasoning = dynamic_reasoning_engine.analyze(business_dna)
 
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
@@ -371,6 +373,13 @@ class ConversationEngine:
             "why_not_aggressive": reality.get("why_not_aggressive"),
             "why_not_balanced": reality.get("why_not_balanced"),
             "why_this_strategy_wins": reality.get("why_this_strategy_wins"),
+            "dynamic_reasoning": dynamic_reasoning,
+"current_bottleneck": dynamic_reasoning.get("current_bottleneck"),
+"current_priority": dynamic_reasoning.get("current_priority"),
+"execution_focus": dynamic_reasoning.get("execution_focus"),
+"growth_blocker": dynamic_reasoning.get("growth_blocker"),
+"next_business_evolution": dynamic_reasoning.get("next_business_evolution"),
+"strategic_warning": dynamic_reasoning.get("strategic_warning"),
 
             "adaptive_intelligence": adaptive,
             "industry": adaptive.get("industry"),
