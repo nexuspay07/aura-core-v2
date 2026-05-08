@@ -1,5 +1,5 @@
 import re
-
+from app.core.business_understanding_engine import business_understanding_engine
 from app.domains.business.business_domain_engine import business_domain_engine
 from app.domains.business.business_strategy_engine import business_strategy_engine
 from app.core.prediction_engine import prediction_engine, get_market_context
@@ -269,6 +269,17 @@ class ConversationEngine:
             }
         )
 
+        business_understanding = business_understanding_engine.analyze(
+            goal,
+            {
+                "budget": budget,
+                "market": market,
+                "risk": risk
+            }
+       )
+
+        business_dna = business_understanding.get("business_dna", {})
+
         business_strategy = business_strategy_engine.generate_strategy(
             business_intent,
             {
@@ -370,6 +381,13 @@ class ConversationEngine:
             "growth_style": adaptive.get("growth_style"),
             "communication_strategy": adaptive.get("communication_strategy"),
             "avoid_this": adaptive.get("avoid_this"),
+            "business_understanding": business_understanding,
+"business_dna": business_dna,
+"business_nature": business_understanding.get("business_nature"),
+"market_nature": business_understanding.get("market_nature"),
+"customer_nature": business_understanding.get("customer_nature"),
+"execution_reality": business_understanding.get("execution_reality"),
+"strategic_direction": business_understanding.get("strategic_direction"),
 
             "personalized_reality": decision_depth.get("personalized_reality"),
             "competitor_threat": decision_depth.get("competitor_threat"),
