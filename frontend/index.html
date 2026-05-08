@@ -492,6 +492,7 @@ function renderProfile(profile) {
 function renderDecisionDashboard(r, profile) {
     const brief = r.decision_brief || {};
     const dna = brief.business_dna || {};
+    const reasoning = brief.dynamic_reasoning || {};
     const usage = getUsageCount();
 
     return `
@@ -543,6 +544,42 @@ function renderDecisionDashboard(r, profile) {
     <div class="box success" style="margin-top:14px;">
         <b>Strategic Direction</b><br>
         ${brief.strategic_direction || "N/A"}
+    </div>
+</div>
+
+<div class="card">
+    <h3>🧠 Dynamic Reasoning</h3>
+
+    <div class="grid-2">
+        <div class="box accent">
+            <b>Current Bottleneck</b><br>
+            ${reasoning.current_bottleneck || "N/A"}
+        </div>
+
+        <div class="box success">
+            <b>Current Priority</b><br>
+            ${reasoning.current_priority || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Execution Focus</b><br>
+            ${reasoning.execution_focus || "N/A"}
+        </div>
+
+        <div class="box warn">
+            <b>Growth Blocker</b><br>
+            ${reasoning.growth_blocker || "N/A"}
+        </div>
+    </div>
+
+    <div class="box danger" style="margin-top:14px;">
+        <b>Strategic Warning</b><br>
+        ${reasoning.strategic_warning || "N/A"}
+    </div>
+
+    <div class="box accent" style="margin-top:14px;">
+        <b>Next Business Evolution</b><br>
+        ${reasoning.next_business_evolution || "N/A"}
     </div>
 </div>
 
@@ -602,6 +639,7 @@ function renderProReport(report) {
 
     const dna = report.business_dna || {};
 const understanding = report.business_understanding || {};
+const reasoning = report.dynamic_reasoning || {};
 
     const visual = report.visual_intelligence || {};
 const matrix = visual.competitor_matrix || {};
@@ -647,6 +685,43 @@ const matrix = visual.competitor_matrix || {};
         ${understanding.strategic_direction || "N/A"}
     </div>
 </div>
+
+<div class="card">
+    <h3>🧠 Dynamic Reasoning</h3>
+
+    <div class="grid-2">
+        <div class="box accent">
+            <b>Current Bottleneck</b><br>
+            ${reasoning.current_bottleneck || "N/A"}
+        </div>
+
+        <div class="box success">
+            <b>Current Priority</b><br>
+            ${reasoning.current_priority || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Execution Focus</b><br>
+            ${reasoning.execution_focus || "N/A"}
+        </div>
+
+        <div class="box warn">
+            <b>Growth Blocker</b><br>
+            ${reasoning.growth_blocker || "N/A"}
+        </div>
+    </div>
+
+    <div class="box danger" style="margin-top:14px;">
+        <b>Strategic Warning</b><br>
+        ${reasoning.strategic_warning || "N/A"}
+    </div>
+
+    <div class="box accent" style="margin-top:14px;">
+        <b>Next Business Evolution</b><br>
+        ${reasoning.next_business_evolution || "N/A"}
+    </div>
+</div>
+
 
 <div class="card">
     <h3>🧬 Business DNA</h3>
