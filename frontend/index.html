@@ -491,6 +491,7 @@ function renderProfile(profile) {
 
 function renderDecisionDashboard(r, profile) {
     const brief = r.decision_brief || {};
+    const dna = brief.business_dna || {};
     const usage = getUsageCount();
 
     return `
@@ -513,6 +514,58 @@ function renderDecisionDashboard(r, profile) {
                 ${brief.why_this || "AURA selected this based on your situation."}
             </div>
         </div>
+
+        <div class="card">
+    <h3>🧬 Business Understanding</h3>
+
+    <div class="grid-2">
+        <div class="box accent">
+            <b>Business Nature</b><br>
+            ${brief.business_nature || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Market Nature</b><br>
+            ${brief.market_nature || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Customer Nature</b><br>
+            ${brief.customer_nature || "N/A"}
+        </div>
+
+        <div class="box warn">
+            <b>Execution Reality</b><br>
+            ${brief.execution_reality || "N/A"}
+        </div>
+    </div>
+
+    <div class="box success" style="margin-top:14px;">
+        <b>Strategic Direction</b><br>
+        ${brief.strategic_direction || "N/A"}
+    </div>
+</div>
+
+<div class="card">
+    <h3>🧬 Business DNA</h3>
+
+    <div class="grid-4">
+        <div class="box"><b>Model</b><br>${dna.business_model || "N/A"}</div>
+        <div class="box"><b>Customer Type</b><br>${dna.customer_type || "N/A"}</div>
+        <div class="box"><b>Channel</b><br>${dna.primary_channel || "N/A"}</div>
+        <div class="box"><b>Stage</b><br>${dna.business_stage || "N/A"}</div>
+
+        <div class="box"><b>Trust Dependency</b><br>${dna.trust_dependency || "N/A"}</div>
+        <div class="box"><b>Repeat Purchase</b><br>${dna.repeat_purchase_potential || "N/A"}</div>
+        <div class="box"><b>Capital Intensity</b><br>${dna.capital_intensity || "N/A"}</div>
+        <div class="box"><b>Operational Complexity</b><br>${dna.operational_complexity || "N/A"}</div>
+
+        <div class="box"><b>Competition Pressure</b><br>${dna.competition_pressure || "N/A"}</div>
+        <div class="box"><b>Price Sensitivity</b><br>${dna.price_sensitivity || "N/A"}</div>
+        <div class="box"><b>Scalability</b><br>${dna.scalability || "N/A"}</div>
+        <div class="box"><b>Proof Requirement</b><br>${dna.proof_requirement || "N/A"}</div>
+    </div>
+</div>
 
         <div class="card">
             <h3>🌍 Market Snapshot</h3>
@@ -547,6 +600,9 @@ function renderProReport(report) {
 
     const adaptive = report.adaptive_intelligence || {};
 
+    const dna = report.business_dna || {};
+const understanding = report.business_understanding || {};
+
     const visual = report.visual_intelligence || {};
 const matrix = visual.competitor_matrix || {};
 
@@ -560,6 +616,48 @@ const matrix = visual.competitor_matrix || {};
             <h3>Executive Decision</h3>
             <div class="box accent">${report.summary || "N/A"}</div>
         </div>
+
+        <div class="card">
+    <h3>🧬 Universal Business Understanding</h3>
+
+    <div class="grid-2">
+        <div class="box accent">
+            <b>Business Nature</b><br>
+            ${understanding.business_nature || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Market Nature</b><br>
+            ${understanding.market_nature || "N/A"}
+        </div>
+
+        <div class="box">
+            <b>Customer Nature</b><br>
+            ${understanding.customer_nature || "N/A"}
+        </div>
+
+        <div class="box warn">
+            <b>Execution Reality</b><br>
+            ${understanding.execution_reality || "N/A"}
+        </div>
+    </div>
+
+    <div class="box success" style="margin-top:14px;">
+        <b>Strategic Direction</b><br>
+        ${understanding.strategic_direction || "N/A"}
+    </div>
+</div>
+
+<div class="card">
+    <h3>🧬 Business DNA</h3>
+
+    <div class="grid-4">
+        <div class="box"><b>Model</b><br>${dna.business_model || "N/A"}</div>
+        <div class="box"><b>Customer Type</b><br>${dna.customer_type || "N/A"}</div>
+        <div class="box"><b>Channel</b><br>${dna.primary_channel || "N/A"}</div>
+        <div class="box"><b>Stage</b><br>${dna.business_stage || "N/A"}</div>
+    </div>
+</div>
 
         <div class="card">
     <h3>📊 Visual Intelligence</h3>

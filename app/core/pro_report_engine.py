@@ -7,6 +7,9 @@ class ProReportEngine:
 
         adaptive = decision_brief.get("adaptive_intelligence", {})
 
+        business_understanding = decision_brief.get("business_understanding", {})
+        business_dna = decision_brief.get("business_dna", {})
+
         recommended_move = decision_brief.get(
             "recommended_move",
             "No recommendation available."
@@ -33,6 +36,9 @@ class ProReportEngine:
             "title": "AURA Pro Decision Report",
 
             "visual_intelligence": visual_intelligence,
+
+            "business_understanding": business_understanding,
+"business_dna": business_dna,
 
             # -----------------------------
             # EXECUTIVE SUMMARY
