@@ -15,36 +15,34 @@ from app.learning.adaptive_intelligence_engine import adaptive_intelligence_engi
 from app.core.world_modeling_engine import world_modeling_engine
 from app.core.multi_goal_engine import multi_goal_engine
 from app.core.resource_intelligence_engine import resource_intelligence_engine
-
 from app.core.autonomous_execution_engine import autonomous_execution_engine
 from app.core.multi_agent_engine import Agent, multi_agent_engine
 
 from app.security.identity_engine import identity_engine
 from app.security.security_engine import security_engine
-
 from app.monitoring.monitoring_engine import monitoring_engine
 from app.control.control_engine import control_engine
 from app.core.plan_optimizer_engine import plan_optimizer_engine
 
-# 🔥 LAB SYSTEMS
 from app.lab.simulation_engine import simulation_engine
 from app.lab.world_engine import world_engine
 from app.lab.debate_engine import debate_engine
 from app.lab.agent_engine import agent_engine
 from app.lab.failure_engine import failure_engine
 
+from app.core.business_understanding_engine import business_understanding_engine
+from app.core.dynamic_reasoning_engine import dynamic_reasoning_engine
+from app.core.market_intelligence_engine import market_intelligence_engine
+from app.core.strategy_comparison_engine import strategy_comparison_engine
+from app.core.prediction_engine import prediction_engine
+from app.core.visual_intelligence_engine import visual_intelligence_engine
 
-# ==============================
-# INIT META STRATEGY
-# ==============================
+
 meta_strategy_engine = MetaStrategyEngine(strategy_performance_tracker)
 
 
 class CognitiveLoop:
     def __init__(self):
-        # ==============================
-        # MULTI-AGENT SYSTEM
-        # ==============================
         multi_agent_engine.register_agent(Agent("Planner-1", "planner"))
         multi_agent_engine.register_agent(Agent("Executor-1", "executor"))
         multi_agent_engine.register_agent(Agent("Analyst-1", "analyst"))
@@ -57,9 +55,6 @@ class CognitiveLoop:
 
         self.agent_token = security_engine.authenticate_agent("AURA_CORE")
 
-        # ==============================
-        # WORLD MODEL
-        # ==============================
         world_modeling_engine.create_model(
             "business",
             {"demand": 100, "price": 10, "revenue": 1000, "cost": 500, "profit": 500},
@@ -73,9 +68,6 @@ class CognitiveLoop:
 
         print("[COGNITIVE LOOP] Initialized")
 
-    # ==========================================
-    # STREAM HELPER
-    # ==========================================
     @staticmethod
     def _stream_event(step, message, data=None) -> str:
         return json.dumps({
@@ -84,93 +76,49 @@ class CognitiveLoop:
             "data": data
         }) + "\n"
 
-    # ==========================================
-    # 🔥 STRUCTURED LIVE STREAM
-    # ==========================================
-    async def run_simulation_stream(self, scenario):
+    def run_intelligence_pipeline(self, goal: str, scenario: dict, profile: dict | None = None):
         try:
-            goal = scenario.get("goal", "Unknown Goal")
+            profile = profile or {}
 
-            yield self._stream_event(
-                "start",
-                f"Starting AURA simulation for: {goal}"
+            business_understanding = business_understanding_engine.analyze(goal, scenario)
+            business_dna = business_understanding.get("business_dna", {})
+
+            dynamic_reasoning = dynamic_reasoning_engine.analyze(business_dna)
+
+            market_intelligence = market_intelligence_engine.analyze(
+                business_dna.get("business_model", "general_business"),
+                scenario
             )
-            await asyncio.sleep(0.5)
 
-            # ==========================
-            # 1. SIMULATION
-            # ==========================
             sim_result = simulation_engine.run_simulation(goal, scenario)
 
-            yield self._stream_event(
-                "simulation",
-                "Strategies generated",
-                {"count": len(sim_result.get("results", []))}
-            )
-
-            # ==========================
-            # 2. WORLD MODELING
-            # ==========================
             domain = world_engine.detect_domain(goal)
             world = world_engine.build_world(domain)
-
-            # Keep stream logic aligned with /lab/simulate
-            world["risk_tolerance"] = scenario.get("risk_tolerance", 0.5)
-            world["budget"] = scenario.get("budget", 10000)
-            world["market"] = scenario.get("market", "normal")
+            world.update(scenario)
 
             sim_result["results"] = world_engine.apply_world(
                 sim_result.get("results", []),
                 world
             )
 
-            yield self._stream_event(
-                "world",
-                f"World applied: {domain}",
-                world
-            )
-
-            # ==========================
-            # 3. DEBATE SYSTEM
-            # ==========================
-            debated, debates = debate_engine.run_debate(
+            debated_results, debates = debate_engine.run_debate(
                 sim_result["results"],
                 goal
             )
-            sim_result["results"] = debated
+            sim_result["results"] = debated_results
 
-            yield self._stream_event(
-                "debate",
-                "Strategies debated",
-                {"count": len(debates)}
-            )
-
-            # ==========================
-            # 4. FAILURE PREDICTION
-            # ==========================
             failures = failure_engine.predict(
                 sim_result["results"],
                 scenario,
                 world
             )
 
-            yield self._stream_event(
-                "failure",
-                "Failure analysis complete",
-                failures
-            )
-
-            # ==========================
-            # 5. TRUST SCORING
-            # ==========================
             for s in sim_result["results"]:
                 if "final_score" not in s:
                     s["final_score"] = s.get("score", 0)
 
-                base_conf = s.get("confidence", 0.7)
-
                 failure_data = next(
-                    (f for f in failures if f["strategy"] == s["name"]),
+                    (f for f in failures if f.get("strategy") == s.get("name")),
                     None
                 )
 
@@ -179,6 +127,7 @@ class CognitiveLoop:
                     if failure_data else 0.3
                 )
 
+                base_conf = s.get("confidence", 0.7)
                 adjusted_conf = base_conf * (1 - failure_prob)
                 trust_score = adjusted_conf * s.get("final_score", 1)
 
@@ -186,77 +135,155 @@ class CognitiveLoop:
                 s["trust_score"] = round(trust_score, 2)
                 s["failure_probability"] = round(failure_prob * 100, 2)
 
-            yield self._stream_event(
-                "trust",
-                "Trust scoring complete",
-                sim_result["results"]
-            )
-
-            # ==========================
-            # 6. FINAL DECISION (UNIFIED)
-            # ==========================
-            for s in sim_result["results"]:
                 score = s.get("final_score", 0)
-                failure = s.get("failure_probability", 0)
-                s["decision_score"] = round(score - (failure * 0.05), 2)
+                s["decision_score"] = round(score - (s["failure_probability"] * 0.05), 2)
 
             sim_result["results"] = sorted(
                 sim_result["results"],
-                key=lambda x: x["decision_score"],
+                key=lambda x: x.get("decision_score", 0),
                 reverse=True
             )
 
-            best = sim_result["results"][0]
+            best = sim_result["results"][0] if sim_result.get("results") else {}
             sim_result["best_strategy"] = best
+
+            strategy_comparison = strategy_comparison_engine.compare(
+                business_dna.get("business_model", "general_business"),
+                scenario
+            )
+
+            prediction = prediction_engine.predict_outcome(
+                business_dna.get("business_model", "general_business"),
+                best.get("name", "Balanced"),
+                scenario
+            )
+
+            visual_intelligence = visual_intelligence_engine.analyze({
+                "confidence": prediction.get("confidence", 0.65),
+                "main_risk": dynamic_reasoning.get("strategic_warning", ""),
+                "market_pressure": market_intelligence.get("market_pressure", "")
+            })
+
+            return {
+                "status": "success",
+                "goal": goal,
+                "scenario": scenario,
+                "profile": profile,
+                "business_understanding": business_understanding,
+                "business_dna": business_dna,
+                "dynamic_reasoning": dynamic_reasoning,
+                "market_intelligence": market_intelligence,
+                "strategy_comparison": strategy_comparison,
+                "prediction": prediction,
+                "visual_intelligence": visual_intelligence,
+                "simulation": sim_result,
+                "results": sim_result.get("results", []),
+                "best_strategy": best,
+                "failures": failures,
+                "debates": debates,
+                "world": world
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e),
+                "goal": goal,
+                "scenario": scenario
+            }
+
+    async def run_simulation_stream(self, scenario):
+        try:
+            goal = scenario.get("goal", "Unknown Goal")
+
+            yield self._stream_event("start", f"Starting AURA simulation for: {goal}")
+            await asyncio.sleep(0.3)
+
+            pipeline = self.run_intelligence_pipeline(goal, scenario)
+
+            if pipeline.get("status") == "error":
+                yield self._stream_event("error", pipeline.get("message"))
+                return
+
+            yield self._stream_event(
+                "business_understanding",
+                "Business understanding complete",
+                pipeline.get("business_understanding")
+            )
+
+            yield self._stream_event(
+                "dynamic_reasoning",
+                "Dynamic reasoning complete",
+                pipeline.get("dynamic_reasoning")
+            )
+
+            yield self._stream_event(
+                "market",
+                "Market intelligence complete",
+                pipeline.get("market_intelligence")
+            )
+
+            yield self._stream_event(
+                "simulation",
+                "Strategies simulated",
+                {"count": len(pipeline.get("results", []))}
+            )
+
+            yield self._stream_event(
+                "debate",
+                "Strategies debated",
+                {"count": len(pipeline.get("debates", []))}
+            )
+
+            yield self._stream_event(
+                "failure",
+                "Failure analysis complete",
+                pipeline.get("failures")
+            )
+
+            yield self._stream_event(
+                "prediction",
+                "Prediction complete",
+                pipeline.get("prediction")
+            )
+
+            yield self._stream_event(
+                "visual_intelligence",
+                "Visual intelligence complete",
+                pipeline.get("visual_intelligence")
+            )
+
+            best = pipeline.get("best_strategy", {})
 
             yield self._stream_event(
                 "decision",
-                f"Best strategy selected: {best['name']}",
+                f"Best strategy selected: {best.get('name', 'Unknown')}",
                 best
             )
 
-            # ==========================
-            # 7. HUMAN CONTROL
-            # ==========================
-            yield self._stream_event(
-                "waiting",
-                "Awaiting human approval"
-            )
+            yield self._stream_event("waiting", "Awaiting human approval")
 
             decision = await asyncio.to_thread(control_engine.wait_for_decision)
 
             if decision == "rejected":
-                yield self._stream_event(
-                    "rejected",
-                    "Simulation rejected by user"
-                )
+                yield self._stream_event("rejected", "Simulation rejected by user")
                 control_engine.reset()
                 return
 
-            yield self._stream_event(
-                "approved",
-                "Approved. Executing"
-            )
+            yield self._stream_event("approved", "Approved. Executing")
             control_engine.reset()
 
-            # ==========================
-            # 8. AGENT EXECUTION
-            # ==========================
-            steps = agent_engine.run_agents(sim_result)
+            steps = agent_engine.run_agents(pipeline.get("simulation", {}))
 
             for step in steps:
-                yield self._stream_event(
-                    "agent",
-                    step.get("message", ""),
-                    step
-                )
+                yield self._stream_event("agent", step.get("message", ""), step)
                 await asyncio.sleep(0.3)
 
-            # ==========================
-            # 9. SELF LEARNING
-            # ==========================
             try:
-                self_learning_engine.learn_from_execution(goal, sim_result)
+                self_learning_engine.learn_from_execution(
+                    goal,
+                    pipeline.get("simulation", {})
+                )
             except Exception as learning_error:
                 yield self._stream_event(
                     "warning",
@@ -267,17 +294,20 @@ class CognitiveLoop:
                 "complete",
                 "Simulation complete",
                 {
-                    "best_strategy": sim_result.get("best_strategy"),
-                    "results_count": len(sim_result.get("results", []))
+                    "best_strategy": pipeline.get("best_strategy"),
+                    "results_count": len(pipeline.get("results", [])),
+                    "business_understanding": pipeline.get("business_understanding"),
+                    "dynamic_reasoning": pipeline.get("dynamic_reasoning"),
+                    "market_intelligence": pipeline.get("market_intelligence"),
+                    "strategy_comparison": pipeline.get("strategy_comparison"),
+                    "prediction": pipeline.get("prediction"),
+                    "visual_intelligence": pipeline.get("visual_intelligence")
                 }
             )
 
         except Exception as e:
             yield self._stream_event("error", str(e))
 
-    # ==========================================
-    # STANDARD LOOP
-    # ==========================================
     def run(self):
         try:
             monitoring_engine.log_event("cognitive_loop_started")
@@ -311,9 +341,6 @@ class CognitiveLoop:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    # ==========================================
-    # HELPER
-    # ==========================================
     @staticmethod
     def _normalize_goal(goal):
         if isinstance(goal, str):
@@ -323,5 +350,4 @@ class CognitiveLoop:
         return goal
 
 
-# ✅ GLOBAL INSTANCE
 cognitive_loop = CognitiveLoop()
