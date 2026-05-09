@@ -4,10 +4,9 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="AURA AI")
-
-from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,19 +24,23 @@ app.add_middleware(
 # IMPORTS
 # =========================
 from app.db.database import database, engine, metadata
+
 from app.lab.world_engine import world_engine
 from app.lab.history_engine import history_engine
 from app.lab.learning_engine import learning_engine
 from app.lab.failure_engine import failure_engine
-from app.core.cognitive_loop import cognitive_loop
-from app.control.control_engine import control_engine
 from app.lab.simulation_engine import simulation_engine
 from app.lab.explanation_engine import explanation_engine
 from app.lab.agent_engine import agent_engine
 from app.lab.debate_engine import debate_engine
 
+from app.core.cognitive_loop import cognitive_loop
+from app.control.control_engine import control_engine
+
 from app.api.strategy_routes import router as strategy_router
 from app.api.marketplace_routes import router as marketplace_router
+from app.api.pro_routes import router as pro_router
+from app.api.payment_routes import router as payment_router
 
 from app.core.conversation_engine import conversation_engine
 from app.core.conversation_memory import conversation_memory
@@ -49,15 +52,13 @@ from app.domains.healthcare.healthcare_engine import healthcare_engine
 from app.core.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
 from app.core.causal_reasoning_engine import causal_reasoning_engine
-from app.api.pro_routes import router as pro_router
-from app.api.payment_routes import router as payment_router
+
 
 app.include_router(payment_router)
-
 app.include_router(pro_router)
-
 app.include_router(strategy_router)
 app.include_router(marketplace_router)
+
 
 # =========================
 # HELPERS
@@ -71,18 +72,19 @@ def generate_action_plan(strategy):
             "Invest heavily in user acquisition",
             "Scale rapidly"
         ]
+
     elif name == "Balanced":
         return [
             "Validate product-market fit",
             "Scale gradually",
             "Optimize operations"
         ]
-    else:
-        return [
-            "Minimize costs",
-            "Run small experiments",
-            "Grow steadily"
-        ]
+
+    return [
+        "Minimize costs",
+        "Run small experiments",
+        "Grow steadily"
+    ]
 
 
 def add_prediction_and_uncertainty(results, world):
@@ -93,6 +95,7 @@ def add_prediction_and_uncertainty(results, world):
 
     for s in results:
         name = s.get("name")
+
         if name in prediction_map:
             p = prediction_map[name]
             s["prediction"] = p
@@ -156,7 +159,9 @@ def is_healthcare_message(message: str) -> bool:
         "dizziness", "shortness of breath", "chest pain",
         "symptom", "medical", "health"
     ]
+
     return any(k in message.lower() for k in keywords)
+
 
 # =========================
 # STARTUP / SHUTDOWN
@@ -171,6 +176,7 @@ async def startup():
 async def shutdown():
     await database.disconnect()
 
+
 # =========================
 # MODELS
 # =========================
@@ -184,6 +190,7 @@ class SimulationRequest(BaseModel):
 class ConversationRequest(BaseModel):
     message: str
     session_id: str | None = None
+
 
 # =========================
 # CHAT
@@ -231,7 +238,11 @@ async def chat(data: ConversationRequest):
     if conversation_engine.needs_clarification(message):
         clarification = conversation_engine.build_clarification_question(intent)
 
-        conversation_memory.add_message(session_id, "assistant", clarification)
+        conversation_memory.add_message(
+            session_id,
+            "assistant",
+            clarification
+        )
 
         return {
             "type": "clarification",
@@ -240,7 +251,7 @@ async def chat(data: ConversationRequest):
         }
 
     # =========================
-    # BUSINESS FLOW
+    # SCENARIO
     # =========================
     scenario = {
         "goal": message,
@@ -249,85 +260,82 @@ async def chat(data: ConversationRequest):
         "market": "normal"
     }
 
-    # ✅ PERSONALIZATION: apply user profile bias
+    # =========================
+    # USER PROFILE
+    # =========================
     profile = user_profile_engine.get_profile(session_id)
 
     if profile.get("preferred_risk") == "low":
         scenario["risk_tolerance"] = 0.2
+
     elif profile.get("preferred_risk") == "high":
         scenario["risk_tolerance"] = 0.8
+
     elif profile.get("preferred_risk") == "medium":
         scenario["risk_tolerance"] = 0.5
 
     if profile.get("preferred_budget"):
         scenario["budget"] = profile["preferred_budget"]
 
-    sim_result = simulation_engine.run_simulation(message, scenario)
-
-    world = world_engine.build_world("business")
-    world.update(scenario)
-
-    world = causal_reasoning_engine.analyze_causality(world, {}, [])
-
-    sim_result["results"] = world_engine.apply_world(
-        sim_result.get("results", []),
-        world
-    )
-
-    sim_result["results"] = add_prediction_and_uncertainty(
-        sim_result["results"],
-        world
-    )
-
-    patterns = await learning_engine.learn("test_user", history_engine)
-
-    sim_result["results"] = learning_engine.apply_learning(
-        sim_result["results"],
+    # =========================
+    # UNIFIED INTELLIGENCE PIPELINE
+    # =========================
+    pipeline_result = cognitive_loop.run_intelligence_pipeline(
+        message,
         scenario,
-        patterns
+        profile
     )
 
-    failures = failure_engine.predict(sim_result["results"], scenario, world)
+    if pipeline_result.get("status") == "error":
+        return pipeline_result
 
-    sim_result["results"] = add_strategy_enrichment(
-        sim_result["results"],
-        failures
-    )
+    best = pipeline_result.get("best_strategy", {})
+    results = pipeline_result.get("results", [])
+    world = pipeline_result.get("world", {})
 
-    best = sim_result["results"][0]
-    best["action_plan"] = generate_action_plan(best)
+    second_best = results[1] if len(results) > 1 else None
 
-    second_best = sim_result["results"][1] if len(sim_result["results"]) > 1 else None
+    explanation = {
+        "summary": pipeline_result.get("dynamic_reasoning", {}).get(
+            "current_priority",
+            "Strategic analysis complete."
+        )
+    }
 
-    explanation = explanation_engine.generate(
-        best,
-        sim_result["results"],
-        failures=failures,
-        world=world
-    )
-
-    # ✅ update user profile after each business request
+    # =========================
+    # UPDATE PROFILE
+    # =========================
     updated_profile = user_profile_engine.update_profile(
         session_id,
         scenario,
         "business"
     )
 
+    # =========================
+    # BUILD RESPONSE
+    # =========================
     response = conversation_engine.build_conversational_response(
         message,
         best,
         explanation,
-        profile=updated_profile
+        profile=updated_profile,
+        pipeline_result=pipeline_result
     )
 
-    await history_engine.save("test_user", {
-        "goal": message,
-        "scenario": scenario,
-        "result": {
-            "results": sim_result["results"],
-            "best_strategy": best
+    # =========================
+    # SAVE HISTORY
+    # =========================
+    await history_engine.save(
+        "test_user",
+        {
+            "goal": message,
+            "scenario": scenario,
+            "result": {
+                "results": results,
+                "best_strategy": best
+            }
         }
-    })
+    )
 
     conversation_memory.add_message(
         session_id,
@@ -336,6 +344,7 @@ async def chat(data: ConversationRequest):
     )
 
     business_subdomain = None
+
     if intent == "business_strategy":
         business_subdomain = business_domain_engine.detect_subdomain(message)
 
@@ -347,10 +356,19 @@ async def chat(data: ConversationRequest):
         "best_strategy": best,
         "alternative_strategy": second_best,
         "explanation": explanation,
-        "learning_patterns": patterns,
         "profile": updated_profile,
-        "world": world
+        "world": world,
+        "pipeline": {
+            "business_understanding": pipeline_result.get("business_understanding"),
+            "business_dna": pipeline_result.get("business_dna"),
+            "dynamic_reasoning": pipeline_result.get("dynamic_reasoning"),
+            "market_intelligence": pipeline_result.get("market_intelligence"),
+            "strategy_comparison": pipeline_result.get("strategy_comparison"),
+            "prediction": pipeline_result.get("prediction"),
+            "visual_intelligence": pipeline_result.get("visual_intelligence")
+        }
     }
+
 
 # =========================
 # LAB SIMULATION
@@ -387,6 +405,7 @@ async def simulate(data: SimulationRequest):
     )
 
     patterns = await learning_engine.learn(username, history_engine)
+
     sim_result["results"] = learning_engine.apply_learning(
         sim_result["results"],
         scenario,
@@ -397,6 +416,7 @@ async def simulate(data: SimulationRequest):
         sim_result["results"],
         goal
     )
+
     sim_result["results"] = debated_strategies
 
     agent_steps = agent_engine.run_agents(sim_result)
@@ -412,6 +432,7 @@ async def simulate(data: SimulationRequest):
     best["action_plan"] = generate_action_plan(best)
 
     second_best = sim_result["results"][1] if len(sim_result["results"]) > 1 else None
+
     if second_best:
         second_best["action_plan"] = generate_action_plan(second_best)
 
@@ -422,14 +443,17 @@ async def simulate(data: SimulationRequest):
         world=world
     )
 
-    await history_engine.save(username, {
-        "goal": goal,
-        "scenario": scenario,
-        "result": {
-            "results": sim_result["results"],
-            "best_strategy": best
+    await history_engine.save(
+        username,
+        {
+            "goal": goal,
+            "scenario": scenario,
+            "result": {
+                "results": sim_result["results"],
+                "best_strategy": best
+            }
         }
-    })
+    )
 
     return {
         "goal": goal,
@@ -446,6 +470,7 @@ async def simulate(data: SimulationRequest):
         "domain": "business"
     }
 
+
 # =========================
 # STREAM
 # =========================
@@ -456,6 +481,7 @@ async def run_stream(data: SimulationRequest):
             yield step
 
     return StreamingResponse(event_generator(), media_type="text/plain")
+
 
 # =========================
 # CONTROL
@@ -471,6 +497,7 @@ async def reject():
     control_engine.reject()
     return {"status": "rejected"}
 
+
 # =========================
 # DASHBOARD
 # =========================
@@ -480,11 +507,13 @@ async def dashboard():
     history = await history_engine.get(username)
 
     total_runs = len(history)
+
     scores = [
         h["result"]["best_strategy"].get("final_score", 0)
         for h in history
         if "result" in h and "best_strategy" in h["result"]
     ]
+
     avg_score = sum(scores) / len(scores) if scores else 0
 
     return {
@@ -493,12 +522,14 @@ async def dashboard():
         "history": history
     }
 
+
 # =========================
 # HISTORY
 # =========================
 @app.get("/lab/history")
 async def get_history():
     return await history_engine.get("test_user")
+
 
 # =========================
 # ROOT
