@@ -29,6 +29,7 @@ from app.lab.world_engine import world_engine
 from app.lab.debate_engine import debate_engine
 from app.lab.agent_engine import agent_engine
 from app.lab.failure_engine import failure_engine
+from app.core.strategic_simulation_engine import strategic_simulation_engine
 
 from app.core.business_understanding_engine import business_understanding_engine
 from app.core.dynamic_reasoning_engine import dynamic_reasoning_engine
@@ -164,6 +165,13 @@ class CognitiveLoop:
                 "market_pressure": market_intelligence.get("market_pressure", "")
             })
 
+            strategic_simulation = strategic_simulation_engine.simulate(
+    goal,
+    business_dna,
+    dynamic_reasoning,
+    prediction
+)
+
             return {
                 "status": "success",
                 "goal": goal,
@@ -176,6 +184,7 @@ class CognitiveLoop:
                 "strategy_comparison": strategy_comparison,
                 "prediction": prediction,
                 "visual_intelligence": visual_intelligence,
+                "strategic_simulation": strategic_simulation,
                 "simulation": sim_result,
                 "results": sim_result.get("results", []),
                 "best_strategy": best,
@@ -253,6 +262,12 @@ class CognitiveLoop:
                 pipeline.get("visual_intelligence")
             )
 
+            yield self._stream_event(
+    "strategic_simulation",
+    "Strategic simulation complete",
+    pipeline.get("strategic_simulation")
+)
+
             best = pipeline.get("best_strategy", {})
 
             yield self._stream_event(
@@ -301,6 +316,7 @@ class CognitiveLoop:
                     "market_intelligence": pipeline.get("market_intelligence"),
                     "strategy_comparison": pipeline.get("strategy_comparison"),
                     "prediction": pipeline.get("prediction"),
+                    "strategic_simulation": pipeline.get("strategic_simulation"),
                     "visual_intelligence": pipeline.get("visual_intelligence")
                 }
             )
