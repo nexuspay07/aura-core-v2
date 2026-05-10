@@ -201,6 +201,7 @@ class ConversationEngine:
             "current_priority": dynamic_reasoning.get("current_priority"),
             "execution_focus": dynamic_reasoning.get("execution_focus"),
             "growth_blocker": dynamic_reasoning.get("growth_blocker"),
+            "strategic_simulation": pipeline_result.get("strategic_simulation", {}),
             "next_business_evolution": dynamic_reasoning.get("next_business_evolution"),
             "strategic_warning": dynamic_reasoning.get("strategic_warning"),
 

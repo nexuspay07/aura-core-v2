@@ -5,6 +5,8 @@ class ProReportEngine:
     def generate(self, goal: str, decision_brief: dict, comparison: dict):
         strategies = comparison.get("comparisons", [])
 
+        strategic_simulation = decision_brief.get("strategic_simulation", {})
+
         dynamic_reasoning = decision_brief.get("dynamic_reasoning", {})
 
         adaptive = decision_brief.get("adaptive_intelligence", {})
@@ -38,6 +40,8 @@ class ProReportEngine:
             "title": "AURA Pro Decision Report",
 
             "visual_intelligence": visual_intelligence,
+
+            "strategic_simulation": strategic_simulation,
 
             "dynamic_reasoning": dynamic_reasoning,
 
