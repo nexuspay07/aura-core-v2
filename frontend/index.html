@@ -539,6 +539,61 @@ function renderMemorySection(memorySummary) {
     `;
 }
 
+function renderExecutiveOverview(brief) {
+    const visual = brief.visual_intelligence || {};
+    const sim = brief.strategic_simulation || {};
+    const dna = brief.business_dna || {};
+
+    return `
+        <div class="card">
+            <h3>🏢 Executive Intelligence Overview</h3>
+
+            <div class="grid-4">
+                <div class="box accent">
+                    <b>Decision Strength</b><br>
+                    ${visual.decision_strength || 0}%<br>
+                    ${visual.decision_strength_label || "Needs Review"}
+                </div>
+
+                <div class="box danger">
+                    <b>Risk Level</b><br>
+                    ${visual.risk_score || 0}%<br>
+                    ${visual.risk_label || "Unknown"}
+                </div>
+
+                <div class="box warn">
+                    <b>Market Pressure</b><br>
+                    ${visual.market_pressure_score || 0}%<br>
+                    ${visual.market_pressure_label || "Unknown"}
+                </div>
+
+                <div class="box success">
+                    <b>Growth Probability</b><br>
+                    ${sim.growth_probability || "N/A"}
+                </div>
+            </div>
+
+            <div class="grid-3" style="margin-top:14px;">
+                <div class="box">
+                    <b>Business Model</b><br>
+                    ${dna.business_model || "N/A"}
+                </div>
+
+                <div class="box">
+                    <b>Execution Difficulty</b><br>
+                    ${visual.execution_difficulty || 0}%<br>
+                    ${visual.execution_label || "N/A"}
+                </div>
+
+                <div class="box danger">
+                    <b>Failure Probability</b><br>
+                    ${sim.failure_probability || "N/A"}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderStrategicSimulation(sim) {
     if (!sim) return "";
 
@@ -669,6 +724,8 @@ function renderDecisionDashboard(r, profile) {
         <div class="muted">${r.detail || ""}</div>
         <div class="muted">🔥 Session streak: ${usage} decisions analyzed</div>
     </div>
+
+    ${renderExecutiveOverview(brief)}
 
     <div class="card">
         <h3>🆓 Free Decision Summary</h3>
