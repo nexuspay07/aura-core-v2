@@ -482,6 +482,63 @@ function renderStrategicSimulation(sim) {
     `;
 }
 
+function renderMemorySection(memorySummary) {
+    if (!memorySummary) return "";
+
+    const recent = memorySummary.recent_decisions || [];
+
+    return `
+        <div class="card">
+            <h3>🧠 AURA Memory</h3>
+
+            <div class="grid-4">
+                <div class="box accent">
+                    <b>Total Decisions</b><br>
+                    ${memorySummary.total_decisions || 0}
+                </div>
+
+                <div class="box">
+                    <b>Repeated Business Model</b><br>
+                    ${memorySummary.repeated_business_model || "N/A"}
+                </div>
+
+                <div class="box warn">
+                    <b>Repeated Risk</b><br>
+                    ${memorySummary.repeated_risk || "N/A"}
+                </div>
+
+                <div class="box danger">
+                    <b>Recurring Warning</b><br>
+                    ${memorySummary.repeated_warning || "N/A"}
+                </div>
+            </div>
+
+            <div class="box success" style="margin-top:14px;">
+                <b>Memory Insight</b><br>
+                ${memorySummary.memory_insight || memorySummary.summary || "AURA is learning your decision pattern."}
+            </div>
+
+            ${
+                recent.length
+                ? `
+                    <div class="box" style="margin-top:14px;">
+                        <b>Recent Decisions</b>
+                        <ul>
+                            ${recent.map(x => `
+                                <li>
+                                    ${x.goal || "Decision"} 
+                                    <br><span class="muted">Risk: ${x.risk || "N/A"} | Model: ${x.business_model || "N/A"}</span>
+                                </li>
+                            `).join("")}
+                        </ul>
+                    </div>
+                `
+                : ""
+            }
+        </div>
+    `;
+}
+
 function renderStrategicSimulation(sim) {
     if (!sim) return "";
 
@@ -603,6 +660,7 @@ function renderDecisionDashboard(r, profile) {
     const dna = brief.business_dna || {};
     const reasoning = brief.dynamic_reasoning || {};
     const simulation = brief.strategic_simulation || {};
+    const memorySummary = brief.memory_summary || {};
     const usage = getUsageCount();
 
     return `
@@ -611,6 +669,8 @@ function renderDecisionDashboard(r, profile) {
             <div class="muted">${r.detail || ""}</div>
             <div class="muted">🔥 Session streak: ${usage} decisions analyzed</div>
         </div>
+
+        ${renderMemorySection(memorySummary)}
 
         <div class="card">
             <h3>🆓 Free Decision Summary</h3>
@@ -1121,7 +1181,12 @@ async function sendMessage() {
                 time: new Date().toISOString()
             });
 
-            setDashboard(renderDecisionDashboard(r, data.profile));
+           if (data.decision_memory?.summary) {
+    r.decision_brief = r.decision_brief || {};
+    r.decision_brief.memory_summary = data.decision_memory.summary;
+}
+
+setDashboard(renderDecisionDashboard(r, data.profile));
         }
 
         else if (data.type === "clarification") {
