@@ -444,6 +444,115 @@ function renderStrategyComparison(brief) {
     `;
 }
 
+function renderStrategicSimulation(sim) {
+    if (!sim || Object.keys(sim).length === 0) return "";
+
+    return `
+        <div class="card">
+            <h3>🔮 Strategic Simulation</h3>
+
+            <div class="grid-4">
+                <div class="box accent"><b>Growth Probability</b><br>${sim.growth_probability || "N/A"}</div>
+                <div class="box danger"><b>Failure Probability</b><br>${sim.failure_probability || "N/A"}</div>
+                <div class="box warn"><b>Cash Pressure</b><br>${sim.cash_pressure || "N/A"}</div>
+                <div class="box"><b>Market Reaction</b><br>${sim.market_reaction || "N/A"}</div>
+            </div>
+
+            <div class="grid-2" style="margin-top:14px;">
+                <div class="box success"><b>30-Day Projection</b><br>${sim["30_day_projection"] || "N/A"}</div>
+                <div class="box accent"><b>90-Day Projection</b><br>${sim["90_day_projection"] || "N/A"}</div>
+            </div>
+
+            <div class="grid-3" style="margin-top:14px;">
+                <div class="box success"><b>Best Case Future</b><br>${sim.best_case_future || "N/A"}</div>
+                <div class="box warn"><b>Most Likely Future</b><br>${sim.most_likely_future || "N/A"}</div>
+                <div class="box danger"><b>Worst Case Future</b><br>${sim.worst_case_future || "N/A"}</div>
+            </div>
+
+            <div class="box accent" style="margin-top:14px;">
+                <b>Recommended Simulated Path</b><br>
+                ${sim.recommended_simulated_path || "N/A"}
+            </div>
+
+            <div class="box warn" style="margin-top:14px;">
+                <b>Execution Risk</b><br>
+                ${sim.execution_risk || "N/A"}
+            </div>
+        </div>
+    `;
+}
+
+function renderStrategicSimulation(sim) {
+    if (!sim) return "";
+
+    return `
+        <div class="card">
+            <h3>🔮 Strategic Simulation</h3>
+
+            <div class="grid-4">
+                <div class="box accent">
+                    <b>Growth Probability</b><br>
+                    ${sim.growth_probability || "N/A"}
+                </div>
+
+                <div class="box danger">
+                    <b>Failure Probability</b><br>
+                    ${sim.failure_probability || "N/A"}
+                </div>
+
+                <div class="box warn">
+                    <b>Cash Pressure</b><br>
+                    ${sim.cash_pressure || "N/A"}
+                </div>
+
+                <div class="box">
+                    <b>Market Reaction</b><br>
+                    ${sim.market_reaction || "N/A"}
+                </div>
+            </div>
+
+            <div class="grid-2" style="margin-top:14px;">
+                <div class="box success">
+                    <b>30-Day Projection</b><br>
+                    ${sim["30_day_projection"] || "N/A"}
+                </div>
+
+                <div class="box accent">
+                    <b>90-Day Projection</b><br>
+                    ${sim["90_day_projection"] || "N/A"}
+                </div>
+            </div>
+
+            <div class="grid-3" style="margin-top:14px;">
+                <div class="box success">
+                    <b>Best Case Future</b><br>
+                    ${sim.best_case_future || "N/A"}
+                </div>
+
+                <div class="box warn">
+                    <b>Most Likely Future</b><br>
+                    ${sim.most_likely_future || "N/A"}
+                </div>
+
+                <div class="box danger">
+                    <b>Worst Case Future</b><br>
+                    ${sim.worst_case_future || "N/A"}
+                </div>
+            </div>
+
+            <div class="box accent" style="margin-top:14px;">
+                <b>Recommended Simulated Path</b><br>
+                ${sim.recommended_simulated_path || "N/A"}
+            </div>
+
+            <div class="box warn" style="margin-top:14px;">
+                <b>Execution Risk</b><br>
+                ${sim.execution_risk || "N/A"}
+            </div>
+        </div>
+    `;
+}
+
 function renderUnlockCard() {
     return `
         <div class="card unlock-card">
@@ -493,6 +602,7 @@ function renderDecisionDashboard(r, profile) {
     const brief = r.decision_brief || {};
     const dna = brief.business_dna || {};
     const reasoning = brief.dynamic_reasoning || {};
+    const simulation = brief.strategic_simulation || {};
     const usage = getUsageCount();
 
     return `
@@ -613,6 +723,7 @@ function renderDecisionDashboard(r, profile) {
         </div>
 
         ${renderStrategyComparison(brief)}
+        ${renderStrategicSimulation(simulation)}
 
         ${
             (r.next_steps || []).length
@@ -634,15 +745,16 @@ function renderDecisionDashboard(r, profile) {
 
 function renderProReport(report) {
     if (!report) return "";
+    
 
     const adaptive = report.adaptive_intelligence || {};
 
     const dna = report.business_dna || {};
-const understanding = report.business_understanding || {};
-const reasoning = report.dynamic_reasoning || {};
-
+    const understanding = report.business_understanding || {};
+    const reasoning = report.dynamic_reasoning || {};
     const visual = report.visual_intelligence || {};
-const matrix = visual.competitor_matrix || {};
+    const simulation = report.strategic_simulation || {};
+    const matrix = visual.competitor_matrix || {};
 
     return `
         <div class="hero">
@@ -844,15 +956,7 @@ const matrix = visual.competitor_matrix || {};
     </div>
 </div>
 
-        <div class="card">
-            <h3>🔮 Outcome Simulation</h3>
-            <div class="grid-4">
-                <div class="box success"><b>Best Case</b><br>${report.scenarios?.best_case || "N/A"}</div>
-                <div class="box warn"><b>Expected</b><br>${report.scenarios?.expected_case || "N/A"}</div>
-                <div class="box danger"><b>Worst Case</b><br>${report.scenarios?.worst_case || "N/A"}</div>
-                <div class="box"><b>Guardrails</b><br>${report.financial_guardrails?.max_test_spend || "N/A"}<br>${report.financial_guardrails?.safe_budget_usage || ""}</div>
-            </div>
-        </div>
+       ${renderStrategicSimulation(simulation)}
 
         <div class="grid-2">
             <div class="card">

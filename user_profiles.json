@@ -22,5 +22,11 @@
         "preferred_budget": 10000,
         "preferred_domain": "business",
         "interaction_count": 2
+    },
+    "test123": {
+        "preferred_risk": "medium",
+        "preferred_budget": 10000,
+        "preferred_domain": "business",
+        "interaction_count": 2
     }
 }
