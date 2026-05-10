@@ -120,15 +120,19 @@ class ConversationEngine:
         return "AURA used your previous interaction profile to keep the recommendation balanced."
 
     def build_conversational_response(
-        self,
-        goal: str,
-        best: dict,
-        explanation,
-        profile: dict | None = None,
-        pipeline_result: dict | None = None
-    ):
+    self,
+    goal: str,
+    best: dict,
+    explanation,
+    profile: dict | None = None,
+    pipeline_result: dict | None = None,
+    memory_summary: dict | None = None
+):
         profile = profile or {}
         pipeline_result = pipeline_result or {}
+
+        memory_summary = memory_summary or {}
+        memory_note = self._build_memory_note(memory_summary)
 
         clean_goal = self.clean_goal_text(goal)
         business_intent = business_domain_engine.detect_subdomain(goal)
@@ -181,6 +185,8 @@ class ConversationEngine:
         profile_note = self.build_profile_note(profile)
 
         decision_brief = {
+            "memory_summary": memory_summary,
+            "memory_note": memory_note,
             "recommended_move": recommended_move,
             "why_this": self._build_why_this(
                 business_understanding,
@@ -234,6 +240,7 @@ class ConversationEngine:
             "risk": best.get("risk", "medium"),
             "business_intent": business_intent,
             "budget": budget,
+            "memory_summary": memory_summary,
             "market": market,
             "final_score": best.get("final_score"),
             "decision_score": best.get("decision_score"),
@@ -288,6 +295,19 @@ class ConversationEngine:
             return "If growth stalls, focus on one proven acquisition channel instead of many."
 
         return self._fallback_move(best.get("name", "Balanced"))
+    
+    def _build_memory_note(self, memory_summary: dict):
+        if not memory_summary or not memory_summary.get("has_memory"):
+             return "AURA is beginning to build memory for this decision pattern."
+
+        insight = memory_summary.get("memory_insight")
+
+        if insight:
+            return insight
+
+        total = memory_summary.get("total_decisions", 0)
+
+        return f"AURA has memory of {total} previous decision(s) in this session."
 
     def _risk_caution(self, risk: str):
         if risk == "high":

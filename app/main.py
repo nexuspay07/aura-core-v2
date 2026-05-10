@@ -315,12 +315,15 @@ async def chat(data: ConversationRequest):
     # =========================
     # BUILD RESPONSE
     # =========================
+    memory_summary = decision_memory_engine.summarize_history(session_id)
+
     response = conversation_engine.build_conversational_response(
         message,
         best,
         explanation,
         profile=updated_profile,
-        pipeline_result=pipeline_result
+        pipeline_result=pipeline_result,
+        memory_summary=memory_summary
     )
 
     decision_record = decision_memory_engine.save_decision(
