@@ -664,13 +664,14 @@ function renderDecisionDashboard(r, profile) {
     const usage = getUsageCount();
 
     return `
-        <div class="hero">
-            <h2>${brief.recommended_move || "No clear move yet"}</h2>
-            <div class="muted">${r.detail || ""}</div>
-            <div class="muted">🔥 Session streak: ${usage} decisions analyzed</div>
-        </div>
+    <div class="hero">
+        <h2>${brief.recommended_move || "No clear move yet"}</h2>
+        <div class="muted">${r.detail || ""}</div>
+        <div class="muted">🔥 Session streak: ${usage} decisions analyzed</div>
+    </div>
 
-        ${renderMemorySection(memorySummary)}
+    <div class="card">
+        <h3>🆓 Free Decision Summary</h3>
 
         <div class="card">
             <h3>🆓 Free Decision Summary</h3>
@@ -685,6 +686,8 @@ function renderDecisionDashboard(r, profile) {
                 ${brief.why_this || "AURA selected this based on your situation."}
             </div>
         </div>
+
+        ${renderMemorySection(memorySummary)}
 
         <div class="card">
     <h3>🧬 Business Understanding</h3>

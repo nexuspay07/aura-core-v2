@@ -28,5 +28,11 @@
         "preferred_budget": 10000,
         "preferred_domain": "business",
         "interaction_count": 2
+    },
+    "sim-test": {
+        "preferred_risk": "medium",
+        "preferred_budget": 10000,
+        "preferred_domain": "business",
+        "interaction_count": 1
     }
 }
