@@ -51,6 +51,7 @@ from app.domains.healthcare.healthcare_engine import healthcare_engine
 
 from app.core.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
+from app.core.decision_memory_engine import decision_memory_engine
 from app.core.causal_reasoning_engine import causal_reasoning_engine
 
 
@@ -322,6 +323,15 @@ async def chat(data: ConversationRequest):
         pipeline_result=pipeline_result
     )
 
+    decision_record = decision_memory_engine.save_decision(
+    session_id=session_id,
+    goal=message,
+    pipeline_result=pipeline_result,
+    response=response
+)
+
+    memory_summary = decision_memory_engine.summarize_history(session_id)
+
     # =========================
     # SAVE HISTORY
     # =========================
@@ -349,26 +359,30 @@ async def chat(data: ConversationRequest):
         business_subdomain = business_domain_engine.detect_subdomain(message)
 
     return {
-        "type": "conversation",
-        "domain": "business",
-        "subdomain": business_subdomain,
-        "response": response,
-        "best_strategy": best,
-        "alternative_strategy": second_best,
-        "explanation": explanation,
-        "profile": updated_profile,
-        "world": world,
-        "pipeline": {
-            "business_understanding": pipeline_result.get("business_understanding"),
-            "business_dna": pipeline_result.get("business_dna"),
-            "dynamic_reasoning": pipeline_result.get("dynamic_reasoning"),
-            "market_intelligence": pipeline_result.get("market_intelligence"),
-            "strategy_comparison": pipeline_result.get("strategy_comparison"),
-            "prediction": pipeline_result.get("prediction"),
-            "visual_intelligence": pipeline_result.get("visual_intelligence")
-        }
+    "type": "conversation",
+    "domain": "business",
+    "subdomain": business_subdomain,
+    "response": response,
+    "best_strategy": best,
+    "alternative_strategy": second_best,
+    "explanation": explanation,
+    "profile": updated_profile,
+    "world": world,
+    "decision_memory": {
+        "latest_decision": decision_record,
+        "summary": memory_summary
+    },
+    "pipeline": {
+        "business_understanding": pipeline_result.get("business_understanding"),
+        "business_dna": pipeline_result.get("business_dna"),
+        "dynamic_reasoning": pipeline_result.get("dynamic_reasoning"),
+        "market_intelligence": pipeline_result.get("market_intelligence"),
+        "strategy_comparison": pipeline_result.get("strategy_comparison"),
+        "prediction": pipeline_result.get("prediction"),
+        "visual_intelligence": pipeline_result.get("visual_intelligence"),
+        "strategic_simulation": pipeline_result.get("strategic_simulation")
     }
-
+}
 
 # =========================
 # LAB SIMULATION
