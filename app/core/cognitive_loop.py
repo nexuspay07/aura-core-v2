@@ -29,6 +29,7 @@ from app.lab.world_engine import world_engine
 from app.lab.debate_engine import debate_engine
 from app.lab.agent_engine import agent_engine
 from app.lab.failure_engine import failure_engine
+from app.core.operational_intelligence_engine import operational_intelligence_engine
 from app.core.strategic_simulation_engine import strategic_simulation_engine
 
 from app.core.business_understanding_engine import business_understanding_engine
@@ -171,6 +172,13 @@ class CognitiveLoop:
     dynamic_reasoning,
     prediction
 )
+            
+            operational_intelligence = operational_intelligence_engine.analyze(
+    goal,
+    business_dna,
+    dynamic_reasoning,
+    strategic_simulation
+)
 
             return {
                 "status": "success",
@@ -185,6 +193,7 @@ class CognitiveLoop:
                 "prediction": prediction,
                 "visual_intelligence": visual_intelligence,
                 "strategic_simulation": strategic_simulation,
+                "operational_intelligence": operational_intelligence,
                 "simulation": sim_result,
                 "results": sim_result.get("results", []),
                 "best_strategy": best,
@@ -267,6 +276,12 @@ class CognitiveLoop:
     "Strategic simulation complete",
     pipeline.get("strategic_simulation")
 )
+            
+            yield self._stream_event(
+    "operational_intelligence",
+    "Operational intelligence complete",
+    pipeline.get("operational_intelligence")
+)
 
             best = pipeline.get("best_strategy", {})
 
@@ -317,7 +332,8 @@ class CognitiveLoop:
                     "strategy_comparison": pipeline.get("strategy_comparison"),
                     "prediction": pipeline.get("prediction"),
                     "strategic_simulation": pipeline.get("strategic_simulation"),
-                    "visual_intelligence": pipeline.get("visual_intelligence")
+                    "visual_intelligence": pipeline.get("visual_intelligence"),
+                    "operational_intelligence": pipeline.get("operational_intelligence")
                 }
             )
 
