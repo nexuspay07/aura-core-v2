@@ -618,6 +618,59 @@ function renderOperationalIntelligence(ops) {
     `;
 }
 
+function renderAdaptiveLearning(learning) {
+    if (!learning || Object.keys(learning).length === 0) return "";
+
+    return `
+        <div class="card">
+            <h3>🧠 Adaptive Learning</h3>
+
+            <div class="grid-3">
+                <div class="box accent">
+                    <b>Learning Active</b><br>
+                    ${learning.learning_active ? "Yes" : "No"}
+                </div>
+
+                <div class="box warn">
+                    <b>Repeated Risk</b><br>
+                    ${learning.repeated_risk || "N/A"}
+                </div>
+
+                <div class="box">
+                    <b>Learning Priority</b><br>
+                    ${learning.learning_priority || "N/A"}
+                </div>
+            </div>
+
+            <div class="box success" style="margin-top:14px;">
+                <b>Pattern Detected</b><br>
+                ${learning.pattern_detected || "No strong pattern detected yet."}
+            </div>
+
+            <div class="box danger" style="margin-top:14px;">
+                <b>Strategic Drift</b><br>
+                ${learning.strategic_drift || "No strategic drift detected."}
+            </div>
+
+            <div class="box accent" style="margin-top:14px;">
+                <b>Recommended Adjustment</b><br>
+                ${learning.recommended_adjustment || "No adaptive adjustment yet."}
+            </div>
+
+            ${
+                learning.repeated_warning
+                ? `
+                    <div class="box warn" style="margin-top:14px;">
+                        <b>Repeated Warning</b><br>
+                        ${learning.repeated_warning}
+                    </div>
+                `
+                : ""
+            }
+        </div>
+    `;
+}
+
 function renderExecutiveOverview(brief) {
     const visual = brief.visual_intelligence || {};
     const sim = brief.strategic_simulation || {};
@@ -796,6 +849,7 @@ function renderDecisionDashboard(r, profile) {
     const simulation = brief.strategic_simulation || {};
     const memorySummary = brief.memory_summary || {};
     const operational = brief.operational_intelligence || {};
+    const learning = brief.adaptive_learning || {};
     const usage = getUsageCount();
 
     return `
@@ -826,6 +880,7 @@ function renderDecisionDashboard(r, profile) {
 
         ${renderMemorySection(memorySummary)}
         ${renderOperationalIntelligence(operational)}
+        ${renderAdaptiveLearning(learning)}
 
         <div class="card">
     <h3>🧬 Business Understanding</h3>
