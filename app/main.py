@@ -383,7 +383,8 @@ async def chat(data: ConversationRequest):
         "strategy_comparison": pipeline_result.get("strategy_comparison"),
         "prediction": pipeline_result.get("prediction"),
         "visual_intelligence": pipeline_result.get("visual_intelligence"),
-        "strategic_simulation": pipeline_result.get("strategic_simulation")
+        "strategic_simulation": pipeline_result.get("strategic_simulation"),
+        "operational_intelligence": pipeline_result.get("operational_intelligence")
     }
 }
 
