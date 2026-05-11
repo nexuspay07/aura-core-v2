@@ -52,6 +52,7 @@ from app.domains.healthcare.healthcare_engine import healthcare_engine
 from app.core.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
 from app.core.decision_memory_engine import decision_memory_engine
+from app.core.adaptive_learning_v2_engine import adaptive_learning_v2_engine
 from app.core.causal_reasoning_engine import causal_reasoning_engine
 
 
@@ -332,8 +333,19 @@ async def chat(data: ConversationRequest):
     pipeline_result=pipeline_result,
     response=response
 )
+    adaptive_learning = adaptive_learning_v2_engine.analyze(
+    memory_summary,
+    pipeline_result
+)
 
     memory_summary = decision_memory_engine.summarize_history(session_id)
+
+    response["decision_brief"]["adaptive_learning"] = adaptive_learning
+    response["decision_brief"]["learning_active"] = adaptive_learning.get("learning_active")
+    response["decision_brief"]["pattern_detected"] = adaptive_learning.get("pattern_detected")
+    response["decision_brief"]["strategic_drift"] = adaptive_learning.get("strategic_drift")
+    response["decision_brief"]["recommended_adjustment"] = adaptive_learning.get("recommended_adjustment")
+    response["decision_brief"]["learning_priority"] = adaptive_learning.get("learning_priority")
 
     # =========================
     # SAVE HISTORY
@@ -372,13 +384,15 @@ async def chat(data: ConversationRequest):
     "profile": updated_profile,
     "world": world,
     "decision_memory": {
-        "latest_decision": decision_record,
-        "summary": memory_summary
-    },
+    "latest_decision": decision_record,
+    "summary": memory_summary,
+    "adaptive_learning": adaptive_learning
+},
     "pipeline": {
         "business_understanding": pipeline_result.get("business_understanding"),
         "business_dna": pipeline_result.get("business_dna"),
         "dynamic_reasoning": pipeline_result.get("dynamic_reasoning"),
+        "adaptive_learning": adaptive_learning,
         "market_intelligence": pipeline_result.get("market_intelligence"),
         "strategy_comparison": pipeline_result.get("strategy_comparison"),
         "prediction": pipeline_result.get("prediction"),
