@@ -130,6 +130,7 @@ class ConversationEngine:
 ):
         profile = profile or {}
         pipeline_result = pipeline_result or {}
+        operational_intelligence = pipeline_result.get("operational_intelligence", {})
 
         memory_summary = memory_summary or {}
         memory_note = self._build_memory_note(memory_summary)
@@ -200,6 +201,19 @@ class ConversationEngine:
             "market_nature": business_understanding.get("market_nature"),
             "customer_nature": business_understanding.get("customer_nature"),
             "execution_reality": business_understanding.get("execution_reality"),
+            "operational_intelligence": operational_intelligence,
+"operational_stability": operational_intelligence.get("operational_stability"),
+"execution_load": operational_intelligence.get("execution_load"),
+"founder_dependency": operational_intelligence.get("founder_dependency"),
+"team_pressure": operational_intelligence.get("team_pressure"),
+"scalability_risk": operational_intelligence.get("scalability_risk"),
+"systemization_score": operational_intelligence.get("systemization_score"),
+"main_operational_bottleneck": operational_intelligence.get("main_operational_bottleneck"),
+"workflow_risk": operational_intelligence.get("workflow_risk"),
+"operational_warning": operational_intelligence.get("operational_warning"),
+"recommended_operational_move": operational_intelligence.get("recommended_operational_move"),
+"operations_next_steps": operational_intelligence.get("operations_next_steps"),
+"scale_readiness": operational_intelligence.get("scale_readiness"),
             "strategic_direction": business_understanding.get("strategic_direction"),
 
             "dynamic_reasoning": dynamic_reasoning,

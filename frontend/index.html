@@ -539,6 +539,85 @@ function renderMemorySection(memorySummary) {
     `;
 }
 
+function renderOperationalIntelligence(ops) {
+    if (!ops || Object.keys(ops).length === 0) return "";
+
+    const steps = ops.operations_next_steps || [];
+
+    return `
+        <div class="card">
+            <h3>🏭 Operational Intelligence</h3>
+
+            <div class="grid-4">
+                <div class="box accent">
+                    <b>Operational Stability</b><br>
+                    ${ops.operational_stability || "N/A"}
+                </div>
+
+                <div class="box warn">
+                    <b>Execution Load</b><br>
+                    ${ops.execution_load || "N/A"}
+                </div>
+
+                <div class="box">
+                    <b>Founder Dependency</b><br>
+                    ${ops.founder_dependency || "N/A"}
+                </div>
+
+                <div class="box danger">
+                    <b>Scalability Risk</b><br>
+                    ${ops.scalability_risk || "N/A"}
+                </div>
+            </div>
+
+            <div class="grid-3" style="margin-top:14px;">
+                <div class="box">
+                    <b>Team Pressure</b><br>
+                    ${ops.team_pressure || "N/A"}
+                </div>
+
+                <div class="box">
+                    <b>Systemization Score</b><br>
+                    ${ops.systemization_score || "N/A"}
+                </div>
+
+                <div class="box warn">
+                    <b>Workflow Risk</b><br>
+                    ${ops.workflow_risk || "N/A"}
+                </div>
+            </div>
+
+            <div class="box danger" style="margin-top:14px;">
+                <b>Main Operational Bottleneck</b><br>
+                ${ops.main_operational_bottleneck || "N/A"}
+            </div>
+
+            <div class="box success" style="margin-top:14px;">
+                <b>Recommended Operational Move</b><br>
+                ${ops.recommended_operational_move || "N/A"}
+            </div>
+
+            <div class="box accent" style="margin-top:14px;">
+                <b>Scale Readiness</b><br>
+                ${ops.scale_readiness || "N/A"}
+            </div>
+
+            ${
+                steps.length
+                ? `
+                    <div class="box" style="margin-top:14px;">
+                        <b>Operational Next Steps</b>
+                        <ol>
+                            ${steps.map(step => `<li>${step}</li>`).join("")}
+                        </ol>
+                    </div>
+                `
+                : ""
+            }
+        </div>
+    `;
+}
+
 function renderExecutiveOverview(brief) {
     const visual = brief.visual_intelligence || {};
     const sim = brief.strategic_simulation || {};
@@ -716,6 +795,7 @@ function renderDecisionDashboard(r, profile) {
     const reasoning = brief.dynamic_reasoning || {};
     const simulation = brief.strategic_simulation || {};
     const memorySummary = brief.memory_summary || {};
+    const operational = brief.operational_intelligence || {};
     const usage = getUsageCount();
 
     return `
@@ -745,6 +825,7 @@ function renderDecisionDashboard(r, profile) {
         </div>
 
         ${renderMemorySection(memorySummary)}
+        ${renderOperationalIntelligence(operational)}
 
         <div class="card">
     <h3>🧬 Business Understanding</h3>
