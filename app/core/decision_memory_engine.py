@@ -1,11 +1,13 @@
 from datetime import datetime, timezone
+from sqlalchemy import select, insert
+
+from app.db.database import database
+from app.db.decision_memory_table import decision_memory_table
 
 
 class DecisionMemoryEngine:
-    def __init__(self):
-        self.memory = {}
 
-    def save_decision(
+    async def save_decision(
         self,
         session_id: str,
         goal: str,
@@ -22,37 +24,74 @@ class DecisionMemoryEngine:
         strategic_simulation = pipeline_result.get("strategic_simulation", {})
 
         record = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc),
+
             "goal": goal,
+
             "business_model": business_dna.get("business_model"),
             "business_stage": business_dna.get("business_stage"),
             "market": business_dna.get("market"),
             "competition_pressure": business_dna.get("competition_pressure"),
             "trust_dependency": business_dna.get("trust_dependency"),
             "scalability": business_dna.get("scalability"),
+
             "recommended_strategy": best_strategy.get("name"),
             "risk": best_strategy.get("risk"),
             "decision_score": best_strategy.get("decision_score"),
             "failure_probability": best_strategy.get("failure_probability"),
+
             "current_bottleneck": dynamic_reasoning.get("current_bottleneck"),
             "growth_blocker": dynamic_reasoning.get("growth_blocker"),
             "strategic_warning": dynamic_reasoning.get("strategic_warning"),
+
             "prediction_confidence": prediction.get("confidence"),
+
             "growth_probability": strategic_simulation.get("growth_probability"),
             "failure_probability_label": strategic_simulation.get("failure_probability"),
+
             "recommended_move": response.get("decision_brief", {}).get("recommended_move"),
         }
 
-        self.memory.setdefault(session_id, []).append(record)
+        query = insert(decision_memory_table).values(**record)
 
-        return record
+        await database.execute(query)
 
-    def get_history(self, session_id: str, limit: int = 10):
+        return {
+            **record,
+            "timestamp": record["timestamp"].isoformat()
+        }
+
+    async def get_history(
+        self,
+        session_id: str,
+        limit: int = 10
+    ):
         session_id = session_id or "default"
-        return self.memory.get(session_id, [])[-limit:]
 
-    def summarize_history(self, session_id: str):
-        history = self.get_history(session_id, limit=20)
+        query = (
+            select(decision_memory_table)
+            .where(decision_memory_table.c.session_id == session_id)
+            .order_by(decision_memory_table.c.id.desc())
+            .limit(limit)
+        )
+
+        rows = await database.fetch_all(query)
+
+        history = []
+
+        for row in rows:
+            item = dict(row)
+
+            if item.get("timestamp"):
+                item["timestamp"] = item["timestamp"].isoformat()
+
+            history.append(item)
+
+        return list(reversed(history))
+
+    async def summarize_history(self, session_id: str):
+        history = await self.get_history(session_id, limit=20)
 
         if not history:
             return {

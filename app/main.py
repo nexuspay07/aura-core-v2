@@ -48,6 +48,7 @@ from app.core.user_profile_engine import user_profile_engine
 
 from app.domains.business.business_domain_engine import business_domain_engine
 from app.domains.healthcare.healthcare_engine import healthcare_engine
+from app.db.decision_memory_table import decision_memory_table
 
 from app.core.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
@@ -316,7 +317,7 @@ async def chat(data: ConversationRequest):
     # =========================
     # BUILD RESPONSE
     # =========================
-    memory_summary = decision_memory_engine.summarize_history(session_id)
+    memory_summary = await decision_memory_engine.summarize_history(session_id)
 
     response = conversation_engine.build_conversational_response(
         message,
@@ -327,7 +328,7 @@ async def chat(data: ConversationRequest):
         memory_summary=memory_summary
     )
 
-    decision_record = decision_memory_engine.save_decision(
+    decision_record = await decision_memory_engine.save_decision(
     session_id=session_id,
     goal=message,
     pipeline_result=pipeline_result,
