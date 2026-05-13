@@ -671,6 +671,63 @@ function renderAdaptiveLearning(learning) {
     `;
 }
 
+function renderStrategicEvolution(evolution) {
+    if (!evolution || Object.keys(evolution).length === 0) return "";
+
+    return `
+        <div class="card">
+            <h3>🧬 Strategic Evolution</h3>
+
+            <div class="grid-4">
+                <div class="box accent">
+                    <b>Evolution Active</b><br>
+                    ${evolution.evolution_active ? "Yes" : "No"}
+                </div>
+
+                <div class="box">
+                    <b>Dominant Strategy</b><br>
+                    ${evolution.dominant_strategy_pattern || "N/A"}
+                </div>
+
+                <div class="box warn">
+                    <b>Dominant Risk</b><br>
+                    ${evolution.dominant_risk_pattern || "N/A"}
+                </div>
+
+                <div class="box danger">
+                    <b>Dominant Warning</b><br>
+                    ${evolution.dominant_warning_pattern || "N/A"}
+                </div>
+            </div>
+
+            <div class="box warn" style="margin-top:14px;">
+                <b>Risk Drift</b><br>
+                ${evolution.risk_drift || "N/A"}
+            </div>
+
+            <div class="box accent" style="margin-top:14px;">
+                <b>Strategic Stability</b><br>
+                ${evolution.strategic_stability || "N/A"}
+            </div>
+
+            <div class="box danger" style="margin-top:14px;">
+                <b>Repeated Failure Pattern</b><br>
+                ${evolution.repeated_failure_pattern || "N/A"}
+            </div>
+
+            <div class="box success" style="margin-top:14px;">
+                <b>Strategic Adaptation</b><br>
+                ${evolution.strategic_adaptation || "N/A"}
+            </div>
+
+            <div class="box accent" style="margin-top:14px;">
+                <b>Evolution Recommendation</b><br>
+                ${evolution.evolution_recommendation || "N/A"}
+            </div>
+        </div>
+    `;
+}
+
 function renderExecutiveOverview(brief) {
     const visual = brief.visual_intelligence || {};
     const sim = brief.strategic_simulation || {};
@@ -851,6 +908,7 @@ function renderDecisionDashboard(r, profile, pipeline = {}) {
     const simulation = pipeline.strategic_simulation || {};
     const operational = pipeline.operational_intelligence || {};
     const learning = pipeline.adaptive_learning || {};
+    const evolution = pipeline.strategic_evolution || {};
 
     const memorySummary = brief.memory_summary || {};
 
@@ -905,6 +963,8 @@ function renderDecisionDashboard(r, profile, pipeline = {}) {
     ${renderOperationalIntelligence(operational)}
 
     ${renderAdaptiveLearning(learning)}
+
+    ${renderStrategicEvolution(evolution)}
 
     <div class="card">
         <h3>🧠 Dynamic Reasoning</h3>
