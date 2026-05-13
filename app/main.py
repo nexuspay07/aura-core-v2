@@ -55,6 +55,7 @@ from app.core.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
 from app.core.decision_memory_engine import decision_memory_engine
 from app.core.adaptive_learning_v2_engine import adaptive_learning_v2_engine
+from app.core.strategy_reinforcement_engine import strategy_reinforcement_engine
 from app.core.causal_reasoning_engine import causal_reasoning_engine
 
 
@@ -369,6 +370,11 @@ async def chat(data: ConversationRequest):
     memory_summary,
     pipeline_result
 )
+    
+    strategy_reinforcement = strategy_reinforcement_engine.analyze(
+    memory_summary,
+    strategic_evolution
+)
 
     # =========================
     # RESPONSE ENRICHMENT
@@ -403,6 +409,12 @@ async def chat(data: ConversationRequest):
     response["decision_brief"]["risk_drift"] = strategic_evolution.get("risk_drift")
     response["decision_brief"]["strategic_stability"] = strategic_evolution.get("strategic_stability")
     response["decision_brief"]["evolution_recommendation"] = strategic_evolution.get("evolution_recommendation")
+    response["decision_brief"]["strategy_reinforcement"] = strategy_reinforcement
+    response["decision_brief"]["reinforcement_active"] = strategy_reinforcement.get("reinforcement_active")
+    response["decision_brief"]["strategy_reward_score"] = strategy_reinforcement.get("strategy_reward_score")
+    response["decision_brief"]["reinforcement_signal"] = strategy_reinforcement.get("reinforcement_signal")
+    response["decision_brief"]["strategy_bias"] = strategy_reinforcement.get("strategy_bias")
+    response["decision_brief"]["reinforcement_recommendation"] = strategy_reinforcement.get("reinforcement_recommendation")
 
     # =========================
     # SAVE HISTORY
@@ -448,7 +460,8 @@ async def chat(data: ConversationRequest):
     "latest_decision": decision_record,
     "summary": memory_summary,
     "adaptive_learning": adaptive_learning,
-    "strategic_evolution": strategic_evolution
+    "strategic_evolution": strategic_evolution,
+    "strategy_reinforcement": strategy_reinforcement
 },
 
         "pipeline": {
@@ -462,7 +475,8 @@ async def chat(data: ConversationRequest):
             "strategic_evolution": strategic_evolution,
             "visual_intelligence": pipeline_result.get("visual_intelligence"),
             "strategic_simulation": pipeline_result.get("strategic_simulation"),
-            "operational_intelligence": pipeline_result.get("operational_intelligence")
+            "operational_intelligence": pipeline_result.get("operational_intelligence"),
+            "strategy_reinforcement": strategy_reinforcement
         }
     }
 # =========================
