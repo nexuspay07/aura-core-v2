@@ -39,6 +39,7 @@ from app.control.control_engine import control_engine
 
 from app.api.strategy_routes import router as strategy_router
 from app.api.marketplace_routes import router as marketplace_router
+from app.core.strategic_evolution_engine import strategic_evolution_engine
 from app.api.pro_routes import router as pro_router
 from app.api.payment_routes import router as payment_router
 
@@ -364,6 +365,11 @@ async def chat(data: ConversationRequest):
         pipeline_result
     )
 
+    strategic_evolution = strategic_evolution_engine.analyze(
+    memory_summary,
+    pipeline_result
+)
+
     # =========================
     # RESPONSE ENRICHMENT
     # =========================
@@ -390,6 +396,13 @@ async def chat(data: ConversationRequest):
     response["decision_brief"]["learning_priority"] = adaptive_learning.get(
         "learning_priority"
     )
+
+    response["decision_brief"]["strategic_evolution"] = strategic_evolution
+    response["decision_brief"]["evolution_active"] = strategic_evolution.get("evolution_active")
+    response["decision_brief"]["dominant_strategy_pattern"] = strategic_evolution.get("dominant_strategy_pattern")
+    response["decision_brief"]["risk_drift"] = strategic_evolution.get("risk_drift")
+    response["decision_brief"]["strategic_stability"] = strategic_evolution.get("strategic_stability")
+    response["decision_brief"]["evolution_recommendation"] = strategic_evolution.get("evolution_recommendation")
 
     # =========================
     # SAVE HISTORY
@@ -432,10 +445,11 @@ async def chat(data: ConversationRequest):
         "world": world,
 
         "decision_memory": {
-            "latest_decision": decision_record,
-            "summary": memory_summary,
-            "adaptive_learning": adaptive_learning
-        },
+    "latest_decision": decision_record,
+    "summary": memory_summary,
+    "adaptive_learning": adaptive_learning,
+    "strategic_evolution": strategic_evolution
+},
 
         "pipeline": {
             "business_understanding": pipeline_result.get("business_understanding"),
@@ -445,6 +459,7 @@ async def chat(data: ConversationRequest):
             "market_intelligence": pipeline_result.get("market_intelligence"),
             "strategy_comparison": pipeline_result.get("strategy_comparison"),
             "prediction": pipeline_result.get("prediction"),
+            "strategic_evolution": strategic_evolution,
             "visual_intelligence": pipeline_result.get("visual_intelligence"),
             "strategic_simulation": pipeline_result.get("strategic_simulation"),
             "operational_intelligence": pipeline_result.get("operational_intelligence")
