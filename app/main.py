@@ -200,6 +200,7 @@ class ConversationRequest(BaseModel):
 # =========================
 @app.post("/chat")
 async def chat(data: ConversationRequest):
+
     message = data.message.strip()
     session_id = data.session_id or "default"
 
@@ -214,6 +215,7 @@ async def chat(data: ConversationRequest):
     # HEALTHCARE
     # =========================
     if is_healthcare_message(message):
+
         result = healthcare_engine.build_response(message)
 
         conversation_memory.add_message(
@@ -239,6 +241,7 @@ async def chat(data: ConversationRequest):
     # CLARIFICATION
     # =========================
     if conversation_engine.needs_clarification(message):
+
         clarification = conversation_engine.build_clarification_question(intent)
 
         conversation_memory.add_message(
@@ -299,7 +302,10 @@ async def chat(data: ConversationRequest):
     second_best = results[1] if len(results) > 1 else None
 
     explanation = {
-        "summary": pipeline_result.get("dynamic_reasoning", {}).get(
+        "summary": pipeline_result.get(
+            "dynamic_reasoning",
+            {}
+        ).get(
             "current_priority",
             "Strategic analysis complete."
         )
@@ -315,38 +321,75 @@ async def chat(data: ConversationRequest):
     )
 
     # =========================
+    # MEMORY BEFORE RESPONSE
+    # =========================
+    memory_summary_before = await decision_memory_engine.summarize_history(
+        session_id
+    )
+
+    # =========================
     # BUILD RESPONSE
     # =========================
-    memory_summary = await decision_memory_engine.summarize_history(session_id)
-
     response = conversation_engine.build_conversational_response(
         message,
         best,
         explanation,
         profile=updated_profile,
         pipeline_result=pipeline_result,
-        memory_summary=memory_summary
+        memory_summary=memory_summary_before
     )
 
+    # =========================
+    # SAVE DECISION
+    # =========================
     decision_record = await decision_memory_engine.save_decision(
-    session_id=session_id,
-    goal=message,
-    pipeline_result=pipeline_result,
-    response=response
-)
-    adaptive_learning = adaptive_learning_v2_engine.analyze(
-    memory_summary,
-    pipeline_result
-)
+        session_id=session_id,
+        goal=message,
+        pipeline_result=pipeline_result,
+        response=response
+    )
 
-    memory_summary = decision_memory_engine.summarize_history(session_id)
+    # =========================
+    # UPDATED MEMORY
+    # =========================
+    memory_summary = await decision_memory_engine.summarize_history(
+        session_id
+    )
+
+    # =========================
+    # ADAPTIVE LEARNING
+    # =========================
+    adaptive_learning = adaptive_learning_v2_engine.analyze(
+        memory_summary,
+        pipeline_result
+    )
+
+    # =========================
+    # RESPONSE ENRICHMENT
+    # =========================
+    response["decision_brief"]["memory_summary"] = memory_summary
 
     response["decision_brief"]["adaptive_learning"] = adaptive_learning
-    response["decision_brief"]["learning_active"] = adaptive_learning.get("learning_active")
-    response["decision_brief"]["pattern_detected"] = adaptive_learning.get("pattern_detected")
-    response["decision_brief"]["strategic_drift"] = adaptive_learning.get("strategic_drift")
-    response["decision_brief"]["recommended_adjustment"] = adaptive_learning.get("recommended_adjustment")
-    response["decision_brief"]["learning_priority"] = adaptive_learning.get("learning_priority")
+
+    response["decision_brief"]["learning_active"] = adaptive_learning.get(
+        "learning_active"
+    )
+
+    response["decision_brief"]["pattern_detected"] = adaptive_learning.get(
+        "pattern_detected"
+    )
+
+    response["decision_brief"]["strategic_drift"] = adaptive_learning.get(
+        "strategic_drift"
+    )
+
+    response["decision_brief"]["recommended_adjustment"] = adaptive_learning.get(
+        "recommended_adjustment"
+    )
+
+    response["decision_brief"]["learning_priority"] = adaptive_learning.get(
+        "learning_priority"
+    )
 
     # =========================
     # SAVE HISTORY
@@ -374,35 +417,39 @@ async def chat(data: ConversationRequest):
     if intent == "business_strategy":
         business_subdomain = business_domain_engine.detect_subdomain(message)
 
+    # =========================
+    # FINAL RESPONSE
+    # =========================
     return {
-    "type": "conversation",
-    "domain": "business",
-    "subdomain": business_subdomain,
-    "response": response,
-    "best_strategy": best,
-    "alternative_strategy": second_best,
-    "explanation": explanation,
-    "profile": updated_profile,
-    "world": world,
-    "decision_memory": {
-    "latest_decision": decision_record,
-    "summary": memory_summary,
-    "adaptive_learning": adaptive_learning
-},
-    "pipeline": {
-        "business_understanding": pipeline_result.get("business_understanding"),
-        "business_dna": pipeline_result.get("business_dna"),
-        "dynamic_reasoning": pipeline_result.get("dynamic_reasoning"),
-        "adaptive_learning": adaptive_learning,
-        "market_intelligence": pipeline_result.get("market_intelligence"),
-        "strategy_comparison": pipeline_result.get("strategy_comparison"),
-        "prediction": pipeline_result.get("prediction"),
-        "visual_intelligence": pipeline_result.get("visual_intelligence"),
-        "strategic_simulation": pipeline_result.get("strategic_simulation"),
-        "operational_intelligence": pipeline_result.get("operational_intelligence")
-    }
-}
+        "type": "conversation",
+        "domain": "business",
+        "subdomain": business_subdomain,
+        "response": response,
+        "best_strategy": best,
+        "alternative_strategy": second_best,
+        "explanation": explanation,
+        "profile": updated_profile,
+        "world": world,
 
+        "decision_memory": {
+            "latest_decision": decision_record,
+            "summary": memory_summary,
+            "adaptive_learning": adaptive_learning
+        },
+
+        "pipeline": {
+            "business_understanding": pipeline_result.get("business_understanding"),
+            "business_dna": pipeline_result.get("business_dna"),
+            "dynamic_reasoning": pipeline_result.get("dynamic_reasoning"),
+            "adaptive_learning": adaptive_learning,
+            "market_intelligence": pipeline_result.get("market_intelligence"),
+            "strategy_comparison": pipeline_result.get("strategy_comparison"),
+            "prediction": pipeline_result.get("prediction"),
+            "visual_intelligence": pipeline_result.get("visual_intelligence"),
+            "strategic_simulation": pipeline_result.get("strategic_simulation"),
+            "operational_intelligence": pipeline_result.get("operational_intelligence")
+        }
+    }
 # =========================
 # LAB SIMULATION
 # =========================
@@ -575,3 +622,12 @@ def root():
 @app.get("/cors-test")
 def cors_test():
     return {"status": "ok"}
+
+@app.get("/routes")
+async def routes_debug():
+    return {
+        "routes": [
+            str(route.path)
+            for route in app.routes
+        ]
+    }
