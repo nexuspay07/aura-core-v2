@@ -842,14 +842,18 @@ function renderProfile(profile) {
     `;
 }
 
-function renderDecisionDashboard(r, profile) {
+function renderDecisionDashboard(r, profile, pipeline = {}) {
+
     const brief = r.decision_brief || {};
-    const dna = brief.business_dna || {};
-    const reasoning = brief.dynamic_reasoning || {};
-    const simulation = brief.strategic_simulation || {};
+
+    const dna = pipeline.business_dna || {};
+    const reasoning = pipeline.dynamic_reasoning || {};
+    const simulation = pipeline.strategic_simulation || {};
+    const operational = pipeline.operational_intelligence || {};
+    const learning = pipeline.adaptive_learning || {};
+
     const memorySummary = brief.memory_summary || {};
-    const operational = brief.operational_intelligence || {};
-    const learning = brief.adaptive_learning || {};
+
     const usage = getUsageCount();
 
     return `
@@ -859,143 +863,96 @@ function renderDecisionDashboard(r, profile) {
         <div class="muted">🔥 Session streak: ${usage} decisions analyzed</div>
     </div>
 
-    ${renderExecutiveOverview(brief)}
+    ${renderExecutiveOverview({
+        ...brief,
+        business_dna: dna,
+        strategic_simulation: simulation
+    })}
 
     <div class="card">
         <h3>🆓 Free Decision Summary</h3>
 
-        <div class="card">
-            <h3>🆓 Free Decision Summary</h3>
-            <div class="grid-4">
-                <div class="box accent"><b>Best Move</b><br>${brief.recommended_move || "N/A"}</div>
-                <div class="box"><b>Expected Impact</b><br>${brief.expected_impact || "N/A"}</div>
-                <div class="box danger"><b>Main Risk</b><br>${brief.main_risk || "N/A"}</div>
-                <div class="box"><b>Watch Metric</b><br>${brief.watch_metric || "N/A"}</div>
+        <div class="grid-4">
+            <div class="box accent">
+                <b>Best Move</b><br>
+                ${brief.recommended_move || "N/A"}
             </div>
-            <div class="box" style="margin-top:14px;">
-                <b>Why this works:</b><br>
-                ${brief.why_this || "AURA selected this based on your situation."}
+
+            <div class="box">
+                <b>Expected Impact</b><br>
+                ${brief.expected_impact || "N/A"}
             </div>
-        </div>
 
-        ${renderMemorySection(memorySummary)}
-        ${renderOperationalIntelligence(operational)}
-        ${renderAdaptiveLearning(learning)}
+            <div class="box danger">
+                <b>Main Risk</b><br>
+                ${brief.main_risk || "N/A"}
+            </div>
 
-        <div class="card">
-    <h3>🧬 Business Understanding</h3>
-
-    <div class="grid-2">
-        <div class="box accent">
-            <b>Business Nature</b><br>
-            ${brief.business_nature || "N/A"}
-        </div>
-
-        <div class="box">
-            <b>Market Nature</b><br>
-            ${brief.market_nature || "N/A"}
-        </div>
-
-        <div class="box">
-            <b>Customer Nature</b><br>
-            ${brief.customer_nature || "N/A"}
-        </div>
-
-        <div class="box warn">
-            <b>Execution Reality</b><br>
-            ${brief.execution_reality || "N/A"}
-        </div>
-    </div>
-
-    <div class="box success" style="margin-top:14px;">
-        <b>Strategic Direction</b><br>
-        ${brief.strategic_direction || "N/A"}
-    </div>
-</div>
-
-<div class="card">
-    <h3>🧠 Dynamic Reasoning</h3>
-
-    <div class="grid-2">
-        <div class="box accent">
-            <b>Current Bottleneck</b><br>
-            ${reasoning.current_bottleneck || "N/A"}
-        </div>
-
-        <div class="box success">
-            <b>Current Priority</b><br>
-            ${reasoning.current_priority || "N/A"}
-        </div>
-
-        <div class="box">
-            <b>Execution Focus</b><br>
-            ${reasoning.execution_focus || "N/A"}
-        </div>
-
-        <div class="box warn">
-            <b>Growth Blocker</b><br>
-            ${reasoning.growth_blocker || "N/A"}
-        </div>
-    </div>
-
-    <div class="box danger" style="margin-top:14px;">
-        <b>Strategic Warning</b><br>
-        ${reasoning.strategic_warning || "N/A"}
-    </div>
-
-    <div class="box accent" style="margin-top:14px;">
-        <b>Next Business Evolution</b><br>
-        ${reasoning.next_business_evolution || "N/A"}
-    </div>
-</div>
-
-<div class="card">
-    <h3>🧬 Business DNA</h3>
-
-    <div class="grid-4">
-        <div class="box"><b>Model</b><br>${dna.business_model || "N/A"}</div>
-        <div class="box"><b>Customer Type</b><br>${dna.customer_type || "N/A"}</div>
-        <div class="box"><b>Channel</b><br>${dna.primary_channel || "N/A"}</div>
-        <div class="box"><b>Stage</b><br>${dna.business_stage || "N/A"}</div>
-
-        <div class="box"><b>Trust Dependency</b><br>${dna.trust_dependency || "N/A"}</div>
-        <div class="box"><b>Repeat Purchase</b><br>${dna.repeat_purchase_potential || "N/A"}</div>
-        <div class="box"><b>Capital Intensity</b><br>${dna.capital_intensity || "N/A"}</div>
-        <div class="box"><b>Operational Complexity</b><br>${dna.operational_complexity || "N/A"}</div>
-
-        <div class="box"><b>Competition Pressure</b><br>${dna.competition_pressure || "N/A"}</div>
-        <div class="box"><b>Price Sensitivity</b><br>${dna.price_sensitivity || "N/A"}</div>
-        <div class="box"><b>Scalability</b><br>${dna.scalability || "N/A"}</div>
-        <div class="box"><b>Proof Requirement</b><br>${dna.proof_requirement || "N/A"}</div>
-    </div>
-</div>
-
-        <div class="card">
-            <h3>🌍 Market Snapshot</h3>
-            <div class="grid-2">
-                <div class="box">${brief.market_pressure || "No market pressure available."}</div>
-                <div class="box accent">${brief.premium_insight || "No premium insight available."}</div>
+            <div class="box">
+                <b>Watch Metric</b><br>
+                ${brief.watch_metric || "N/A"}
             </div>
         </div>
 
-        ${renderStrategyComparison(brief)}
-        ${renderStrategicSimulation(simulation)}
+        <div class="box" style="margin-top:14px;">
+            <b>Why this works:</b><br>
+            ${brief.why_this || "AURA selected this based on your situation."}
+        </div>
+    </div>
 
-        ${
-            (r.next_steps || []).length
-            ? `
-                <div class="card">
-                    <h3>✅ Immediate Next Steps</h3>
-                    <ol>
-                        ${(r.next_steps || []).slice(0, 3).map(s => `<li>${s}</li>`).join("")}
-                    </ol>
-                </div>
-            `
-            : ""
-        }
+    ${renderMemorySection(memorySummary)}
 
-        ${renderUnlockCard()}
-        ${renderProfile(profile)}
+    ${renderOperationalIntelligence(operational)}
+
+    ${renderAdaptiveLearning(learning)}
+
+    <div class="card">
+        <h3>🧠 Dynamic Reasoning</h3>
+
+        <div class="grid-2">
+            <div class="box accent">
+                <b>Current Bottleneck</b><br>
+                ${reasoning.current_bottleneck || "N/A"}
+            </div>
+
+            <div class="box success">
+                <b>Current Priority</b><br>
+                ${reasoning.current_priority || "N/A"}
+            </div>
+
+            <div class="box">
+                <b>Execution Focus</b><br>
+                ${reasoning.execution_focus || "N/A"}
+            </div>
+
+            <div class="box warn">
+                <b>Growth Blocker</b><br>
+                ${reasoning.growth_blocker || "N/A"}
+            </div>
+        </div>
+
+        <div class="box danger" style="margin-top:14px;">
+            <b>Strategic Warning</b><br>
+            ${reasoning.strategic_warning || "N/A"}
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>🧬 Business DNA</h3>
+
+        <div class="grid-4">
+            <div class="box"><b>Model</b><br>${dna.business_model || "N/A"}</div>
+            <div class="box"><b>Customer Type</b><br>${dna.customer_type || "N/A"}</div>
+            <div class="box"><b>Stage</b><br>${dna.business_stage || "N/A"}</div>
+            <div class="box"><b>Scalability</b><br>${dna.scalability || "N/A"}</div>
+        </div>
+    </div>
+
+    ${renderStrategicSimulation(simulation)}
+
+    ${renderProfile(profile)}
+
+    ${renderUnlockCard()}
     `;
 }
 
@@ -1382,7 +1339,13 @@ async function sendMessage() {
     r.decision_brief.memory_summary = data.decision_memory.summary;
 }
 
-setDashboard(renderDecisionDashboard(r, data.profile));
+setDashboard(
+    renderDecisionDashboard(
+        r,
+        data.profile,
+        data.pipeline || {}
+    )
+);
         }
 
         else if (data.type === "clarification") {
