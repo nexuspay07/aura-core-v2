@@ -728,6 +728,53 @@ function renderStrategicEvolution(evolution) {
     `;
 }
 
+function renderStrategyReinforcement(reinforcement) {
+    if (!reinforcement || Object.keys(reinforcement).length === 0) return "";
+
+    return `
+        <div class="card">
+            <h3>🧠 Strategy Reinforcement</h3>
+
+            <div class="grid-4">
+                <div class="box accent">
+                    <b>Reinforcement Active</b><br>
+                    ${reinforcement.reinforcement_active ? "Yes" : "No"}
+                </div>
+
+                <div class="box success">
+                    <b>Reward Score</b><br>
+                    ${reinforcement.strategy_reward_score ?? "N/A"}%
+                </div>
+
+                <div class="box warn">
+                    <b>Strategy Bias</b><br>
+                    ${reinforcement.strategy_bias || "N/A"}
+                </div>
+
+                <div class="box danger">
+                    <b>Penalized Pattern</b><br>
+                    ${reinforcement.penalized_pattern || "None"}
+                </div>
+            </div>
+
+            <div class="box success" style="margin-top:14px;">
+                <b>Rewarded Pattern</b><br>
+                ${reinforcement.rewarded_pattern || "N/A"}
+            </div>
+
+            <div class="box warn" style="margin-top:14px;">
+                <b>Reinforcement Signal</b><br>
+                ${reinforcement.reinforcement_signal || "N/A"}
+            </div>
+
+            <div class="box accent" style="margin-top:14px;">
+                <b>Reinforcement Recommendation</b><br>
+                ${reinforcement.reinforcement_recommendation || "N/A"}
+            </div>
+        </div>
+    `;
+}
+
 function renderExecutiveOverview(brief) {
     const visual = brief.visual_intelligence || {};
     const sim = brief.strategic_simulation || {};
@@ -909,6 +956,7 @@ function renderDecisionDashboard(r, profile, pipeline = {}) {
     const operational = pipeline.operational_intelligence || {};
     const learning = pipeline.adaptive_learning || {};
     const evolution = pipeline.strategic_evolution || {};
+    const reinforcement = pipeline.strategy_reinforcement || {};
 
     const memorySummary = brief.memory_summary || {};
 
@@ -965,6 +1013,8 @@ function renderDecisionDashboard(r, profile, pipeline = {}) {
     ${renderAdaptiveLearning(learning)}
 
     ${renderStrategicEvolution(evolution)}
+
+    ${renderStrategyReinforcement(reinforcement)}
 
     <div class="card">
         <h3>🧠 Dynamic Reasoning</h3>
