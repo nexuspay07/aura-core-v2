@@ -40,5 +40,11 @@
         "preferred_budget": 10000,
         "preferred_domain": "business",
         "interaction_count": 3
+    },
+    "business-test": {
+        "preferred_risk": "medium",
+        "preferred_budget": 10000,
+        "preferred_domain": "business",
+        "interaction_count": 3
     }
 }

@@ -12,8 +12,18 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://aura-ai-frontend-on0e.onrender.com",
+
+        # React / Vite
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:5175",
+
+        # Older local frontends
         "http://localhost:3000",
-        "http://127.0.0.1:5500"
+        "http://127.0.0.1:5500",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -33,6 +43,8 @@ from app.lab.simulation_engine import simulation_engine
 from app.lab.explanation_engine import explanation_engine
 from app.lab.agent_engine import agent_engine
 from app.lab.debate_engine import debate_engine
+from app.db.user_table import user_table
+from app.api.auth_routes import router as auth_router
 
 from app.core.cognitive_loop import cognitive_loop
 from app.control.control_engine import control_engine
@@ -50,6 +62,15 @@ from app.core.user_profile_engine import user_profile_engine
 from app.domains.business.business_domain_engine import business_domain_engine
 from app.domains.healthcare.healthcare_engine import healthcare_engine
 from app.db.decision_memory_table import decision_memory_table
+from app.db.organization_table import organization_table
+from app.db.workspace_table import workspace_table
+from app.api.organization_routes import router as organization_router
+from app.db.intelligence_session_table import intelligence_session_table
+from sqlalchemy import select, insert
+from app.db.organization_table import organization_table
+from app.db.workspace_table import workspace_table
+from app.db.intelligence_session_table import intelligence_session_table
+from app.api.intelligence_session_routes import router as intelligence_session_router
 
 from app.core.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
@@ -63,6 +84,9 @@ app.include_router(payment_router)
 app.include_router(pro_router)
 app.include_router(strategy_router)
 app.include_router(marketplace_router)
+app.include_router(auth_router)
+app.include_router(organization_router)
+app.include_router(intelligence_session_router)
 
 
 # =========================
@@ -167,6 +191,68 @@ def is_healthcare_message(message: str) -> bool:
 
     return any(k in message.lower() for k in keywords)
 
+async def auto_save_intelligence_session(
+    organization_id: int | None,
+    workspace_id: int | None,
+    session_id: str,
+    goal: str,
+    response: dict,
+    pipeline_result: dict
+):
+    if not organization_id or not workspace_id:
+        return None
+
+    org = await database.fetch_one(
+        select(organization_table).where(
+            organization_table.c.id == organization_id
+        )
+    )
+
+    if not org:
+        return None
+
+    workspace = await database.fetch_one(
+        select(workspace_table).where(
+            workspace_table.c.id == workspace_id
+        )
+    )
+
+    if not workspace:
+        return None
+
+    if workspace["organization_id"] != organization_id:
+        return None
+
+    decision_brief = response.get("decision_brief", {})
+    business_dna = pipeline_result.get("business_dna", {})
+
+    title = goal[:80]
+
+    query = insert(intelligence_session_table).values(
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        created_by_user_id=org["owner_user_id"],
+        title=title,
+        goal=goal,
+        domain="business",
+        session_type="decision_analysis",
+        status="completed",
+        summary=response.get("summary"),
+        recommended_move=decision_brief.get("recommended_move"),
+        risk_level=response.get("risk_profile"),
+        business_model=business_dna.get("business_model"),
+        is_active=True,
+    )
+
+    saved_id = await database.execute(query)
+
+    return {
+        "saved": True,
+        "intelligence_session_id": saved_id,
+        "organization_id": organization_id,
+        "workspace_id": workspace_id
+    }
+
 
 # =========================
 # STARTUP / SHUTDOWN
@@ -195,6 +281,8 @@ class SimulationRequest(BaseModel):
 class ConversationRequest(BaseModel):
     message: str
     session_id: str | None = None
+    organization_id: int | None = None
+    workspace_id: int | None = None
 
 
 # =========================
@@ -403,6 +491,15 @@ async def chat(data: ConversationRequest):
         "learning_priority"
     )
 
+    saved_intelligence_session = await auto_save_intelligence_session(
+    organization_id=data.organization_id,
+    workspace_id=data.workspace_id,
+    session_id=session_id,
+    goal=message,
+    response=response,
+    pipeline_result=pipeline_result
+)
+
     response["decision_brief"]["strategic_evolution"] = strategic_evolution
     response["decision_brief"]["evolution_active"] = strategic_evolution.get("evolution_active")
     response["decision_brief"]["dominant_strategy_pattern"] = strategic_evolution.get("dominant_strategy_pattern")
@@ -455,6 +552,7 @@ async def chat(data: ConversationRequest):
         "explanation": explanation,
         "profile": updated_profile,
         "world": world,
+        "workspace_save": saved_intelligence_session,
 
         "decision_memory": {
     "latest_decision": decision_record,
