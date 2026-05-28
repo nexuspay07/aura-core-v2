@@ -1,27 +1,18 @@
-from sentence_transformers import SentenceTransformer
-import numpy as np
-
-# Load lightweight model
-model = SentenceTransformer("all-MiniLM-L6-v2")
+# app/memory/vector_engine.py
 
 
 def embed_text(text: str):
+    """
+    Lightweight placeholder embedding.
+    Prevents heavy ML model loading in production.
+    """
 
-    embedding = model.encode(text)
-
-    return embedding
+    return [0.0]
 
 
 def cosine_similarity(vec1, vec2):
+    """
+    Lightweight placeholder similarity.
+    """
 
-    vec1 = np.array(vec1)
-    vec2 = np.array(vec2)
-
-    dot = np.dot(vec1, vec2)
-
-    norm1 = np.linalg.norm(vec1)
-    norm2 = np.linalg.norm(vec2)
-
-    similarity = dot / (norm1 * norm2)
-
-    return similarity
+    return 0.0
