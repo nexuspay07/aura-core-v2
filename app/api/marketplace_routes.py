@@ -1,8 +1,13 @@
 from fastapi import APIRouter
-from app.db.database import database
+from sqlalchemy import select
+
+from app.db.database import SessionLocal
 from app.models.strategy import strategies
 
-router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
+router = APIRouter(
+    prefix="/marketplace",
+    tags=["Marketplace"]
+)
 
 
 # ==========================
@@ -10,16 +15,33 @@ router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
 # ==========================
 @router.post("/save")
 async def save_strategy(data: dict):
-    await database.execute(
-        strategies.insert().values(
-            name=data.get("name", "Unnamed Strategy"),
+
+    db = SessionLocal()
+
+    try:
+
+        query = strategies.insert().values(
+            name=data.get(
+                "name",
+                "Unnamed Strategy"
+            ),
             goal=data.get("goal"),
             data=data,
-            owner="guest",   # ✅ fallback user
+            owner="guest",
             is_public=1
         )
-    )
-    return {"message": "Strategy saved to marketplace"}
+
+        db.execute(query)
+        db.commit()
+
+    finally:
+
+        db.close()
+
+    return {
+        "message":
+        "Strategy saved to marketplace"
+    }
 
 
 # ==========================
@@ -27,19 +49,61 @@ async def save_strategy(data: dict):
 # ==========================
 @router.get("/all")
 async def get_all():
-    query = strategies.select().where(strategies.c.is_public == 1)
-    return await database.fetch_all(query)
+
+    db = SessionLocal()
+
+    try:
+
+        query = (
+            select(strategies)
+            .where(
+                strategies.c.is_public == 1
+            )
+        )
+
+        result = db.execute(query)
+
+        rows = result.fetchall()
+
+    finally:
+
+        db.close()
+
+    return [
+        dict(row._mapping)
+        for row in rows
+    ]
 
 
 # ==========================
-# GET MY STRATEGIES (NOW = ALL GUEST)
+# GET MY STRATEGIES
 # ==========================
 @router.get("/mine")
 async def get_my():
-    query = strategies.select().where(
-        strategies.c.owner == "guest"
-    )
-    return await database.fetch_all(query)
+
+    db = SessionLocal()
+
+    try:
+
+        query = (
+            select(strategies)
+            .where(
+                strategies.c.owner == "guest"
+            )
+        )
+
+        result = db.execute(query)
+
+        rows = result.fetchall()
+
+    finally:
+
+        db.close()
+
+    return [
+        dict(row._mapping)
+        for row in rows
+    ]
 
 
 # ==========================
@@ -47,24 +111,79 @@ async def get_my():
 # ==========================
 @router.get("/{strategy_id}")
 async def get_one(strategy_id: int):
-    query = strategies.select().where(strategies.c.id == strategy_id)
-    return await database.fetch_one(query)
+
+    db = SessionLocal()
+
+    try:
+
+        query = (
+            select(strategies)
+            .where(
+                strategies.c.id == strategy_id
+            )
+        )
+
+        result = db.execute(query)
+
+        row = result.fetchone()
+
+    finally:
+
+        db.close()
+
+    if not row:
+
+        return {
+            "error":
+            "Not found"
+        }
+
+    return dict(row._mapping)
 
 
 # ==========================
-# DELETE STRATEGY (NO AUTH CHECK)
+# DELETE STRATEGY
 # ==========================
 @router.delete("/{strategy_id}")
 async def delete(strategy_id: int):
-    query = strategies.select().where(strategies.c.id == strategy_id)
-    strategy = await database.fetch_one(query)
 
-    if not strategy:
-        return {"error": "Not found"}
+    db = SessionLocal()
 
-    # ✅ No ownership check (open system)
-    await database.execute(
-        strategies.delete().where(strategies.c.id == strategy_id)
-    )
+    try:
 
-    return {"message": "Deleted"}
+        query = (
+            select(strategies)
+            .where(
+                strategies.c.id == strategy_id
+            )
+        )
+
+        result = db.execute(query)
+
+        strategy = result.fetchone()
+
+        if not strategy:
+
+            return {
+                "error":
+                "Not found"
+            }
+
+        delete_query = (
+            strategies.delete()
+            .where(
+                strategies.c.id == strategy_id
+            )
+        )
+
+        db.execute(delete_query)
+        db.commit()
+
+    finally:
+
+        db.close()
+
+    return {
+        "message":
+        "Deleted"
+    }

@@ -3,64 +3,191 @@ import json
 
 from app.core.goal_engine import goal_engine
 from app.core.context_engine import context_engine
-from app.core.memory_retrieval_engine import memory_retrieval_engine
+
+from app.core.memory.memory_priority_retrieval_engine import (
+    memory_priority_retrieval_engine
+)
+
+from app.memory.memory_retriever import (
+    retrieve_relevant_memories
+)
+
 from app.core.task_engine import task_engine
 from app.core.planning_engine import planning_engine
 
-from app.learning.strategy_performance_tracker import strategy_performance_tracker
-from app.learning.meta_strategy_engine import MetaStrategyEngine
-from app.learning.self_learning_engine import self_learning_engine
-from app.learning.adaptive_intelligence_engine import adaptive_intelligence_engine
+from app.learning.strategy_performance_tracker import (
+    strategy_performance_tracker
+)
 
-from app.core.world_modeling_engine import world_modeling_engine
-from app.core.multi_goal_engine import multi_goal_engine
-from app.core.resource_intelligence_engine import resource_intelligence_engine
-from app.core.autonomous_execution_engine import autonomous_execution_engine
-from app.core.multi_agent_engine import Agent, multi_agent_engine
+from app.learning.meta_strategy_engine import (
+    MetaStrategyEngine
+)
 
-from app.security.identity_engine import identity_engine
-from app.security.security_engine import security_engine
-from app.monitoring.monitoring_engine import monitoring_engine
-from app.control.control_engine import control_engine
-from app.core.plan_optimizer_engine import plan_optimizer_engine
+from app.learning.self_learning_engine import (
+    self_learning_engine
+)
 
-from app.lab.simulation_engine import simulation_engine
-from app.lab.world_engine import world_engine
-from app.lab.debate_engine import debate_engine
-from app.lab.agent_engine import agent_engine
-from app.lab.failure_engine import failure_engine
-from app.core.operational_intelligence_engine import operational_intelligence_engine
-from app.core.strategic_simulation_engine import strategic_simulation_engine
+from app.learning.adaptive_intelligence_engine import (
+    adaptive_intelligence_engine
+)
 
-from app.core.business_understanding_engine import business_understanding_engine
-from app.core.dynamic_reasoning_engine import dynamic_reasoning_engine
-from app.core.market_intelligence_engine import market_intelligence_engine
-from app.core.strategy_comparison_engine import strategy_comparison_engine
-from app.core.prediction_engine import prediction_engine
-from app.core.visual_intelligence_engine import visual_intelligence_engine
+from app.core.simulation.world_model_engine import (
+    world_model_engine
+)
+
+from app.core.multi_goal_engine import (
+    multi_goal_engine
+)
+
+from app.core.resource_intelligence_engine import (
+    resource_intelligence_engine
+)
+
+from app.core.autonomous_execution_engine import (
+    autonomous_execution_engine
+)
+
+from app.core.agents.multi_agent_engine import (
+    multi_agent_engine,
+    Agent
+)
+
+from app.security.identity_engine import (
+    identity_engine
+)
+
+from app.security.security_engine import (
+    security_engine
+)
+
+from app.monitoring.monitoring_engine import (
+    monitoring_engine
+)
+
+from app.control.control_engine import (
+    control_engine
+)
+
+from app.core.plan_optimizer_engine import (
+    plan_optimizer_engine
+)
+
+from app.lab.simulation_engine import (
+    simulation_engine
+)
+
+from app.lab.world_engine import (
+    world_engine
+)
+
+from app.lab.debate_engine import (
+    debate_engine
+)
+
+from app.lab.agent_engine import (
+    agent_engine
+)
+
+from app.lab.failure_engine import (
+    failure_engine
+)
+
+from app.core.operational_intelligence_engine import (
+    operational_intelligence_engine
+)
+
+from app.core.simulation.strategic_simulation_engine import (
+    strategic_simulation_engine
+)
+
+from app.core.business_understanding_engine import (
+    business_understanding_engine
+)
+
+from app.core.reasoning.dynamic_reasoning_engine import (
+    dynamic_reasoning_engine
+)
+
+from app.core.market.market_intelligence_engine import (
+    market_intelligence_engine
+)
+
+from app.core.strategy_comparison_engine import (
+    strategy_comparison_engine
+)
+
+from app.core.simulation.prediction_engine import (
+    prediction_engine
+)
+
+from app.core.visual_intelligence_engine import (
+    visual_intelligence_engine
+)
+
+from app.core.decision_memory_engine import (
+    decision_memory_engine
+)
+
+from app.core.strategy_reinforcement_engine import (
+    strategy_reinforcement_engine
+)
 
 
-meta_strategy_engine = MetaStrategyEngine(strategy_performance_tracker)
+meta_strategy_engine = MetaStrategyEngine(
+    strategy_performance_tracker
+)
 
 
 class CognitiveLoop:
+
     def __init__(self):
-        multi_agent_engine.register_agent(Agent("Planner-1", "planner"))
-        multi_agent_engine.register_agent(Agent("Executor-1", "executor"))
-        multi_agent_engine.register_agent(Agent("Analyst-1", "analyst"))
-        multi_agent_engine.register_agent(Agent("RiskAgent-1", "risk"))
-        multi_agent_engine.register_agent(Agent("FinanceAgent-1", "finance"))
-        multi_agent_engine.register_agent(Agent("MarketAgent-1", "market"))
-        multi_agent_engine.register_agent(Agent("EthicsAgent-1", "ethics"))
+
+        multi_agent_engine.register_agent(
+            Agent("Planner-1", "planner")
+        )
+
+        multi_agent_engine.register_agent(
+            Agent("Executor-1", "executor")
+        )
+
+        multi_agent_engine.register_agent(
+            Agent("Analyst-1", "analyst")
+        )
+
+        multi_agent_engine.register_agent(
+            Agent("RiskAgent-1", "risk")
+        )
+
+        multi_agent_engine.register_agent(
+            Agent("FinanceAgent-1", "finance")
+        )
+
+        multi_agent_engine.register_agent(
+            Agent("MarketAgent-1", "market")
+        )
+
+        multi_agent_engine.register_agent(
+            Agent("EthicsAgent-1", "ethics")
+        )
 
         print("[MULTI-AGENT] Agents initialized")
 
-        self.agent_token = security_engine.authenticate_agent("AURA_CORE")
+        self.agent_token = security_engine.authenticate_agent(
+            "AURA_CORE"
+        )
 
-        world_modeling_engine.create_model(
+        world_model_engine.create_model(
             "business",
-            {"demand": 100, "price": 10, "revenue": 1000, "cost": 500, "profit": 500},
-            {"price": "affects demand"}
+            {
+                "demand": 100,
+                "price": 10,
+                "revenue": 1000,
+                "cost": 500,
+                "profit": 500
+            },
+            {
+                "price": "affects demand"
+            }
         )
 
         identity_engine.register_agent(
@@ -71,42 +198,78 @@ class CognitiveLoop:
         print("[COGNITIVE LOOP] Initialized")
 
     @staticmethod
-    def _stream_event(step, message, data=None) -> str:
+    def _stream_event(step, message, data=None):
+
         return json.dumps({
             "step": step,
             "message": message,
             "data": data
         }) + "\n"
 
-    def run_intelligence_pipeline(self, goal: str, scenario: dict, profile: dict | None = None):
+    def run_intelligence_pipeline(
+        self,
+        goal: str,
+        scenario: dict,
+        profile: dict | None = None
+    ):
+
         try:
+
             profile = profile or {}
 
-            business_understanding = business_understanding_engine.analyze(goal, scenario)
-            business_dna = business_understanding.get("business_dna", {})
+            business_understanding = (
+                business_understanding_engine.analyze(
+                    goal,
+                    scenario
+                )
+            )
 
-            dynamic_reasoning = dynamic_reasoning_engine.analyze(business_dna)
+            business_dna = business_understanding.get(
+                "business_dna",
+                {}
+            )
 
-            market_intelligence = market_intelligence_engine.analyze(
-                business_dna.get("business_model", "general_business"),
+            dynamic_reasoning = (
+                dynamic_reasoning_engine.analyze(
+                    business_dna
+                )
+            )
+
+            market_intelligence = (
+                market_intelligence_engine.analyze(
+                    business_dna.get(
+                        "business_model",
+                        "general_business"
+                    ),
+                    scenario
+                )
+            )
+
+            sim_result = simulation_engine.run_simulation(
+                goal,
                 scenario
             )
 
-            sim_result = simulation_engine.run_simulation(goal, scenario)
-
             domain = world_engine.detect_domain(goal)
+
             world = world_engine.build_world(domain)
+
             world.update(scenario)
 
-            sim_result["results"] = world_engine.apply_world(
-                sim_result.get("results", []),
-                world
+            sim_result["results"] = (
+                world_engine.apply_world(
+                    sim_result.get("results", []),
+                    world
+                )
             )
 
-            debated_results, debates = debate_engine.run_debate(
-                sim_result["results"],
-                goal
+            debated_results, debates = (
+                debate_engine.run_debate(
+                    sim_result["results"],
+                    goal
+                )
             )
+
             sim_result["results"] = debated_results
 
             failures = failure_engine.predict(
@@ -116,11 +279,15 @@ class CognitiveLoop:
             )
 
             for s in sim_result["results"]:
+
                 if "final_score" not in s:
                     s["final_score"] = s.get("score", 0)
 
                 failure_data = next(
-                    (f for f in failures if f.get("strategy") == s.get("name")),
+                    (
+                        f for f in failures
+                        if f.get("strategy") == s.get("name")
+                    ),
                     None
                 )
 
@@ -130,55 +297,142 @@ class CognitiveLoop:
                 )
 
                 base_conf = s.get("confidence", 0.7)
-                adjusted_conf = base_conf * (1 - failure_prob)
-                trust_score = adjusted_conf * s.get("final_score", 1)
 
-                s["confidence_score"] = round(adjusted_conf * 100, 2)
-                s["trust_score"] = round(trust_score, 2)
-                s["failure_probability"] = round(failure_prob * 100, 2)
+                adjusted_conf = (
+                    base_conf * (1 - failure_prob)
+                )
+
+                trust_score = (
+                    adjusted_conf
+                    * s.get("final_score", 1)
+                )
+
+                s["confidence_score"] = round(
+                    adjusted_conf * 100,
+                    2
+                )
+
+                s["trust_score"] = round(
+                    trust_score,
+                    2
+                )
+
+                s["failure_probability"] = round(
+                    failure_prob * 100,
+                    2
+                )
 
                 score = s.get("final_score", 0)
-                s["decision_score"] = round(score - (s["failure_probability"] * 0.05), 2)
+
+                s["decision_score"] = round(
+                    score - (
+                        s["failure_probability"] * 0.05
+                    ),
+                    2
+                )
 
             sim_result["results"] = sorted(
                 sim_result["results"],
-                key=lambda x: x.get("decision_score", 0),
+                key=lambda x: x.get(
+                    "decision_score",
+                    0
+                ),
                 reverse=True
             )
 
-            best = sim_result["results"][0] if sim_result.get("results") else {}
+            best = (
+                sim_result["results"][0]
+                if sim_result.get("results")
+                else {}
+            )
+
             sim_result["best_strategy"] = best
 
-            strategy_comparison = strategy_comparison_engine.compare(
-                business_dna.get("business_model", "general_business"),
-                scenario
+            strategy_comparison = (
+                strategy_comparison_engine.compare(
+                    business_dna.get(
+                        "business_model",
+                        "general_business"
+                    ),
+                    scenario
+                )
             )
 
-            prediction = prediction_engine.predict_outcome(
-                business_dna.get("business_model", "general_business"),
-                best.get("name", "Balanced"),
-                scenario
+            prediction = (
+                prediction_engine.predict_outcome(
+                    business_dna.get(
+                        "business_model",
+                        "general_business"
+                    ),
+                    best.get("name", "Balanced"),
+                    scenario
+                )
             )
 
-            visual_intelligence = visual_intelligence_engine.analyze({
-                "confidence": prediction.get("confidence", 0.65),
-                "main_risk": dynamic_reasoning.get("strategic_warning", ""),
-                "market_pressure": market_intelligence.get("market_pressure", "")
-            })
+            visual_intelligence = (
+                visual_intelligence_engine.analyze({
+                    "confidence": prediction.get(
+                        "confidence",
+                        0.65
+                    ),
+                    "main_risk": dynamic_reasoning.get(
+                        "strategic_warning",
+                        ""
+                    ),
+                    "market_pressure": market_intelligence.get(
+                        "market_pressure",
+                        ""
+                    )
+                })
+            )
 
-            strategic_simulation = strategic_simulation_engine.simulate(
-    goal,
-    business_dna,
-    dynamic_reasoning,
-    prediction
-)
-            
-            operational_intelligence = operational_intelligence_engine.analyze(
-    goal,
-    business_dna,
-    dynamic_reasoning,
-    strategic_simulation
-)
+            strategic_simulation = (
+                strategic_simulation_engine.simulate(
+                    goal,
+                    business_dna,
+                    dynamic_reasoning,
+                    prediction
+                )
+            )
+
+            operational_intelligence = (
+                operational_intelligence_engine.analyze(
+                    goal,
+                    business_dna,
+                    dynamic_reasoning,
+                    strategic_simulation
+                )
+            )
+
+            # ==========================================
+            # DECISION MEMORY
+            # ==========================================
+
+            decision_memory = (
+                decision_memory_engine.save_decision(
+                    goal=goal,
+                    business_dna=business_dna,
+                    dynamic_reasoning=dynamic_reasoning,
+                    prediction=prediction,
+                    simulation=sim_result,
+                    operational_intelligence=operational_intelligence
+                )
+            )
+
+            memory_summary = (
+                decision_memory_engine.summarize_history()
+            )
+
+            # ==========================================
+            # STRATEGY REINFORCEMENT
+            # ==========================================
+
+            strategy_reinforcement = (
+                strategy_reinforcement_engine.analyze(
+                    memory_summary,
+                    strategic_simulation
+                )
+            )
 
             return {
                 "status": "success",
@@ -199,10 +453,14 @@ class CognitiveLoop:
                 "best_strategy": best,
                 "failures": failures,
                 "debates": debates,
+                "decision_memory": decision_memory,
+                "memory_summary": memory_summary,
+                "strategy_reinforcement": strategy_reinforcement,
                 "world": world
             }
 
         except Exception as e:
+
             return {
                 "status": "error",
                 "message": str(e),
@@ -210,175 +468,170 @@ class CognitiveLoop:
                 "scenario": scenario
             }
 
-    async def run_simulation_stream(self, scenario):
-        try:
-            goal = scenario.get("goal", "Unknown Goal")
-
-            yield self._stream_event("start", f"Starting AURA simulation for: {goal}")
-            await asyncio.sleep(0.3)
-
-            pipeline = self.run_intelligence_pipeline(goal, scenario)
-
-            if pipeline.get("status") == "error":
-                yield self._stream_event("error", pipeline.get("message"))
-                return
-
-            yield self._stream_event(
-                "business_understanding",
-                "Business understanding complete",
-                pipeline.get("business_understanding")
-            )
-
-            yield self._stream_event(
-                "dynamic_reasoning",
-                "Dynamic reasoning complete",
-                pipeline.get("dynamic_reasoning")
-            )
-
-            yield self._stream_event(
-                "market",
-                "Market intelligence complete",
-                pipeline.get("market_intelligence")
-            )
-
-            yield self._stream_event(
-                "simulation",
-                "Strategies simulated",
-                {"count": len(pipeline.get("results", []))}
-            )
-
-            yield self._stream_event(
-                "debate",
-                "Strategies debated",
-                {"count": len(pipeline.get("debates", []))}
-            )
-
-            yield self._stream_event(
-                "failure",
-                "Failure analysis complete",
-                pipeline.get("failures")
-            )
-
-            yield self._stream_event(
-                "prediction",
-                "Prediction complete",
-                pipeline.get("prediction")
-            )
-
-            yield self._stream_event(
-                "visual_intelligence",
-                "Visual intelligence complete",
-                pipeline.get("visual_intelligence")
-            )
-
-            yield self._stream_event(
-    "strategic_simulation",
-    "Strategic simulation complete",
-    pipeline.get("strategic_simulation")
-)
-            
-            yield self._stream_event(
-    "operational_intelligence",
-    "Operational intelligence complete",
-    pipeline.get("operational_intelligence")
-)
-
-            best = pipeline.get("best_strategy", {})
-
-            yield self._stream_event(
-                "decision",
-                f"Best strategy selected: {best.get('name', 'Unknown')}",
-                best
-            )
-
-            yield self._stream_event("waiting", "Awaiting human approval")
-
-            decision = await asyncio.to_thread(control_engine.wait_for_decision)
-
-            if decision == "rejected":
-                yield self._stream_event("rejected", "Simulation rejected by user")
-                control_engine.reset()
-                return
-
-            yield self._stream_event("approved", "Approved. Executing")
-            control_engine.reset()
-
-            steps = agent_engine.run_agents(pipeline.get("simulation", {}))
-
-            for step in steps:
-                yield self._stream_event("agent", step.get("message", ""), step)
-                await asyncio.sleep(0.3)
-
-            try:
-                self_learning_engine.learn_from_execution(
-                    goal,
-                    pipeline.get("simulation", {})
-                )
-            except Exception as learning_error:
-                yield self._stream_event(
-                    "warning",
-                    f"Learning update failed: {str(learning_error)}"
-                )
-
-            yield self._stream_event(
-                "complete",
-                "Simulation complete",
-                {
-                    "best_strategy": pipeline.get("best_strategy"),
-                    "results_count": len(pipeline.get("results", [])),
-                    "business_understanding": pipeline.get("business_understanding"),
-                    "dynamic_reasoning": pipeline.get("dynamic_reasoning"),
-                    "market_intelligence": pipeline.get("market_intelligence"),
-                    "strategy_comparison": pipeline.get("strategy_comparison"),
-                    "prediction": pipeline.get("prediction"),
-                    "strategic_simulation": pipeline.get("strategic_simulation"),
-                    "visual_intelligence": pipeline.get("visual_intelligence"),
-                    "operational_intelligence": pipeline.get("operational_intelligence")
-                }
-            )
-
-        except Exception as e:
-            yield self._stream_event("error", str(e))
-
     def run(self):
-        try:
-            monitoring_engine.log_event("cognitive_loop_started")
 
-            if not security_engine.verify_agent("AURA_CORE"):
-                return {"status": "agent_not_authenticated"}
+        try:
+
+            monitoring_engine.log_event(
+                "cognitive_loop_started"
+            )
+
+            if not security_engine.verify_agent(
+                "AURA_CORE"
+            ):
+
+                return {
+                    "status": "agent_not_authenticated"
+                }
 
             goal = multi_goal_engine.get_next_goal()
+
             if not goal:
-                return {"status": "no_goal"}
+
+                return {
+                    "status": "no_goal"
+                }
 
             goal = self._normalize_goal(goal)
 
             context = context_engine.collect_context()
-            memories = memory_retrieval_engine.retrieve(context)
 
-            tasks = task_engine.generate_tasks(goal, context, memories)
-            plan = planning_engine.create_plan(tasks, context)
+            # ==========================================
+            # SEMANTIC MEMORY RETRIEVAL
+            # ==========================================
 
-            resources = resource_intelligence_engine.get_current_resources()
+            raw_memories = asyncio.run(
+                retrieve_relevant_memories(
+                    tenant_id="AURA_SYSTEM",
+                    domain="general",
+                    query=str(context),
+                    limit=10
+                )
+            )
 
-            execution_results = autonomous_execution_engine.execute_plan(
-                plan, {}, resources
+            memory_objects = []
+
+            for memory in raw_memories:
+
+                if isinstance(memory, dict):
+
+                    memory_objects.append({
+                        "memory": memory.get(
+                            "text",
+                            str(memory)
+                        ),
+                        "importance_score": memory.get(
+                            "importance_score",
+                            10
+                        ),
+                        "semantic_score": memory.get(
+                            "score",
+                            0.5
+                        ),
+                        "reinforcement_strength": memory.get(
+                            "reinforcement_strength",
+                            1.0
+                        ),
+                        "confidence": memory.get(
+                            "confidence",
+                            0.5
+                        ),
+                        "recall_count": memory.get(
+                            "recall_count",
+                            1
+                        ),
+                        "decay_factor": memory.get(
+                            "decay_factor",
+                            1.0
+                        )
+                    })
+
+                else:
+
+                    memory_objects.append({
+                        "memory": str(memory),
+                        "importance_score": 10,
+                        "semantic_score": 0.5,
+                        "reinforcement_strength": 1.0,
+                        "confidence": 0.5,
+                        "recall_count": 1,
+                        "decay_factor": 1.0
+                    })
+
+            memories = (
+                memory_priority_retrieval_engine
+                .retrieve_priority_memories(
+                    memory_objects
+                )
+            )
+
+            # ==========================================
+            # TASK GENERATION
+            # ==========================================
+
+            tasks = task_engine.generate_tasks(
+                goal,
+                context,
+                memories
+            )
+
+            # ==========================================
+            # PLANNING
+            # ==========================================
+
+            plan = planning_engine.create_plan(
+                tasks,
+                context
+            )
+
+            # ==========================================
+            # RESOURCE ANALYSIS
+            # ==========================================
+
+            resources = (
+                resource_intelligence_engine
+                .get_current_resources()
+            )
+
+            # ==========================================
+            # EXECUTION
+            # ==========================================
+
+            execution_results = (
+                autonomous_execution_engine
+                .execute_plan(
+                    plan,
+                    {},
+                    resources
+                )
             )
 
             return {
                 "goal": goal,
+                "context": context,
+                "memories_used": memories,
+                "tasks": tasks,
+                "plan": plan,
+                "resources": resources,
                 "execution_results": execution_results
             }
 
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+
+            return {
+                "status": "error",
+                "message": str(e)
+            }
 
     @staticmethod
     def _normalize_goal(goal):
+
         if isinstance(goal, str):
             return {"name": goal}
+
         elif not isinstance(goal, dict):
             return {"name": str(goal)}
+
         return goal
 
 

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from AURA.AURA_CORE_V2.app.db.memory_model import Memory
+from app.db.memory_model import Memory
 
 
 class MemoryRepository:

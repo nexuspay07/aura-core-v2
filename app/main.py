@@ -1,3 +1,12 @@
+from app.memory.memory_service import (
+    save_memory
+)
+
+from app.memory.memory_retriever import (
+    retrieve_relevant_memories
+)
+
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -6,7 +15,20 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.db.database import (
+    Base,
+    engine
+)
+
+from app.models.strategy import strategies
+from app.models.simulation import simulations
+from app.models.strategy import metadata as strategy_metadata
+
+Base.metadata.create_all(bind=engine)
+strategy_metadata.create_all(bind=engine)
+
 app = FastAPI(title="AURA AI")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,7 +55,7 @@ app.add_middleware(
 # =========================
 # IMPORTS
 # =========================
-from app.db.database import database, engine, metadata
+from app.db.database import engine, metadata
 
 from app.lab.world_engine import world_engine
 from app.lab.history_engine import history_engine
@@ -45,6 +67,10 @@ from app.lab.agent_engine import agent_engine
 from app.lab.debate_engine import debate_engine
 from app.db.user_table import user_table
 from app.api.auth_routes import router as auth_router
+from app.api.chat_routes import router as chat_router
+from app.core.conversation_memory import conversation_memory
+from app.core.decision_memory_engine import decision_memory_engine
+from app.core.agents.multi_agent_engine import multi_agent_engine
 
 from app.core.cognitive_loop import cognitive_loop
 from app.control.control_engine import control_engine
@@ -55,8 +81,8 @@ from app.core.strategic_evolution_engine import strategic_evolution_engine
 from app.api.pro_routes import router as pro_router
 from app.api.payment_routes import router as payment_router
 
-from app.core.conversation_engine import conversation_engine
-from app.core.conversation_memory import conversation_memory
+from app.core.memory.conversation_engine import conversation_engine
+
 from app.core.user_profile_engine import user_profile_engine
 
 from app.domains.business.business_domain_engine import business_domain_engine
@@ -72,21 +98,28 @@ from app.db.workspace_table import workspace_table
 from app.db.intelligence_session_table import intelligence_session_table
 from app.api.intelligence_session_routes import router as intelligence_session_router
 
-from app.core.prediction_engine import prediction_engine
+from app.core.simulation.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
-from app.core.decision_memory_engine import decision_memory_engine
 from app.core.adaptive_learning_v2_engine import adaptive_learning_v2_engine
 from app.core.strategy_reinforcement_engine import strategy_reinforcement_engine
-from app.core.causal_reasoning_engine import causal_reasoning_engine
+from app.core.reasoning.causal_reasoning_engine import causal_reasoning_engine
+from app.services.memory_service import (
+    save_user_memory,
+    get_user_memories,
+    save_organization_memory,
+    get_organization_memories,
+    save_session_memory,
+    get_session_memory,
+)
 
-
+app.include_router(chat_router)
 app.include_router(payment_router)
 app.include_router(pro_router)
 app.include_router(strategy_router)
 app.include_router(marketplace_router)
-app.include_router(auth_router)
 app.include_router(organization_router)
 app.include_router(intelligence_session_router)
+app.include_router(auth_router)
 
 
 # =========================
@@ -253,6 +286,15 @@ async def auto_save_intelligence_session(
         "workspace_id": workspace_id
     }
 
+@app.get("/health")
+async def health():
+
+    return {
+        "status": "ok",
+        "system": "AURA CORE",
+        "state": "running"
+    }
+
 
 # =========================
 # STARTUP / SHUTDOWN
@@ -260,17 +302,19 @@ async def auto_save_intelligence_session(
 @app.on_event("startup")
 async def startup():
     metadata.create_all(engine)
-    await database.connect()
+
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    await database.disconnect()
+ pass
+          
 
 
 # =========================
 # MODELS
 # =========================
+
 class SimulationRequest(BaseModel):
     goal: str
     risk_tolerance: float = 0.5
@@ -285,298 +329,520 @@ class ConversationRequest(BaseModel):
     workspace_id: int | None = None
 
 
-# =========================
-# CHAT
-# =========================
-@app.post("/chat")
-async def chat(data: ConversationRequest):
+# # =========================
+# # CHAT
+# # =========================
+# @app.post("/chat")
+# async def chat(data: ConversationRequest):
 
-    message = data.message.strip()
-    session_id = data.session_id or "default"
+#     message = data.message.strip()
 
-    if not message:
-        return {"error": "Message is required"}
+#     session_id = data.session_id or "default"
 
-    conversation_memory.add_message(session_id, "user", message)
+#     # =====================================================
+#     # LOAD MEMORY CONTEXT
+#     # =====================================================
 
-    intent = conversation_engine.detect_intent(message)
+#     session_memories = get_session_memory(
+#         session_id
+#     )
 
-    # =========================
-    # HEALTHCARE
-    # =========================
-    if is_healthcare_message(message):
+#     organization_memories = []
 
-        result = healthcare_engine.build_response(message)
+#     if data.organization_id:
 
-        conversation_memory.add_message(
-            session_id,
-            "assistant",
-            result.get("summary", "")
-        )
+#         organization_memories = (
+#             get_organization_memories(
+#                 str(data.organization_id)
+#             )
+#         )
 
-        user_profile_engine.update_profile(
-            session_id,
-            {"risk_tolerance": 0.5, "budget": 10000},
-            "healthcare"
-        )
+#     user_memories = get_user_memories(
+#         session_id
+#     )
 
-        return {
-            "type": "healthcare",
-            "domain": "healthcare",
-            "response": result,
-            "profile": user_profile_engine.get_profile(session_id)
-        }
+#      # =====================================================
+#      # SEMANTIC MEMORY RETRIEVAL
+#      # =====================================================
 
-    # =========================
-    # CLARIFICATION
-    # =========================
-    if conversation_engine.needs_clarification(message):
+#     semantic_memories = (
+#     await retrieve_relevant_memories(
+#         tenant_id=session_id,
+#         domain="business",
+#         query=message,
+#         limit=5
+#     )
+# )
 
-        clarification = conversation_engine.build_clarification_question(intent)
+#     # =====================================================
+#     # BUILD MEMORY CONTEXT
+#     # =====================================================
 
-        conversation_memory.add_message(
-            session_id,
-            "assistant",
-            clarification
-        )
+#     memory_context = ""
+#     semantic_context = ""
 
-        return {
-            "type": "clarification",
-            "response": clarification,
-            "profile": user_profile_engine.get_profile(session_id)
-        }
+#     for memory in session_memories[-5:]:
 
-    # =========================
-    # SCENARIO
-    # =========================
-    scenario = {
-        "goal": message,
-        "risk_tolerance": 0.5,
-        "budget": 10000,
-        "market": "normal"
-    }
+#        role = memory.get("role", "unknown")
+#     msg = memory.get("message", "")
 
-    # =========================
-    # USER PROFILE
-    # =========================
-    profile = user_profile_engine.get_profile(session_id)
+#     memory_context += (
+#         f"{role.upper()}: {msg}\n"
+#     )
 
-    if profile.get("preferred_risk") == "low":
-        scenario["risk_tolerance"] = 0.2
+#     for item in semantic_memories:
 
-    elif profile.get("preferred_risk") == "high":
-        scenario["risk_tolerance"] = 0.8
+#        semantic_memory = item["memory"]
 
-    elif profile.get("preferred_risk") == "medium":
-        scenario["risk_tolerance"] = 0.5
+#     semantic_context += (
+#         f"RELATED MEMORY:\n"
+#         f"USER: {semantic_memory['user_message']}\n"
+#         f"AURA: {semantic_memory['aura_response']}\n\n"
+#     )
 
-    if profile.get("preferred_budget"):
-        scenario["budget"] = profile["preferred_budget"]
+#     if not message:
+#         return {"error": "Message is required"}
 
-    # =========================
-    # UNIFIED INTELLIGENCE PIPELINE
-    # =========================
-    pipeline_result = cognitive_loop.run_intelligence_pipeline(
-        message,
-        scenario,
-        profile
-    )
+#     conversation_memory.add_message(
+#         session_id,
+#         "user",
+#         message
+#     )
 
-    if pipeline_result.get("status") == "error":
-        return pipeline_result
+#     save_session_memory(
+#         session_id,
+#         "user",
+#         message
+#     )
 
-    best = pipeline_result.get("best_strategy", {})
-    results = pipeline_result.get("results", [])
-    world = pipeline_result.get("world", {})
+#     intent = conversation_engine.detect_intent(message)
 
-    second_best = results[1] if len(results) > 1 else None
+#     # =========================
+#     # HEALTHCARE
+#     # =========================
+#     if is_healthcare_message(message):
 
-    explanation = {
-        "summary": pipeline_result.get(
-            "dynamic_reasoning",
-            {}
-        ).get(
-            "current_priority",
-            "Strategic analysis complete."
-        )
-    }
+#         result = healthcare_engine.build_response(message)
 
-    # =========================
-    # UPDATE PROFILE
-    # =========================
-    updated_profile = user_profile_engine.update_profile(
-        session_id,
-        scenario,
-        "business"
-    )
+#         conversation_memory.add_message(
+#             session_id,
+#             "assistant",
+#             result.get("summary", "")
+#         )
 
-    # =========================
-    # MEMORY BEFORE RESPONSE
-    # =========================
-    memory_summary_before = await decision_memory_engine.summarize_history(
-        session_id
-    )
+#         user_profile_engine.update_profile(
+#             session_id,
+#             {"risk_tolerance": 0.5, "budget": 10000},
+#             "healthcare"
+#         )
 
-    # =========================
-    # BUILD RESPONSE
-    # =========================
-    response = conversation_engine.build_conversational_response(
-        message,
-        best,
-        explanation,
-        profile=updated_profile,
-        pipeline_result=pipeline_result,
-        memory_summary=memory_summary_before
-    )
+#         return {
+#             "type": "healthcare",
+#             "domain": "healthcare",
+#             "response": result,
+#             "profile": user_profile_engine.get_profile(session_id)
+#         }
 
-    # =========================
-    # SAVE DECISION
-    # =========================
-    decision_record = await decision_memory_engine.save_decision(
-        session_id=session_id,
-        goal=message,
-        pipeline_result=pipeline_result,
-        response=response
-    )
+#     # =========================
+#     # CLARIFICATION
+#     # =========================
+#     if conversation_engine.needs_clarification(message):
 
-    # =========================
-    # UPDATED MEMORY
-    # =========================
-    memory_summary = await decision_memory_engine.summarize_history(
-        session_id
-    )
+#         clarification = (
+#             conversation_engine
+#             .build_clarification_question(intent)
+#         )
 
-    # =========================
-    # ADAPTIVE LEARNING
-    # =========================
-    adaptive_learning = adaptive_learning_v2_engine.analyze(
-        memory_summary,
-        pipeline_result
-    )
+#         conversation_memory.add_message(
+#             session_id,
+#             "assistant",
+#             clarification
+#         )
 
-    strategic_evolution = strategic_evolution_engine.analyze(
-    memory_summary,
-    pipeline_result
-)
-    
-    strategy_reinforcement = strategy_reinforcement_engine.analyze(
-    memory_summary,
-    strategic_evolution
-)
+#         return {
+#             "type": "clarification",
+#             "response": clarification,
+#             "profile": user_profile_engine.get_profile(session_id)
+#         }
 
-    # =========================
-    # RESPONSE ENRICHMENT
-    # =========================
-    response["decision_brief"]["memory_summary"] = memory_summary
+#     # =========================
+#     # SCENARIO
+#     # =========================
+#     scenario = {
+#         "goal": message,
+#         "risk_tolerance": 0.5,
+#         "budget": 10000,
+#         "market": "normal"
+#     }
 
-    response["decision_brief"]["adaptive_learning"] = adaptive_learning
+#     # =========================
+#     # USER PROFILE
+#     # =========================
+#     profile = user_profile_engine.get_profile(
+#         session_id
+#     )
 
-    response["decision_brief"]["learning_active"] = adaptive_learning.get(
-        "learning_active"
-    )
+#     if profile.get("preferred_risk") == "low":
+#         scenario["risk_tolerance"] = 0.2
 
-    response["decision_brief"]["pattern_detected"] = adaptive_learning.get(
-        "pattern_detected"
-    )
+#     elif profile.get("preferred_risk") == "high":
+#         scenario["risk_tolerance"] = 0.8
 
-    response["decision_brief"]["strategic_drift"] = adaptive_learning.get(
-        "strategic_drift"
-    )
+#     elif profile.get("preferred_risk") == "medium":
+#         scenario["risk_tolerance"] = 0.5
 
-    response["decision_brief"]["recommended_adjustment"] = adaptive_learning.get(
-        "recommended_adjustment"
-    )
+#     if profile.get("preferred_budget"):
+#         scenario["budget"] = profile[
+#             "preferred_budget"
+#         ]
 
-    response["decision_brief"]["learning_priority"] = adaptive_learning.get(
-        "learning_priority"
-    )
+#     # =========================
+#     # UNIFIED INTELLIGENCE PIPELINE
+#     # =========================
+#     enhanced_message = f"""
+#     Previous conversation context:
 
-    saved_intelligence_session = await auto_save_intelligence_session(
-    organization_id=data.organization_id,
-    workspace_id=data.workspace_id,
-    session_id=session_id,
-    goal=message,
-    response=response,
-    pipeline_result=pipeline_result
-)
+# {memory_context}
 
-    response["decision_brief"]["strategic_evolution"] = strategic_evolution
-    response["decision_brief"]["evolution_active"] = strategic_evolution.get("evolution_active")
-    response["decision_brief"]["dominant_strategy_pattern"] = strategic_evolution.get("dominant_strategy_pattern")
-    response["decision_brief"]["risk_drift"] = strategic_evolution.get("risk_drift")
-    response["decision_brief"]["strategic_stability"] = strategic_evolution.get("strategic_stability")
-    response["decision_brief"]["evolution_recommendation"] = strategic_evolution.get("evolution_recommendation")
-    response["decision_brief"]["strategy_reinforcement"] = strategy_reinforcement
-    response["decision_brief"]["reinforcement_active"] = strategy_reinforcement.get("reinforcement_active")
-    response["decision_brief"]["strategy_reward_score"] = strategy_reinforcement.get("strategy_reward_score")
-    response["decision_brief"]["reinforcement_signal"] = strategy_reinforcement.get("reinforcement_signal")
-    response["decision_brief"]["strategy_bias"] = strategy_reinforcement.get("strategy_bias")
-    response["decision_brief"]["reinforcement_recommendation"] = strategy_reinforcement.get("reinforcement_recommendation")
+# Semantically related memories:
 
-    # =========================
-    # SAVE HISTORY
-    # =========================
-    await history_engine.save(
-        "test_user",
-        {
-            "goal": message,
-            "scenario": scenario,
-            "result": {
-                "results": results,
-                "best_strategy": best
-            }
-        }
-    )
+# {semantic_context}
 
-    conversation_memory.add_message(
-        session_id,
-        "assistant",
-        response.get("summary", "")
-    )
+# Current user request:
 
-    business_subdomain = None
+# {message}
+# """
 
-    if intent == "business_strategy":
-        business_subdomain = business_domain_engine.detect_subdomain(message)
+#     pipeline_result = (
+#     cognitive_loop.run_intelligence_pipeline(
+#         enhanced_message,
+#         scenario,
+#         profile
+#     )
+# )
 
-    # =========================
-    # FINAL RESPONSE
-    # =========================
-    return {
-        "type": "conversation",
-        "domain": "business",
-        "subdomain": business_subdomain,
-        "response": response,
-        "best_strategy": best,
-        "alternative_strategy": second_best,
-        "explanation": explanation,
-        "profile": updated_profile,
-        "world": world,
-        "workspace_save": saved_intelligence_session,
+#     if pipeline_result.get("status") == "error":
+#         return pipeline_result
 
-        "decision_memory": {
-    "latest_decision": decision_record,
-    "summary": memory_summary,
-    "adaptive_learning": adaptive_learning,
-    "strategic_evolution": strategic_evolution,
-    "strategy_reinforcement": strategy_reinforcement
-},
+#     best = pipeline_result.get(
+#         "best_strategy",
+#         {}
+#     )
 
-        "pipeline": {
-            "business_understanding": pipeline_result.get("business_understanding"),
-            "business_dna": pipeline_result.get("business_dna"),
-            "dynamic_reasoning": pipeline_result.get("dynamic_reasoning"),
-            "adaptive_learning": adaptive_learning,
-            "market_intelligence": pipeline_result.get("market_intelligence"),
-            "strategy_comparison": pipeline_result.get("strategy_comparison"),
-            "prediction": pipeline_result.get("prediction"),
-            "strategic_evolution": strategic_evolution,
-            "visual_intelligence": pipeline_result.get("visual_intelligence"),
-            "strategic_simulation": pipeline_result.get("strategic_simulation"),
-            "operational_intelligence": pipeline_result.get("operational_intelligence"),
-            "strategy_reinforcement": strategy_reinforcement
-        }
-    }
+#     results = pipeline_result.get(
+#         "results",
+#         []
+#     )
+
+#     world = pipeline_result.get(
+#         "world",
+#         {}
+#     )
+
+#     second_best = (
+#         results[1]
+#         if len(results) > 1
+#         else None
+#     )
+
+#     explanation = {
+#         "summary": (
+#             pipeline_result.get(
+#                 "dynamic_reasoning",
+#                 {}
+#             ).get(
+#                 "current_priority",
+#                 "Strategic analysis complete."
+#             )
+#         )
+#     }
+
+#     # =========================
+#     # UPDATE PROFILE
+#     # =========================
+#     updated_profile = (
+#         user_profile_engine.update_profile(
+#             session_id,
+#             scenario,
+#             "business"
+#         )
+#     )
+
+#     # =========================
+#     # MEMORY BEFORE RESPONSE
+#     # =========================
+#     memory_summary_before = (
+#         await decision_memory_engine
+#         .summarize_history(session_id)
+#     )
+
+#     # =========================
+#     # BUILD RESPONSE
+#     # =========================
+#     response = (
+#         conversation_engine
+#         .build_conversational_response(
+#             message,
+#             best,
+#             explanation,
+#             profile=updated_profile,
+#             pipeline_result=pipeline_result,
+#             memory_summary=memory_summary_before
+#         )
+#     )
+
+#     # =========================
+#     # SAVE DECISION
+#     # =========================
+#     decision_record = (
+#         await decision_memory_engine
+#         .save_decision(
+#             session_id=session_id,
+#             goal=message,
+#             pipeline_result=pipeline_result,
+#             response=response
+#         )
+#     )
+
+#     # =========================
+#     # UPDATED MEMORY
+#     # =========================
+#     memory_summary = (
+#         await decision_memory_engine
+#         .summarize_history(session_id)
+#     )
+
+#     # =========================
+#     # ADAPTIVE LEARNING
+#     # =========================
+#     adaptive_learning = (
+#         adaptive_learning_v2_engine.analyze(
+#             memory_summary,
+#             pipeline_result
+#         )
+#     )
+
+#     strategic_evolution = (
+#         strategic_evolution_engine.analyze(
+#             memory_summary,
+#             pipeline_result
+#         )
+#     )
+
+#     strategy_reinforcement = (
+#         strategy_reinforcement_engine.analyze(
+#             memory_summary,
+#             strategic_evolution
+#         )
+#     )
+
+#     # =========================
+#     # RESPONSE ENRICHMENT
+#     # =========================
+#     response["decision_brief"][
+#         "memory_summary"
+#     ] = memory_summary
+
+#     response["decision_brief"][
+#         "adaptive_learning"
+#     ] = adaptive_learning
+
+#     response["decision_brief"][
+#         "learning_active"
+#     ] = adaptive_learning.get(
+#         "learning_active"
+#     )
+
+#     response["decision_brief"][
+#         "pattern_detected"
+#     ] = adaptive_learning.get(
+#         "pattern_detected"
+#     )
+
+#     response["decision_brief"][
+#         "strategic_drift"
+#     ] = adaptive_learning.get(
+#         "strategic_drift"
+#     )
+
+#     response["decision_brief"][
+#         "recommended_adjustment"
+#     ] = adaptive_learning.get(
+#         "recommended_adjustment"
+#     )
+
+#     response["decision_brief"][
+#         "learning_priority"
+#     ] = adaptive_learning.get(
+#         "learning_priority"
+#     )
+
+#     saved_intelligence_session = (
+#         await auto_save_intelligence_session(
+#             organization_id=data.organization_id,
+#             workspace_id=data.workspace_id,
+#             session_id=session_id,
+#             goal=message,
+#             response=response,
+#             pipeline_result=pipeline_result
+#         )
+#     )
+
+#     response["decision_brief"][
+#         "strategic_evolution"
+#     ] = strategic_evolution
+
+#     response["decision_brief"][
+#         "strategy_reinforcement"
+#     ] = strategy_reinforcement
+
+#     # =========================
+#     # SAVE HISTORY
+#     # =========================
+#     await history_engine.save(
+#         "test_user",
+#         {
+#             "goal": message,
+#             "scenario": scenario,
+#             "result": {
+#                 "results": results,
+#                 "best_strategy": best
+#             }
+#         }
+#     )
+
+#     conversation_memory.add_message(
+#         session_id,
+#         "assistant",
+#         response.get("summary", "")
+#     )
+
+#     save_session_memory(
+#         session_id,
+#         "assistant",
+#         response.get("summary", "")
+#     )
+
+#     await save_memory(
+#     tenant_id=session_id,
+#     domain="business",
+#     user_message=message,
+#     aura_response=response.get(
+#         "summary",
+#         ""
+#     )
+# )
+
+#     business_subdomain = None
+
+#     if intent == "business_strategy":
+
+#         business_subdomain = (
+#             business_domain_engine
+#             .detect_subdomain(message)
+#         )
+
+#     # =========================
+#     # FINAL RESPONSE
+#     # =========================
+#     return {
+#         "type": "conversation",
+#         "domain": "business",
+#         "subdomain": business_subdomain,
+#         "response": response,
+#         "best_strategy": best,
+#         "alternative_strategy": second_best,
+#         "explanation": explanation,
+#         "profile": updated_profile,
+#         "world": world,
+#         "workspace_save": (
+#             saved_intelligence_session
+#         ),
+
+#         "memory": {
+#             "session_memories":
+#                 session_memories,
+
+#             "organization_memories":
+#                 organization_memories,
+
+#             "user_memories":
+#                 user_memories,
+#         },
+
+#         "decision_memory": {
+#             "latest_decision":
+#                 decision_record,
+
+#             "summary":
+#                 memory_summary,
+
+#             "adaptive_learning":
+#                 adaptive_learning,
+
+#             "strategic_evolution":
+#                 strategic_evolution,
+
+#             "strategy_reinforcement":
+#                 strategy_reinforcement
+#         },
+
+#         "pipeline": {
+#             "business_understanding":
+#                 pipeline_result.get(
+#                     "business_understanding"
+#                 ),
+
+#             "business_dna":
+#                 pipeline_result.get(
+#                     "business_dna"
+#                 ),
+
+#             "dynamic_reasoning":
+#                 pipeline_result.get(
+#                     "dynamic_reasoning"
+#                 ),
+
+#             "adaptive_learning":
+#                 adaptive_learning,
+
+#             "market_intelligence":
+#                 pipeline_result.get(
+#                     "market_intelligence"
+#                 ),
+
+#             "strategy_comparison":
+#                 pipeline_result.get(
+#                     "strategy_comparison"
+#                 ),
+
+#             "prediction":
+#                 pipeline_result.get(
+#                     "prediction"
+#                 ),
+
+#             "strategic_evolution":
+#                 strategic_evolution,
+
+#             "visual_intelligence":
+#                 pipeline_result.get(
+#                     "visual_intelligence"
+#                 ),
+
+#             "strategic_simulation":
+#                 pipeline_result.get(
+#                     "strategic_simulation"
+#                 ),
+
+#             "operational_intelligence":
+#                 pipeline_result.get(
+#                     "operational_intelligence"
+#                 ),
+
+#             "strategy_reinforcement":
+#                 strategy_reinforcement
+#         }
+#     }
 # =========================
 # LAB SIMULATION
 # =========================

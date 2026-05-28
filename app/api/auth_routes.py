@@ -3,7 +3,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, insert
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from app.db.database import database
+from app.db.database import SessionLocal
 from app.db.user_table import user_table
 from app.core.auth_engine import auth_engine
 
@@ -24,6 +24,10 @@ class LoginRequest(BaseModel):
 
 
 def clean_user(row):
+
+    if hasattr(row, "_mapping"):
+        row = dict(row._mapping)
+
     return {
         "id": row["id"],
         "email": row["email"],
@@ -31,13 +35,18 @@ def clean_user(row):
         "role": row["role"],
         "is_active": row["is_active"],
         "is_verified": row["is_verified"],
-        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "created_at": (
+            row["created_at"].isoformat()
+            if row["created_at"]
+            else None
+        ),
     }
 
 
 async def get_current_user_from_token(
     credentials: HTTPAuthorizationCredentials
 ):
+
     token = credentials.credentials
 
     payload = auth_engine.decode_token(token)
@@ -54,7 +63,16 @@ async def get_current_user_from_token(
         user_table.c.id == user_id
     )
 
-    user = await database.fetch_one(query)
+    db = SessionLocal()
+
+    try:
+
+        result = db.execute(query)
+        user = result.fetchone()
+
+    finally:
+
+        db.close()
 
     if not user:
         raise HTTPException(
@@ -62,43 +80,66 @@ async def get_current_user_from_token(
             detail="User not found"
         )
 
+    user = dict(user._mapping)
+
     return {
         "id": user["id"],
         "email": user["email"],
         "full_name": user["full_name"],
-        "role": user["role"]
+        "role": user["role"],
+        "is_active": user["is_active"],
+        "is_verified": user["is_verified"],
+        "created_at": user["created_at"],
     }
 
 
 @router.post("/register")
 async def register(data: RegisterRequest):
+
     if len(data.password) < 8:
         raise HTTPException(
             status_code=400,
             detail="Password must be at least 8 characters"
         )
 
-    existing_query = select(user_table).where(user_table.c.email == data.email.lower())
-    existing_user = await database.fetch_one(existing_query)
+    db = SessionLocal()
 
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
+    try:
+
+        existing_query = select(user_table).where(
+            user_table.c.email == data.email.lower()
         )
 
-    password_hash = auth_engine.hash_password(data.password)
+        existing_result = db.execute(existing_query)
+        existing_user = existing_result.fetchone()
 
-    query = insert(user_table).values(
-        email=data.email.lower(),
-        password_hash=password_hash,
-        full_name=data.full_name,
-        role="user",
-        is_active=True,
-        is_verified=False,
-    )
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="Email already registered"
+            )
 
-    user_id = await database.execute(query)
+        password_hash = auth_engine.hash_password(
+            data.password
+        )
+
+        query = insert(user_table).values(
+            email=data.email.lower(),
+            password_hash=password_hash,
+            full_name=data.full_name,
+            role="user",
+            is_active=True,
+            is_verified=False,
+        )
+
+        result = db.execute(query)
+        db.commit()
+
+        user_id = result.inserted_primary_key[0]
+
+    finally:
+
+        db.close()
 
     token = auth_engine.create_access_token(
         user_id=user_id,
@@ -124,17 +165,44 @@ async def register(data: RegisterRequest):
 
 @router.post("/login")
 async def login(data: LoginRequest):
-    query = select(user_table).where(user_table.c.email == data.email.lower())
-    user = await database.fetch_one(query)
+
+    db = SessionLocal()
+
+    try:
+
+        query = select(user_table).where(
+            user_table.c.email == data.email.lower()
+        )
+
+        result = db.execute(query)
+        user = result.fetchone()
+
+    finally:
+
+        db.close()
 
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
 
-    if not auth_engine.verify_password(data.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+    user = dict(user._mapping)
+
+    if not auth_engine.verify_password(
+        data.password,
+        user["password_hash"]
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
 
     if not user["is_active"]:
-        raise HTTPException(status_code=403, detail="User account is disabled")
+        raise HTTPException(
+            status_code=403,
+            detail="User account is disabled"
+        )
 
     token = auth_engine.create_access_token(
         user_id=user["id"],
@@ -152,8 +220,13 @@ async def login(data: LoginRequest):
 
 
 @router.get("/me")
-async def me(authorization: str | None = Header(default=None)):
-    user = await get_current_user_from_token(authorization)
+async def me(
+    credentials: HTTPAuthorizationCredentials = security
+):
+
+    user = await get_current_user_from_token(
+        credentials
+    )
 
     return {
         "success": True,

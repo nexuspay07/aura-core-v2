@@ -1,14 +1,36 @@
 import re
 
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from sqlalchemy import select, insert
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Depends
+)
 
-from app.db.database import database
-from app.db.organization_table import organization_table
-from app.db.workspace_table import workspace_table
-from app.api.auth_routes import get_current_user_from_token
+from fastapi.security import (
+    HTTPBearer,
+    HTTPAuthorizationCredentials
+)
+
+from pydantic import BaseModel
+
+from sqlalchemy import (
+    select,
+    insert
+)
+
+from app.db.database import SessionLocal
+
+from app.db.organization_table import (
+    organization_table
+)
+
+from app.db.workspace_table import (
+    workspace_table
+)
+
+from app.api.auth_routes import (
+    get_current_user_from_token
+)
 
 
 router = APIRouter(
@@ -20,20 +42,31 @@ security = HTTPBearer()
 
 
 class CreateOrganizationRequest(BaseModel):
+
     name: str
+
     industry: str | None = None
+
     company_size: str | None = None
 
 
 def make_slug(name: str):
+
     slug = name.lower().strip()
-    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+
+    slug = re.sub(
+        r"[^a-z0-9]+",
+        "-",
+        slug
+    )
+
     slug = slug.strip("-")
 
     return slug or "organization"
 
 
 def clean_organization(row):
+
     return {
         "id": row["id"],
         "name": row["name"],
@@ -45,12 +78,14 @@ def clean_organization(row):
         "is_active": row["is_active"],
         "created_at": (
             row["created_at"].isoformat()
-            if row["created_at"] else None
+            if row["created_at"]
+            else None
         ),
     }
 
 
 def clean_workspace(row):
+
     return {
         "id": row["id"],
         "organization_id": row["organization_id"],
@@ -62,7 +97,8 @@ def clean_workspace(row):
         "is_active": row["is_active"],
         "created_at": (
             row["created_at"].isoformat()
-            if row["created_at"] else None
+            if row["created_at"]
+            else None
         ),
     }
 
@@ -75,80 +111,142 @@ async def create_organization(
     data: CreateOrganizationRequest,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    user = await get_current_user_from_token(credentials)
 
-    # -----------------------------
-    # SAFE UNIQUE SLUG GENERATION
-    # -----------------------------
-    base_slug = make_slug(data.name)
-    final_slug = base_slug
-    counter = 1
+    user = await get_current_user_from_token(
+        credentials
+    )
 
-    while True:
-        existing_query = select(organization_table).where(
-            organization_table.c.slug == final_slug
+    db = SessionLocal()
+
+    try:
+
+        # -----------------------------
+        # SAFE UNIQUE SLUG GENERATION
+        # -----------------------------
+        base_slug = make_slug(data.name)
+
+        final_slug = base_slug
+
+        counter = 1
+
+        while True:
+
+            existing_query = (
+                select(organization_table)
+                .where(
+                    organization_table.c.slug
+                    == final_slug
+                )
+            )
+
+            result = db.execute(
+                existing_query
+            )
+
+            existing = result.fetchone()
+
+            if not existing:
+                break
+
+            final_slug = (
+                f"{base_slug}-{counter}"
+            )
+
+            counter += 1
+
+        # -----------------------------
+        # CREATE ORGANIZATION
+        # -----------------------------
+        query = insert(
+            organization_table
+        ).values(
+            name=data.name,
+            slug=final_slug,
+            owner_user_id=user["id"],
+            plan="free",
+            industry=data.industry,
+            company_size=data.company_size,
+            is_active=True,
         )
 
-        existing = await database.fetch_one(existing_query)
+        result = db.execute(query)
 
-        if not existing:
-            break
+        db.commit()
 
-        final_slug = f"{base_slug}-{counter}"
-        counter += 1
+        org_id = result.inserted_primary_key[0]
 
-    # -----------------------------
-    # CREATE ORGANIZATION
-    # -----------------------------
-    query = insert(organization_table).values(
-        name=data.name,
-        slug=final_slug,
-        owner_user_id=user["id"],
-        plan="free",
-        industry=data.industry,
-        company_size=data.company_size,
-        is_active=True,
-    )
-
-    org_id = await database.execute(query)
-
-    # -----------------------------
-    # CREATE DEFAULT WORKSPACE
-    # -----------------------------
-    workspace_slug = f"{final_slug}-main"
-
-    workspace_query = insert(workspace_table).values(
-        organization_id=org_id,
-        name="Main Workspace",
-        slug=workspace_slug,
-        description="Default AURA Business workspace",
-        workspace_type="business",
-        created_by_user_id=user["id"],
-        is_active=True,
-    )
-
-    workspace_id = await database.execute(workspace_query)
-
-    # -----------------------------
-    # FETCH CREATED RECORDS
-    # -----------------------------
-    org = await database.fetch_one(
-        select(organization_table).where(
-            organization_table.c.id == org_id
+        # -----------------------------
+        # CREATE DEFAULT WORKSPACE
+        # -----------------------------
+        workspace_slug = (
+            f"{final_slug}-main"
         )
-    )
 
-    workspace = await database.fetch_one(
-        select(workspace_table).where(
-            workspace_table.c.id == workspace_id
+        workspace_query = insert(
+            workspace_table
+        ).values(
+            organization_id=org_id,
+            name="Main Workspace",
+            slug=workspace_slug,
+            description=(
+                "Default AURA Business workspace"
+            ),
+            workspace_type="business",
+            created_by_user_id=user["id"],
+            is_active=True,
         )
-    )
+
+        workspace_result = db.execute(
+            workspace_query
+        )
+
+        db.commit()
+
+        workspace_id = (
+            workspace_result
+            .inserted_primary_key[0]
+        )
+
+        # -----------------------------
+        # FETCH CREATED RECORDS
+        # -----------------------------
+        org_result = db.execute(
+            select(organization_table)
+            .where(
+                organization_table.c.id
+                == org_id
+            )
+        )
+
+        org = org_result.fetchone()
+
+        workspace_result = db.execute(
+            select(workspace_table)
+            .where(
+                workspace_table.c.id
+                == workspace_id
+            )
+        )
+
+        workspace = (
+            workspace_result.fetchone()
+        )
+
+    finally:
+
+        db.close()
 
     return {
         "success": True,
-        "message": "Organization created successfully",
-        "organization": clean_organization(org),
-        "workspace": clean_workspace(workspace),
+        "message": (
+            "Organization created successfully"
+        ),
+        "organization": clean_organization(
+            dict(org._mapping)
+        ),
+        "workspace": clean_workspace(
+            dict(workspace._mapping)
+        ),
     }
 
 
@@ -159,18 +257,37 @@ async def create_organization(
 async def list_my_organizations(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    user = await get_current_user_from_token(credentials)
 
-    query = select(organization_table).where(
-        organization_table.c.owner_user_id == user["id"]
+    user = await get_current_user_from_token(
+        credentials
     )
 
-    rows = await database.fetch_all(query)
+    db = SessionLocal()
+
+    try:
+
+        query = (
+            select(organization_table)
+            .where(
+                organization_table.c.owner_user_id
+                == user["id"]
+            )
+        )
+
+        result = db.execute(query)
+
+        rows = result.fetchall()
+
+    finally:
+
+        db.close()
 
     return {
         "success": True,
         "organizations": [
-            clean_organization(row)
+            clean_organization(
+                dict(row._mapping)
+            )
             for row in rows
         ],
     }
@@ -184,37 +301,77 @@ async def get_organization(
     organization_id: int,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    user = await get_current_user_from_token(credentials)
 
-    query = select(organization_table).where(
-        organization_table.c.id == organization_id
+    user = await get_current_user_from_token(
+        credentials
     )
 
-    org = await database.fetch_one(query)
+    db = SessionLocal()
 
-    if not org:
-        raise HTTPException(
-            status_code=404,
-            detail="Organization not found"
+    try:
+
+        query = (
+            select(organization_table)
+            .where(
+                organization_table.c.id
+                == organization_id
+            )
         )
 
-    if org["owner_user_id"] != user["id"]:
-        raise HTTPException(
-            status_code=403,
-            detail="Not allowed"
+        result = db.execute(query)
+
+        org = result.fetchone()
+
+        if not org:
+
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Organization not found"
+                )
+            )
+
+        org_data = dict(org._mapping)
+
+        if (
+            org_data["owner_user_id"]
+            != user["id"]
+        ):
+
+            raise HTTPException(
+                status_code=403,
+                detail="Not allowed"
+            )
+
+        workspace_query = (
+            select(workspace_table)
+            .where(
+                workspace_table.c.organization_id
+                == organization_id
+            )
         )
 
-    workspace_query = select(workspace_table).where(
-        workspace_table.c.organization_id == organization_id
-    )
+        workspace_result = db.execute(
+            workspace_query
+        )
 
-    workspaces = await database.fetch_all(workspace_query)
+        workspaces = (
+            workspace_result.fetchall()
+        )
+
+    finally:
+
+        db.close()
 
     return {
         "success": True,
-        "organization": clean_organization(org),
+        "organization": clean_organization(
+            org_data
+        ),
         "workspaces": [
-            clean_workspace(row)
+            clean_workspace(
+                dict(row._mapping)
+            )
             for row in workspaces
         ],
     }

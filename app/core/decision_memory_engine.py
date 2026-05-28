@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import select, insert
 
-from app.db.database import database
+from app.db.database import SessionLocal
 from app.db.decision_memory_table import decision_memory_table
 
 
@@ -14,52 +14,139 @@ class DecisionMemoryEngine:
         pipeline_result: dict,
         response: dict | None = None
     ):
+
         session_id = session_id or "default"
         response = response or {}
 
-        business_dna = pipeline_result.get("business_dna", {})
-        dynamic_reasoning = pipeline_result.get("dynamic_reasoning", {})
-        prediction = pipeline_result.get("prediction", {})
-        best_strategy = pipeline_result.get("best_strategy", {})
-        strategic_simulation = pipeline_result.get("strategic_simulation", {})
+        business_dna = pipeline_result.get(
+            "business_dna",
+            {}
+        )
+
+        dynamic_reasoning = pipeline_result.get(
+            "dynamic_reasoning",
+            {}
+        )
+
+        prediction = pipeline_result.get(
+            "prediction",
+            {}
+        )
+
+        best_strategy = pipeline_result.get(
+            "best_strategy",
+            {}
+        )
+
+        strategic_simulation = pipeline_result.get(
+            "strategic_simulation",
+            {}
+        )
 
         record = {
+
             "session_id": session_id,
-            "timestamp": datetime.now(timezone.utc),
+
+            "timestamp": datetime.now(
+                timezone.utc
+            ),
 
             "goal": goal,
 
-            "business_model": business_dna.get("business_model"),
-            "business_stage": business_dna.get("business_stage"),
-            "market": business_dna.get("market"),
-            "competition_pressure": business_dna.get("competition_pressure"),
-            "trust_dependency": business_dna.get("trust_dependency"),
-            "scalability": business_dna.get("scalability"),
+            "business_model": business_dna.get(
+                "business_model"
+            ),
 
-            "recommended_strategy": best_strategy.get("name"),
-            "risk": best_strategy.get("risk"),
-            "decision_score": best_strategy.get("decision_score"),
-            "failure_probability": best_strategy.get("failure_probability"),
+            "business_stage": business_dna.get(
+                "business_stage"
+            ),
 
-            "current_bottleneck": dynamic_reasoning.get("current_bottleneck"),
-            "growth_blocker": dynamic_reasoning.get("growth_blocker"),
-            "strategic_warning": dynamic_reasoning.get("strategic_warning"),
+            "market": business_dna.get(
+                "market"
+            ),
 
-            "prediction_confidence": prediction.get("confidence"),
+            "competition_pressure": business_dna.get(
+                "competition_pressure"
+            ),
 
-            "growth_probability": strategic_simulation.get("growth_probability"),
-            "failure_probability_label": strategic_simulation.get("failure_probability"),
+            "trust_dependency": business_dna.get(
+                "trust_dependency"
+            ),
 
-            "recommended_move": response.get("decision_brief", {}).get("recommended_move"),
+            "scalability": business_dna.get(
+                "scalability"
+            ),
+
+            "recommended_strategy": best_strategy.get(
+                "name"
+            ),
+
+            "risk": best_strategy.get(
+                "risk"
+            ),
+
+            "decision_score": best_strategy.get(
+                "decision_score"
+            ),
+
+            "failure_probability": best_strategy.get(
+                "failure_probability"
+            ),
+
+            "current_bottleneck": dynamic_reasoning.get(
+                "current_bottleneck"
+            ),
+
+            "growth_blocker": dynamic_reasoning.get(
+                "growth_blocker"
+            ),
+
+            "strategic_warning": dynamic_reasoning.get(
+                "strategic_warning"
+            ),
+
+            "prediction_confidence": prediction.get(
+                "confidence"
+            ),
+
+            "growth_probability": strategic_simulation.get(
+                "growth_probability"
+            ),
+
+            "failure_probability_label": strategic_simulation.get(
+                "failure_probability"
+            ),
+
+            "recommended_move": response.get(
+                "decision_brief",
+                {}
+            ).get(
+                "recommended_move"
+            ),
         }
 
-        query = insert(decision_memory_table).values(**record)
+        query = insert(
+            decision_memory_table
+        ).values(
+            **record
+        )
 
-        await database.execute(query)
+        db = SessionLocal()
+
+        try:
+
+            db.execute(query)
+            db.commit()
+
+        finally:
+
+            db.close()
 
         return {
             **record,
-            "timestamp": record["timestamp"].isoformat()
+            "timestamp": record[
+                "timestamp"
+            ].isoformat()
         }
 
     async def get_history(
@@ -67,40 +154,80 @@ class DecisionMemoryEngine:
         session_id: str,
         limit: int = 10
     ):
+
         session_id = session_id or "default"
 
         query = (
             select(decision_memory_table)
-            .where(decision_memory_table.c.session_id == session_id)
-            .order_by(decision_memory_table.c.id.desc())
+            .where(
+                decision_memory_table.c.session_id
+                == session_id
+            )
+            .order_by(
+                decision_memory_table.c.id.desc()
+            )
             .limit(limit)
         )
 
-        rows = await database.fetch_all(query)
+        db = SessionLocal()
+
+        try:
+
+            result = db.execute(query)
+
+            rows = result.fetchall()
+
+        finally:
+
+            db.close()
 
         history = []
 
         for row in rows:
-            item = dict(row)
+
+            item = dict(
+                row._mapping
+            )
 
             if item.get("timestamp"):
-                item["timestamp"] = item["timestamp"].isoformat()
+
+                item["timestamp"] = item[
+                    "timestamp"
+                ].isoformat()
 
             history.append(item)
 
-        return list(reversed(history))
+        return list(
+            reversed(history)
+        )
 
-    async def summarize_history(self, session_id: str):
-        history = await self.get_history(session_id, limit=20)
+    async def summarize_history(
+        self,
+        session_id: str
+    ):
+
+        history = await self.get_history(
+            session_id,
+            limit=20
+        )
 
         if not history:
+
             return {
+
                 "has_memory": False,
+
                 "total_decisions": 0,
-                "summary": "No previous decision memory found.",
+
+                "summary":
+                "No previous decision memory found.",
+
                 "repeated_business_model": None,
+
                 "repeated_risk": None,
+
                 "repeated_warning": None,
+
                 "memory_insight": None,
             }
 
@@ -109,42 +236,105 @@ class DecisionMemoryEngine:
         warnings = {}
 
         for item in history:
-            model = item.get("business_model")
-            risk = item.get("risk")
-            warning = item.get("strategic_warning")
+
+            model = item.get(
+                "business_model"
+            )
+
+            risk = item.get(
+                "risk"
+            )
+
+            warning = item.get(
+                "strategic_warning"
+            )
 
             if model:
-                business_models[model] = business_models.get(model, 0) + 1
+
+                business_models[model] = (
+                    business_models.get(
+                        model,
+                        0
+                    ) + 1
+                )
 
             if risk:
-                risks[risk] = risks.get(risk, 0) + 1
+
+                risks[risk] = (
+                    risks.get(
+                        risk,
+                        0
+                    ) + 1
+                )
 
             if warning:
-                warnings[warning] = warnings.get(warning, 0) + 1
 
-        repeated_business_model = self._top_item(business_models)
-        repeated_risk = self._top_item(risks)
-        repeated_warning = self._top_item(warnings)
+                warnings[warning] = (
+                    warnings.get(
+                        warning,
+                        0
+                    ) + 1
+                )
 
-        memory_insight = self._build_memory_insight(
-            len(history),
-            repeated_business_model,
-            repeated_risk,
-            repeated_warning
+        repeated_business_model = (
+            self._top_item(
+                business_models
+            )
+        )
+
+        repeated_risk = (
+            self._top_item(
+                risks
+            )
+        )
+
+        repeated_warning = (
+            self._top_item(
+                warnings
+            )
+        )
+
+        memory_insight = (
+            self._build_memory_insight(
+                len(history),
+                repeated_business_model,
+                repeated_risk,
+                repeated_warning
+            )
         )
 
         return {
+
             "has_memory": True,
-            "total_decisions": len(history),
-            "summary": f"AURA has memory of {len(history)} previous decision(s) in this session.",
-            "repeated_business_model": repeated_business_model,
-            "repeated_risk": repeated_risk,
-            "repeated_warning": repeated_warning,
-            "memory_insight": memory_insight,
-            "recent_decisions": history[-5:],
+
+            "total_decisions": len(
+                history
+            ),
+
+            "summary":
+            f"AURA has memory of {len(history)} previous decision(s) in this session.",
+
+            "repeated_business_model":
+            repeated_business_model,
+
+            "repeated_risk":
+            repeated_risk,
+
+            "repeated_warning":
+            repeated_warning,
+
+            "memory_insight":
+            memory_insight,
+
+            "recent_decisions":
+            history[-5:],
         }
 
-    def _top_item(self, counts: dict):
+    def _top_item(
+        self,
+        counts: dict
+    ):
+
         if not counts:
             return None
 
@@ -161,25 +351,32 @@ class DecisionMemoryEngine:
         risk,
         warning
     ):
+
         parts = []
 
         if business_model:
+
             parts.append(
                 f"You have repeatedly explored {business_model.replace('_', ' ')} decisions."
             )
 
         if risk:
+
             parts.append(
                 f"Your recent recommendations have mostly carried {risk} risk."
             )
 
         if warning:
+
             parts.append(
                 f"A recurring warning is: {warning}"
             )
 
         if not parts:
-            return "AURA is beginning to learn your decision pattern."
+
+            return (
+                "AURA is beginning to learn your decision pattern."
+            )
 
         return " ".join(parts)
 

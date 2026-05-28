@@ -2,7 +2,7 @@
 
 import json
 import time
-from AURA.AURA_CORE_V2.app.db.database import database
+from app.db.database import database
 
 
 class PersistenceEngine:

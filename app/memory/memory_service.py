@@ -1,38 +1,59 @@
-from sqlalchemy.orm import Session
+import json
 
-from app.memory.memory_repository import MemoryRepository
+from app.memory.vector_engine import (
+    embed_text
+)
+
+from sqlalchemy import insert
+
+from app.db.database import SessionLocal
+
+from app.db.conversation_memory_model import (
+    conversation_memory_table
+)
 
 
-class MemoryService:
+async def save_memory(
+    tenant_id: str,
+    domain: str,
+    user_message: str,
+    aura_response: str
+):
 
-    def __init__(self):
+    combined_text = (
+        f"USER: {user_message}\n"
+        f"AURA: {aura_response}"
+    )
 
-        self.repository = MemoryRepository()
+    embedding = embed_text(
+        combined_text
+    )
 
-    def store_memory(
-        self,
-        db: Session,
-        tenant_id: str,
-        domain: str,
-        message: str,
-        response: str
-    ):
+    embedding_json = json.dumps(
+        embedding.tolist()
+    )
 
-        return self.repository.save_memory(
-            db=db,
-            tenant_id=tenant_id,
-            domain=domain,
-            message=message,
-            response=response
-        )
+    query = insert(
+        conversation_memory_table
+    ).values(
+        tenant_id=tenant_id,
+        domain=domain,
+        user_message=user_message,
+        aura_response=aura_response,
+        embedding=embedding_json,
+    )
 
-    def get_recent_memories(
-        self,
-        db: Session,
-        tenant_id: str
-    ):
+    db = SessionLocal()
 
-        return self.repository.get_recent_memories(
-            db=db,
-            tenant_id=tenant_id
-        )
+    try:
+
+        db.execute(query)
+        db.commit()
+
+    finally:
+
+        db.close()
+
+    return {
+        "saved": True
+    }

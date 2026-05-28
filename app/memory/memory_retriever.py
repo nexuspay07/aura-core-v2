@@ -1,37 +1,82 @@
-from AURA.AURA_CORE_V2.app.db.database import SessionLocal
-from app.db.memory_models import ConversationMemory
-from app.memory.vector_engine import embed_text, cosine_similarity
+import json
+import numpy as np
+
+from sqlalchemy import select
+
+from app.db.database import SessionLocal
+
+from app.db.conversation_memory_model import (
+    conversation_memory_table
+)
+
+from app.memory.vector_engine import (
+    embed_text,
+    cosine_similarity,
+)
 
 
-def retrieve_relevant_memories(tenant_id, domain, query, limit=5):
+async def retrieve_relevant_memories(
+    tenant_id,
+    domain,
+    query,
+    limit=5
+):
 
     db = SessionLocal()
 
-    memories = (
-        db.query(ConversationMemory)
-        .filter(
-            ConversationMemory.tenant_id == tenant_id,
-            ConversationMemory.domain == domain
-        )
-        .all()
-    )
+    try:
 
-    db.close()
+        result = db.execute(
+            select(conversation_memory_table)
+            .where(
+                conversation_memory_table.c.tenant_id
+                == tenant_id
+            )
+            .where(
+                conversation_memory_table.c.domain
+                == domain
+            )
+        )
+
+        rows = result.fetchall()
+
+    finally:
+
+        db.close()
 
     query_vector = embed_text(query)
 
     scored_memories = []
 
-    for memory in memories:
+    for memory in rows:
 
-        memory_vector = embed_text(memory.user_message)
+        memory_data = dict(memory._mapping)
 
-        score = cosine_similarity(query_vector, memory_vector)
+        if memory_data["embedding"]:
 
-        scored_memories.append((score, memory))
+            memory_vector = np.array(
+                json.loads(memory_data["embedding"])
+            )
 
-    scored_memories.sort(key=lambda x: x[0], reverse=True)
+        else:
 
-    top_memories = [m[1] for m in scored_memories[:limit]]
+            memory_vector = embed_text(
+                memory_data["user_message"]
+            )
 
-    return top_memories
+        score = cosine_similarity(
+            query_vector,
+            memory_vector
+        )
+
+        scored_memories.append({
+            "score": float(score),
+            "memory": memory_data
+        })
+
+    scored_memories.sort(
+        key=lambda x: x["score"],
+        reverse=True
+    )
+
+    return scored_memories[:limit]

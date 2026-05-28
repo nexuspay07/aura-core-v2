@@ -1,4 +1,4 @@
-from AURA.AURA_CORE_V2.app.db.database import SessionLocal
+from app.db.database import SessionLocal
 from app.db.models import UsageLog
 
 

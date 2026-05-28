@@ -1,5 +1,7 @@
 from fastapi import APIRouter
-from app.db.database import database
+from sqlalchemy import select
+
+from app.db.database import SessionLocal
 from app.models.simulation import simulations
 
 router = APIRouter()
@@ -10,14 +12,29 @@ router = APIRouter()
 # ==========================
 @router.post("/simulation/save")
 async def save_simulation(data: dict):
-    await database.execute(
-        simulations.insert().values(
+
+    db = SessionLocal()
+
+    try:
+
+        query = simulations.insert().values(
             goal=data.get("goal"),
             result=data,
-            owner="guest"  # ✅ fallback user
+            owner="guest"
         )
-    )
-    return {"message": "Simulation saved"}
+
+        db.execute(query)
+
+        db.commit()
+
+    finally:
+
+        db.close()
+
+    return {
+        "message":
+        "Simulation saved"
+    }
 
 
 # ==========================
@@ -25,5 +42,22 @@ async def save_simulation(data: dict):
 # ==========================
 @router.get("/simulation/history")
 async def get_history():
-    query = simulations.select()  # ✅ no filtering
-    return await database.fetch_all(query)
+
+    db = SessionLocal()
+
+    try:
+
+        query = select(simulations)
+
+        result = db.execute(query)
+
+        rows = result.fetchall()
+
+    finally:
+
+        db.close()
+
+    return [
+        dict(row._mapping)
+        for row in rows
+    ]

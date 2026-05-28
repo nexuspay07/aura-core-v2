@@ -1,6 +1,6 @@
 import time
 import random
-from app.core.memory_engine import memory_engine
+from app.core.memory.memory_engine import memory_engine
 
 
 class ExpansionEngine:

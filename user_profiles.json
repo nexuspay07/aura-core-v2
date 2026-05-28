@@ -46,5 +46,23 @@
         "preferred_budget": 10000,
         "preferred_domain": "business",
         "interaction_count": 3
+    },
+    "workspace_session": {
+        "preferred_risk": "medium",
+        "preferred_budget": 10000,
+        "preferred_domain": "business",
+        "interaction_count": 1
+    },
+    "default-session": {
+        "preferred_risk": null,
+        "preferred_budget": null,
+        "preferred_domain": null,
+        "interaction_count": 0
+    },
+    "blaise-session": {
+        "preferred_risk": null,
+        "preferred_budget": null,
+        "preferred_domain": null,
+        "interaction_count": 0
     }
 }
