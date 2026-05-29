@@ -29,24 +29,15 @@ strategy_metadata.create_all(bind=engine)
 
 app = FastAPI(title="AURA AI")
 
+origins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "https://aura-business-frontend.onrender.com",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://aura-ai-frontend-on0e.onrender.com",
-
-        # React / Vite
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:5175",
-        "http://127.0.0.1:5175",
-
-        # Older local frontends
-        "http://localhost:3000",
-        "http://127.0.0.1:5500",
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
