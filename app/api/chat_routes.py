@@ -87,6 +87,10 @@ async def chat(data: ConversationRequest):
         profile=profile
     )
 )
+    
+    print("\n========== AURA RESULT ==========")
+    print(result)
+    print("=================================\n")
 
     # ==========================================
     # SAFE EXTRACTIONS
