@@ -80,13 +80,13 @@ async def chat(data: ConversationRequest):
     # ==========================================
 
     result = (
-        cognitive_loop
-        .run_intelligence_pipeline(
-            user_message=message,
-            tenant_id=tenant_id,
-            scenario=scenario
-        )
+    cognitive_loop
+    .run_intelligence_pipeline(
+        goal=message,
+        scenario=scenario,
+        profile=profile
     )
+)
 
     # ==========================================
     # SAFE EXTRACTIONS
