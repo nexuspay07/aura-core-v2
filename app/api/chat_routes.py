@@ -121,32 +121,24 @@ async def chat(data: ConversationRequest):
     )
 
     market = (
-        result.get(
-            "market"
-        )
-        or {}
-    )
+    result.get("market_intelligence")
+    or {}
+)
 
     operational = (
-        result.get(
-            "operational"
-        )
-        or {}
-    )
+    result.get("operational_intelligence")
+    or {}
+)
 
     simulation = (
-        result.get(
-            "simulation"
-        )
-        or {}
-    )
+    result.get("strategic_simulation")
+    or {}
+)
 
     reinforcement = (
-        result.get(
-            "reinforcement"
-        )
-        or {}
-    )
+    result.get("strategy_reinforcement")
+    or {}
+)
 
     memory_summary = (
         result.get(
@@ -167,19 +159,25 @@ async def chat(data: ConversationRequest):
 
             "summary":
 
-                dynamic_reasoning.get(
-                    "current_priority"
-                )
+    dynamic_reasoning.get(
+        "current_priority"
+    )
 
-                or
+    or
 
-                business_understanding.get(
-                    "strategic_direction"
-                )
+    dynamic_reasoning.get(
+        "executive_summary"
+    )
 
-                or
+    or
 
-                "AURA generated strategic analysis.",
+    business_understanding.get(
+        "strategic_direction"
+    )
+
+    or
+
+    f"Strategic analysis completed for: {message}",
 
             "recommended_strategy":
 
