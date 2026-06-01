@@ -416,19 +416,17 @@ class CognitiveLoop:
                 "strategic_simulation": strategic_simulation
             }
 
-            decision_memory = asyncio.run(
-                decision_memory_engine.save_decision(
-                    session_id="default",
-                    goal=goal,
-                    pipeline_result=pipeline_result
-                )
-            )
+            # ==========================================
+            # DECISION MEMORY (TEMP DISABLED)
+            # ==========================================
 
-            memory_summary = asyncio.run(
-    decision_memory_engine.summarize_history(
-        session_id="default"
-    )
-)
+            decision_memory = {}
+
+            memory_summary = {
+                 "has_memory": False,
+                 "total_decisions": 0,
+                 "summary": "Decision memory temporarily disabled."
+           }
             # ==========================================
             # STRATEGY REINFORCEMENT
             # ==========================================
