@@ -408,21 +408,27 @@ class CognitiveLoop:
             # DECISION MEMORY
             # ==========================================
 
-            decision_memory = (
+            pipeline_result = {
+                "business_dna": business_dna,
+                "dynamic_reasoning": dynamic_reasoning,
+                "prediction": prediction,
+                "best_strategy": best,
+                "strategic_simulation": strategic_simulation
+            }
+
+            decision_memory = asyncio.run(
                 decision_memory_engine.save_decision(
+                    session_id="default",
                     goal=goal,
-                    business_dna=business_dna,
-                    dynamic_reasoning=dynamic_reasoning,
-                    prediction=prediction,
-                    simulation=sim_result,
-                    operational_intelligence=operational_intelligence
+                    pipeline_result=pipeline_result
                 )
             )
 
-            memory_summary = (
-                decision_memory_engine.summarize_history()
-            )
-
+            memory_summary = asyncio.run(
+    decision_memory_engine.summarize_history(
+        session_id="default"
+    )
+)
             # ==========================================
             # STRATEGY REINFORCEMENT
             # ==========================================
