@@ -16,6 +16,23 @@ organization_table = Table(
     Column("owner_user_id", Integer, ForeignKey("users.id"), nullable=False),
 
     Column("plan", String, default="free"),  # free, pro, business, enterprise
+    Column(
+    "subscription_status",
+    String,
+    default="inactive"
+),
+
+Column(
+    "payment_provider",
+    String,
+    nullable=True
+),
+
+Column(
+    "external_subscription_id",
+    String,
+    nullable=True
+),
     Column("industry", String, nullable=True),
     Column("company_size", String, nullable=True),
 
