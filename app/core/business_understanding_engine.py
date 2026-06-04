@@ -105,6 +105,31 @@ class BusinessUnderstandingEngine:
 
         if any(x in text for x in ["store", "shop", "retail", "sell products", "ecommerce", "online store"]):
             return "retail_or_ecommerce_business"
+        
+        if any(x in text for x in [
+           "holding company",
+           "conglomerate",
+           "group",
+           "portfolio"
+       ]):
+          return "holding_company"
+
+        if any(x in text for x in [
+            "fintech",
+            "payments",
+            "banking",
+            "wallet",
+            "nexuspay"
+       ]):
+            return "financial_platform"
+
+        if any(x in text for x in [
+            "artificial intelligence",
+            "ai",
+            "automation platform",
+            "aura ai"
+       ]):
+         return "ai_platform"
 
         return "general_business"
 
@@ -354,6 +379,23 @@ class BusinessUnderstandingEngine:
         )
 
     def _strategic_direction(self, dna):
+
+        if dna["business_model"] == "holding_company":
+          return (
+        "Concentrate resources into the strongest subsidiary until sustainable cash flow exists before expanding the portfolio."
+    )
+
+        if dna["business_model"] == "financial_platform":
+          return (
+        "Trust, compliance, and transaction reliability should be established before aggressive growth."
+    )
+
+        if dna["business_model"] == "ai_platform":
+         return (
+        "Create a defensible intelligence advantage before scaling customer acquisition."
+    )
+
+
         if dna["budget"] <= 5000 and dna["competition_pressure"] in ["very_high", "high"]:
             return (
                 "Use a narrow-entry strategy: pick one customer type, one painful problem, and one clear reason to choose you."

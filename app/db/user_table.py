@@ -15,9 +15,37 @@ user_table = Table(
     Column("full_name", String, nullable=True),
     Column("role", String, default="user"),
 
+    # SUBSCRIPTIONS
+
+Column(
+    "plan",
+    String,
+    default="free"
+),
+
+Column(
+    "subscription_status",
+    String,
+    default="inactive"
+),
+
+Column(
+    "payment_provider",
+    String,
+    nullable=True
+),
+
+Column(
+    "external_customer_id",
+    String,
+    nullable=True
+),
+
     Column("is_active", Boolean, default=True),
     Column("is_verified", Boolean, default=False),
 
     Column("created_at", DateTime, default=lambda: datetime.now(timezone.utc)),
     Column("updated_at", DateTime, default=lambda: datetime.now(timezone.utc)),
+
+    
 )

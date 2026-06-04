@@ -146,6 +146,21 @@ class DynamicReasoningEngine:
             return (
                 "Focus on learning quickly and validating customer behavior."
             )
+        
+        if model == "holding_company":
+              return (
+                "Focus on capital allocation, subsidiary prioritization, and strategic leverage."
+            )
+
+        if model == "financial_platform":
+              return (
+                "Focus on compliance, transaction trust, security, and ecosystem growth."
+            )
+
+        if model == "ai_platform":
+              return (
+                "Focus on product intelligence, adoption, retention, and proprietary capabilities."
+            )
 
         if stage == "growth_stage":
             return (
