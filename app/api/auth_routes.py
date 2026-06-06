@@ -163,6 +163,8 @@ async def register(data: RegisterRequest):
     }
 
 
+
+
 @router.post("/login")
 async def login(data: LoginRequest):
 
@@ -217,6 +219,34 @@ async def login(data: LoginRequest):
         "token_type": "bearer",
         "user": clean_user(user)
     }
+
+@router.get("/debug-users")
+async def debug_users():
+
+    db = SessionLocal()
+
+    try:
+
+        query = select(user_table)
+
+        result = db.execute(query)
+
+        users = result.fetchall()
+
+        return {
+            "count": len(users),
+            "users": [
+                {
+                    "id": u.id,
+                    "email": u.email,
+                }
+                for u in users
+            ]
+        }
+
+    finally:
+
+        db.close()
 
 
 @router.get("/me")
