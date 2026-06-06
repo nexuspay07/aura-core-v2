@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, insert
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -251,7 +251,7 @@ async def debug_users():
 
 @router.get("/me")
 async def me(
-    credentials: HTTPAuthorizationCredentials = security
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
 
     user = await get_current_user_from_token(
