@@ -1,6 +1,14 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from sqlalchemy import insert
+
+from app.db.database import SessionLocal
+
+from app.db.intelligence_session_table import (
+    intelligence_session_table
+)
+
 from app.core.user_profile_engine import (
     user_profile_engine
 )
@@ -155,7 +163,7 @@ async def chat(data: ConversationRequest):
     # FINAL RESPONSE
     # ==========================================
 
-    return {
+    response_data = {
 
         "success": True,
 
@@ -329,3 +337,72 @@ async def chat(data: ConversationRequest):
                 ]
         }
     }
+
+        # ==========================================
+    # SAVE INTELLIGENCE SESSION
+    # ==========================================
+
+    try:
+
+        db = SessionLocal()
+
+        query = insert(
+            intelligence_session_table
+        ).values(
+
+            organization_id=(
+                data.organization_id or 1
+            ),
+
+            workspace_id=(
+                data.workspace_id or 1
+            ),
+
+            created_by_user_id=1,
+
+            title=message[:100],
+
+            goal=message,
+
+            domain="business",
+
+            session_type="decision_analysis",
+
+            status="completed",
+
+            summary=response_data[
+                "response"
+            ]["summary"],
+
+            recommended_move=response_data[
+                "response"
+            ]["recommended_strategy"],
+
+            risk_level=response_data[
+                "response"
+            ]["risk_level"],
+
+            business_model="business",
+
+            is_active=True
+        )
+
+        db.execute(query)
+
+        db.commit()
+
+        print(
+            "[AURA] Intelligence session saved"
+        )
+
+    except Exception as e:
+
+        print(
+            f"[AURA] Session save failed: {e}"
+        )
+
+    finally:
+
+        db.close()
+
+    return response_data
