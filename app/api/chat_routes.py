@@ -100,6 +100,10 @@ async def chat(data: ConversationRequest):
     print(result)
     print("=================================\n")
 
+    print("\n========== TOP LEVEL KEYS ==========")
+    print(result.keys())
+    print("====================================\n")
+
     # ==========================================
     # SAFE EXTRACTIONS
     # ==========================================
@@ -466,6 +470,8 @@ async def chat(data: ConversationRequest):
             risk_level=response_data[
                 "response"
             ]["risk_level"],
+
+            report_json=response_data["response"],
 
             business_model="business",
 

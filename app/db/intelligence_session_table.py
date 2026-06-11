@@ -12,6 +12,7 @@ from sqlalchemy import (
 from datetime import datetime, timezone
 
 from app.db.database import metadata
+from sqlalchemy import JSON
 
 
 intelligence_session_table = Table(
@@ -26,6 +27,12 @@ intelligence_session_table = Table(
         ForeignKey("organizations.id"),
         nullable=False
     ),
+
+    Column(
+    "report_json",
+    JSON,
+    nullable=True
+),
 
     Column(
         "workspace_id",

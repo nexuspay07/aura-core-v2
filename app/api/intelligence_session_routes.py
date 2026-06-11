@@ -10,6 +10,8 @@ from fastapi.security import (
 )
 
 from pydantic import BaseModel
+from sqlalchemy import delete
+
 
 from sqlalchemy import (
     select,
@@ -37,6 +39,8 @@ from app.api.auth_routes import (
 from app.services.openai_service import (
     generate_strategic_intelligence
 )
+
+
 
 
 router = APIRouter(
@@ -244,6 +248,8 @@ async def create_intelligence_session(
         ),
         workspace_id=data.workspace_id
     )
+
+    
 
     # =====================================================
     # REAL AI STRATEGIC INTELLIGENCE
@@ -551,4 +557,118 @@ async def get_intelligence_session(
         "session": clean_session(
             session_data
         ),
+    }
+
+# =====================================================
+# DELETE SESSION
+# =====================================================
+
+@router.delete("/{session_id}")
+async def delete_intelligence_session(
+    session_id: int,
+    credentials:
+    HTTPAuthorizationCredentials = Depends(
+        security
+    )
+):
+
+    user = (
+        await get_current_user_from_token(
+            credentials
+        )
+    )
+
+    db = SessionLocal()
+
+    try:
+
+        # -------------------------------------
+        # VERIFY SESSION EXISTS
+        # -------------------------------------
+
+        session_result = db.execute(
+            select(
+                intelligence_session_table
+            ).where(
+                intelligence_session_table.c.id
+                == session_id
+            )
+        )
+
+        session = (
+            session_result.fetchone()
+        )
+
+        if not session:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Session not found"
+            )
+
+        session_data = dict(
+            session._mapping
+        )
+
+        # -------------------------------------
+        # VERIFY USER OWNS ORGANIZATION
+        # -------------------------------------
+
+        org_result = db.execute(
+            select(
+                organization_table
+            ).where(
+                organization_table.c.id
+                == session_data[
+                    "organization_id"
+                ]
+            )
+        )
+
+        org = org_result.fetchone()
+
+        if not org:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Organization not found"
+            )
+
+        org_data = dict(
+            org._mapping
+        )
+
+        if (
+            org_data["owner_user_id"]
+            != user["id"]
+        ):
+
+            raise HTTPException(
+                status_code=403,
+                detail="Not allowed"
+            )
+
+        # -------------------------------------
+        # DELETE SESSION
+        # -------------------------------------
+
+        query = delete(
+            intelligence_session_table
+        ).where(
+            intelligence_session_table.c.id
+            == session_id
+        )
+
+        db.execute(query)
+
+        db.commit()
+
+    finally:
+
+        db.close()
+
+    return {
+        "success": True,
+        "message":
+        "Session deleted successfully"
     }
