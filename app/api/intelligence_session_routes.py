@@ -82,45 +82,44 @@ def clean_session(row):
 
     return {
         "id": row["id"],
-        "organization_id": (
-            row["organization_id"]
-        ),
-        "workspace_id": (
-            row["workspace_id"]
-        ),
-        "created_by_user_id": (
-            row["created_by_user_id"]
-        ),
+        "organization_id": row["organization_id"],
+        "workspace_id": row["workspace_id"],
+        "created_by_user_id": row["created_by_user_id"],
+
         "title": row["title"],
         "goal": row["goal"],
+
         "domain": row["domain"],
-        "session_type": (
-            row["session_type"]
-        ),
+        "session_type": row["session_type"],
+
         "status": row["status"],
+
         "summary": row["summary"],
-        "recommended_move": (
-            row["recommended_move"]
-        ),
-        "risk_level": (
-            row["risk_level"]
-        ),
-        "business_model": (
-            row["business_model"]
-        ),
-        "is_active": (
-            row["is_active"]
-        ),
-        "created_at": (
+
+        "recommended_move":
+            row["recommended_move"],
+
+        "risk_level":
+            row["risk_level"],
+
+        "business_model":
+            row["business_model"],
+
+        "report_json":
+            row.get("report_json"),
+
+        "is_active":
+            row["is_active"],
+
+        "created_at":
             row["created_at"].isoformat()
             if row["created_at"]
-            else None
-        ),
-        "updated_at": (
+            else None,
+
+        "updated_at":
             row["updated_at"].isoformat()
             if row["updated_at"]
-            else None
-        ),
+            else None,
     }
 
 

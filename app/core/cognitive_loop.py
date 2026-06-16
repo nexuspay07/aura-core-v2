@@ -4,6 +4,17 @@ import json
 from app.core.goal_engine import goal_engine
 from app.core.context_engine import context_engine
 
+from app.core.executive_intelligence.strategic_analysis_engine import (
+    strategic_analysis_engine
+)
+from app.core.executive_intelligence.market_intelligence_engine import (
+    market_intelligence_engine
+)
+
+from app.core.executive_intelligence.competitive_intelligence_engine import (
+    competitive_intelligence_engine
+)
+
 from app.core.memory.memory_priority_retrieval_engine import (
     memory_priority_retrieval_engine
 )
@@ -106,10 +117,6 @@ from app.core.business_understanding_engine import (
 
 from app.core.reasoning.dynamic_reasoning_engine import (
     dynamic_reasoning_engine
-)
-
-from app.core.market.market_intelligence_engine import (
-    market_intelligence_engine
 )
 
 from app.core.strategy_comparison_engine import (
@@ -217,11 +224,56 @@ class CognitiveLoop:
 
             profile = profile or {}
 
+            # ==========================================
+            # STRATEGIC ANALYSIS
+            # ==========================================
+
+            strategic_analysis = (
+                strategic_analysis_engine.analyze(
+                    goal,
+                    profile
+                )
+            )
+
+            # ==========================================
+            # MARKET INTELLIGENCE
+            # ==========================================
+
+            market_intelligence = (
+                market_intelligence_engine.analyze(
+                    goal=goal,
+                    strategic_analysis=strategic_analysis
+                )
+            )
+
+            # ==========================================
+            # COMPETITIVE INTELLIGENCE
+            # ==========================================
+
+            competitive_intelligence = (
+                competitive_intelligence_engine.analyze(
+                    strategic_analysis,
+                    market_intelligence
+                )
+            )
+
+            # ==========================================
+            # BUSINESS UNDERSTANDING
+            # ==========================================
+
             business_understanding = (
                 business_understanding_engine.analyze(
                     goal,
-                    scenario
+                    scenario,
+                    strategic_analysis,
+                    market_intelligence,
+                    competitive_intelligence
                 )
+            )
+
+            print(
+                "\nCOMPETITIVE INTELLIGENCE:\n",
+                competitive_intelligence
             )
 
             business_dna = business_understanding.get(
@@ -232,16 +284,6 @@ class CognitiveLoop:
             dynamic_reasoning = (
                 dynamic_reasoning_engine.analyze(
                     business_dna
-                )
-            )
-
-            market_intelligence = (
-                market_intelligence_engine.analyze(
-                    business_dna.get(
-                        "business_model",
-                        "general_business"
-                    ),
-                    scenario
                 )
             )
 
@@ -438,30 +480,48 @@ class CognitiveLoop:
                 )
             )
 
+            
+            
+            print(
+    "\nMARKET INTELLIGENCE:\n",
+    market_intelligence
+)
+
+
             return {
-                "status": "success",
-                "goal": goal,
-                "scenario": scenario,
-                "profile": profile,
-                "business_understanding": business_understanding,
-                "business_dna": business_dna,
-                "dynamic_reasoning": dynamic_reasoning,
-                "market_intelligence": market_intelligence,
-                "strategy_comparison": strategy_comparison,
-                "prediction": prediction,
-                "visual_intelligence": visual_intelligence,
-                "strategic_simulation": strategic_simulation,
-                "operational_intelligence": operational_intelligence,
-                "simulation": sim_result,
-                "results": sim_result.get("results", []),
-                "best_strategy": best,
-                "failures": failures,
-                "debates": debates,
-                "decision_memory": decision_memory,
-                "memory_summary": memory_summary,
-                "strategy_reinforcement": strategy_reinforcement,
-                "world": world
-            }
+    "status": "success",
+    "goal": goal,
+    "scenario": scenario,
+    "profile": profile,
+
+    "strategic_analysis": strategic_analysis,
+    "market_intelligence": market_intelligence,
+    "competitive_intelligence": competitive_intelligence,
+    "business_understanding": business_understanding,
+
+    "business_dna": business_dna,
+    "dynamic_reasoning": dynamic_reasoning,
+
+    "strategy_comparison": strategy_comparison,
+    "prediction": prediction,
+    "visual_intelligence": visual_intelligence,
+
+    "strategic_simulation": strategic_simulation,
+    "operational_intelligence": operational_intelligence,
+
+    "simulation": sim_result,
+    "results": sim_result.get("results", []),
+    "best_strategy": best,
+
+    "failures": failures,
+    "debates": debates,
+
+    "decision_memory": decision_memory,
+    "memory_summary": memory_summary,
+    "strategy_reinforcement": strategy_reinforcement,
+
+    "world": world
+}
 
         except Exception as e:
 

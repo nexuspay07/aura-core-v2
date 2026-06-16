@@ -100,6 +100,24 @@ async def chat(data: ConversationRequest):
     print(result)
     print("=================================\n")
 
+    strategic_analysis = (
+    result.get(
+        "strategic_analysis"
+    )
+    or {}
+)
+
+    print(
+    "\nSTRATEGIC ANALYSIS:\n",
+    strategic_analysis
+)
+
+    print(
+    result.get(
+        "strategic_analysis"
+    )
+)
+
     print("\n========== TOP LEVEL KEYS ==========")
     print(result.keys())
     print("====================================\n")
@@ -114,6 +132,7 @@ async def chat(data: ConversationRequest):
         )
         or {}
     )
+
 
     dynamic_reasoning = (
         result.get(
@@ -172,260 +191,266 @@ async def chat(data: ConversationRequest):
 
         "response": {
 
-    # ==========================================
-    # PHASE 64 EXECUTIVE INTELLIGENCE
-    # ==========================================
+            # ==========================================
+            # PHASE 64.6 EXECUTIVE INTELLIGENCE
+            # ==========================================
 
-    "executive_summary":
+            "executive_summary":
 
-        dynamic_reasoning.get(
-            "current_priority"
-        )
+                strategic_analysis.get(
+                    "recommended_focus"
+                )
 
-        or
+                or
 
-        dynamic_reasoning.get(
-            "executive_summary"
-        )
+                dynamic_reasoning.get(
+                    "executive_summary"
+                )
 
-        or
+                or
 
-        business_understanding.get(
-            "strategic_direction"
-        )
+                f"Strategic analysis completed for: {message}",
 
-        or
+            "strategic_position":
 
-        f"Strategic analysis completed for: {message}",
+                f"""
+Business Stage:
+{strategic_analysis.get('business_stage', 'unknown')}
 
-    "strategic_position":
+Primary Objective:
+{strategic_analysis.get('objective', 'unknown')}
+""",
 
-        business_understanding.get(
-            "strategic_direction"
-        )
+            "market_analysis":
 
-        or
+                f"""
+Opportunity:
+{strategic_analysis.get('opportunity', 'unknown')}
 
-        "Strategic positioning analysis unavailable.",
+Threat:
+{strategic_analysis.get('threat', 'unknown')}
+""",
 
-    "market_analysis":
+            "growth_strategy":
 
-        market.get(
-            "market_pressure"
-        )
+                best_strategy.get(
+                    "name"
+                )
 
-        or
+                or
 
-        business_understanding.get(
-            "market_nature"
-        )
+                "Balanced Strategic Growth",
 
-        or
+            "operational_plan":
 
-        "Market analysis unavailable.",
+                strategic_analysis.get(
+                    "recommended_focus"
+                )
 
-    "growth_strategy":
+                or
 
-        best_strategy.get(
-            "name"
-        )
+                "Operational plan unavailable.",
 
-        or
+            "strategic_warning":
 
-        "Balanced Strategic Growth",
+                dynamic_reasoning.get(
+                    "strategic_warning"
+                )
 
-    "operational_plan":
+                or
 
-        operational.get(
-            "recommended_operational_move"
-        )
+                "No major strategic warnings identified.",
 
-        or
+            # ==========================================
+            # LEGACY RESPONSE FIELDS
+            # ==========================================
 
-        "Operational plan unavailable.",
-
-    "strategic_warning":
-
-        dynamic_reasoning.get(
-            "strategic_warning"
-        )
-
-        or
-
-        "No major strategic warnings identified.",
-
-    # ==========================================
-    # LEGACY RESPONSE FIELDS
-    # ==========================================
-
-    "summary":
-
-        dynamic_reasoning.get(
-            "current_priority"
-        )
-
-        or
-
-        dynamic_reasoning.get(
-            "executive_summary"
-        )
-
-        or
-
-        business_understanding.get(
-            "strategic_direction"
-        )
-
-        or
-
-        f"Strategic analysis completed for: {message}",
-
-    "recommended_strategy":
-
-        best_strategy.get(
-            "name"
-        )
-
-        or
-
-        "Balanced Strategic Growth",
-
-    "strategy_score":
-
-        best_strategy.get(
-            "decision_score"
-        )
-
-        or 75,
-
-    "risk_level":
-
-        best_strategy.get(
-            "risk"
-        )
-
-        or "medium",
-
-    "confidence":
-
-        prediction.get(
-            "confidence"
-        )
-
-        or 0.72,
-
-    "market_insight":
-
-        market.get(
-            "market_pressure"
-        )
-
-        or
-
-        business_understanding.get(
-            "market_nature"
-        )
-
-        or
-
-        "Market conditions require strategic positioning.",
-
-    "execution_focus":
-
-        dynamic_reasoning.get(
-            "execution_focus"
-        )
-
-        or
-
-        "Focus on disciplined execution and operational efficiency.",
-
-    "next_business_evolution":
-
-        dynamic_reasoning.get(
-            "next_business_evolution"
-        )
-
-        or
-
-        "Improve systems and validate customer demand.",
-
-    "recommended_operational_move":
-
-        operational.get(
-            "recommended_operational_move"
-        )
-
-        or
-
-        "Strengthen operational consistency and execution systems.",
-
-    "growth_projection":
-
-        simulation.get(
-            "90_day_projection"
-        )
-
-        or
-
-        "Moderate growth potential with disciplined execution.",
-
-    "warning":
-
-        dynamic_reasoning.get(
-            "strategic_warning"
-        )
-
-        or
-
-        "Avoid scaling too aggressively without validated demand.",
-
-    "reinforcement_status":
-
-        reinforcement.get(
-            "reinforcement_status"
-        )
-
-        or
-
-        "Learning patterns still evolving.",
-
-    "reinforcement_recommendation":
-
-        reinforcement.get(
-            "reinforcement_recommendation"
-        )
-
-        or
-
-        "Continue gathering strategic execution data.",
-
-    "memory_summary":
-
-        memory_summary
-
-        or {
             "summary":
-            "Strategic memory systems active."
-        },
 
-    "next_steps":
+                strategic_analysis.get(
+                    "recommended_focus"
+                )
 
-        operational.get(
-            "operations_next_steps",
-            []
-        )
+                or
 
-        or [
+                dynamic_reasoning.get(
+                    "current_priority"
+                )
 
-            "Validate market demand",
+                or
 
-            "Improve operational systems",
+                dynamic_reasoning.get(
+                    "executive_summary"
+                )
 
-            "Strengthen strategic positioning"
+                or
+
+                business_understanding.get(
+                    "strategic_direction"
+                )
+
+                or
+
+                f"Strategic analysis completed for: {message}",
+
+            "recommended_strategy":
+
+                best_strategy.get(
+                    "name"
+                )
+
+                or
+
+                "Balanced Strategic Growth",
+
+            "strategy_score":
+
+                best_strategy.get(
+                    "decision_score"
+                )
+
+                or 75,
+
+            "risk_level":
+
+                best_strategy.get(
+                    "risk"
+                )
+
+                or "medium",
+
+            "confidence":
+
+                prediction.get(
+                    "confidence"
+                )
+
+                or 0.72,
+
+            "market_insight":
+
+                market.get(
+                    "market_pressure"
+                )
+
+                or
+
+                business_understanding.get(
+                    "market_nature"
+                )
+
+                or
+
+                "Market conditions require strategic positioning.",
+
+            "execution_focus":
+
+                dynamic_reasoning.get(
+                    "execution_focus"
+                )
+
+                or
+
+                strategic_analysis.get(
+                    "recommended_focus"
+                )
+
+                or
+
+                "Focus on disciplined execution and operational efficiency.",
+
+            "next_business_evolution":
+
+                dynamic_reasoning.get(
+                    "next_business_evolution"
+                )
+
+                or
+
+                "Improve systems and validate customer demand.",
+
+            "recommended_operational_move":
+
+                operational.get(
+                    "recommended_operational_move"
+                )
+
+                or
+
+                strategic_analysis.get(
+                    "recommended_focus"
+                )
+
+                or
+
+                "Strengthen operational consistency and execution systems.",
+
+            "growth_projection":
+
+                simulation.get(
+                    "90_day_projection"
+                )
+
+                or
+
+                "Moderate growth potential with disciplined execution.",
+
+            "warning":
+
+                dynamic_reasoning.get(
+                    "strategic_warning"
+                )
+
+                or
+
+                "Avoid scaling too aggressively without validated demand.",
+
+            "reinforcement_status":
+
+                reinforcement.get(
+                    "reinforcement_status"
+                )
+
+                or
+
+                "Learning patterns still evolving.",
+
+            "reinforcement_recommendation":
+
+                reinforcement.get(
+                    "reinforcement_recommendation"
+                )
+
+                or
+
+                "Continue gathering strategic execution data.",
+
+            "memory_summary":
+
+                memory_summary
+
+                or {
+                    "summary":
+                    "Strategic memory systems active."
+                },
+
+            "next_steps":
+
+                operational.get(
+                    "operations_next_steps",
+                    []
+                )
+
+                or [
+
+                    "Validate market demand",
+
+                    "Improve operational systems",
+
+                    "Strengthen strategic positioning"
                 ]
+        }
     }
-}
 
         # ==========================================
     # SAVE INTELLIGENCE SESSION

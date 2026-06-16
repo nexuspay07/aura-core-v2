@@ -101,6 +101,10 @@ class MarketIntelligenceEngine:
             "The key is not just choosing a strategy, but choosing the strategy that matches your constraints. "
             "A good business decision is one that survives bad conditions and still leaves room to grow."
         )
+    
+    print(
+    "OLD MARKET INTELLIGENCE ENGINE LOADED"
+)
 
 
 market_intelligence_engine = MarketIntelligenceEngine()
