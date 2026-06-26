@@ -1,0 +1,152 @@
+class ResponseComposerEngine:
+    """
+    Phase 66.5
+
+    Converts raw intelligence outputs into a
+    clean executive-level answer suitable
+    for real users.
+    """
+
+    def compose(
+        self,
+        goal: str,
+        executive_synthesis: dict,
+        market_intelligence: dict,
+        competitive_intelligence: dict,
+        dynamic_reasoning: dict,
+        operational_intelligence: dict,
+        simulation: dict
+    ):
+
+        summary = executive_synthesis.get(
+            "executive_recommendation",
+            "No recommendation available."
+        )
+
+        confidence = executive_synthesis.get(
+            "confidence",
+            50
+        )
+
+        findings = self._build_findings(
+            market_intelligence,
+            competitive_intelligence,
+            dynamic_reasoning
+        )
+
+        recommendations = self._build_recommendations(
+            dynamic_reasoning,
+            operational_intelligence
+        )
+
+        risks = self._build_risks(
+            executive_synthesis,
+            dynamic_reasoning
+        )
+
+        next_steps = operational_intelligence.get(
+            "operations_next_steps",
+            []
+        )
+
+        best_strategy = simulation.get(
+            "best_strategy",
+            {}
+        )
+
+        return {
+            "executive_summary": summary,
+            "key_findings": findings,
+            "recommendations": recommendations,
+            "risks": risks,
+            "next_steps": next_steps,
+            "recommended_strategy": best_strategy,
+            "confidence": confidence
+        }
+
+    def _build_findings(
+        self,
+        market_intelligence,
+        competitive_intelligence,
+        dynamic_reasoning
+    ):
+
+        findings = []
+
+        opportunity = market_intelligence.get(
+            "opportunity_score"
+        )
+
+        if opportunity:
+            findings.append(
+                f"Market opportunity score is {opportunity}."
+            )
+
+        competition = market_intelligence.get(
+            "competition_level"
+        )
+
+        if competition:
+            findings.append(
+                f"Competition level is {competition}."
+            )
+
+        bottleneck = dynamic_reasoning.get(
+            "current_bottleneck"
+        )
+
+        if bottleneck:
+            findings.append(bottleneck)
+
+        return findings
+
+    def _build_recommendations(
+        self,
+        dynamic_reasoning,
+        operational_intelligence
+    ):
+
+        recommendations = []
+
+        priority = dynamic_reasoning.get(
+            "current_priority"
+        )
+
+        if priority:
+            recommendations.append(priority)
+
+        move = operational_intelligence.get(
+            "recommended_operational_move"
+        )
+
+        if move:
+            recommendations.append(move)
+
+        return recommendations
+
+    def _build_risks(
+        self,
+        executive_synthesis,
+        dynamic_reasoning
+    ):
+
+        risks = []
+
+        warning = dynamic_reasoning.get(
+            "strategic_warning"
+        )
+
+        if warning:
+            risks.append(warning)
+
+        for item in executive_synthesis.get(
+            "risks",
+            []
+        ):
+            if item not in risks:
+                risks.append(item)
+
+        return risks
+
+
+response_composer_engine = ResponseComposerEngine()

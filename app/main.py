@@ -23,6 +23,10 @@ from app.db.database import (
 from app.models.strategy import strategies
 from app.models.simulation import simulations
 from app.models.strategy import metadata as strategy_metadata
+from app.core.output_standardization_engine import (
+    output_standardization_engine
+)
+
 
 Base.metadata.create_all(bind=engine)
 strategy_metadata.create_all(bind=engine)

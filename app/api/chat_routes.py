@@ -223,12 +223,18 @@ Primary Objective:
 
             "market_analysis":
 
-                f"""
-Opportunity:
-{strategic_analysis.get('opportunity', 'unknown')}
+f"""
+Market:
+{market.get('market_type', 'unknown')}
 
-Threat:
-{strategic_analysis.get('threat', 'unknown')}
+Opportunity Score:
+{market.get('opportunity_score', 'unknown')}
+
+Threat Score:
+{market.get('threat_score', 'unknown')}
+
+Competition:
+{market.get('competition_level', 'unknown')}
 """,
 
             "growth_strategy":
@@ -243,13 +249,13 @@ Threat:
 
             "operational_plan":
 
-                strategic_analysis.get(
-                    "recommended_focus"
-                )
+operational.get(
+    "recommended_operational_move"
+)
 
-                or
+or
 
-                "Operational plan unavailable.",
+"Operational intelligence unavailable.",
 
             "strategic_warning":
 
@@ -267,9 +273,9 @@ Threat:
 
             "summary":
 
-                strategic_analysis.get(
-                    "recommended_focus"
-                )
+                dynamic_reasoning.get(
+    "executive_summary"
+)
 
                 or
 

@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.response_composer_engine import response_composer_engine
 
 
 class IntelligenceOrchestrator:
@@ -58,5 +59,39 @@ class IntelligenceOrchestrator:
             "last_event": self.last_event
         }
 
+    # ==========================================================
+    # 🔥 PHASE 66.5 — RESPONSE COMPOSER INTEGRATION LAYER
+    # ==========================================================
+
+    def compose_final_response(
+        self,
+        goal,
+        executive_synthesis,
+        market_intelligence,
+        competitive_intelligence,
+        dynamic_reasoning,
+        operational_intelligence,
+        simulation
+    ):
+        """
+        This is the FINAL EXECUTION LAYER of Aura AI.
+
+        It converts raw intelligence outputs into human-readable executive response.
+        """
+
+        return response_composer_engine.compose(
+            goal=goal,
+            executive_synthesis=executive_synthesis,
+            market_intelligence=market_intelligence,
+            competitive_intelligence=competitive_intelligence,
+            dynamic_reasoning=dynamic_reasoning,
+            operational_intelligence=operational_intelligence,
+            simulation=simulation
+        )
+
+
+# ==========================================================
+# SINGLE GLOBAL INSTANCE
+# ==========================================================
 
 intelligence_orchestrator = IntelligenceOrchestrator()

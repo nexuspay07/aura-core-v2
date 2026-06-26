@@ -10,6 +10,8 @@ class BusinessUnderstandingEngine:
     that other AURA engines can reason from.
     """
 
+    
+
     def analyze(
         self,
         goal: str,
