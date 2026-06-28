@@ -175,6 +175,10 @@ from app.core.strategy_reinforcement_engine import (
     strategy_reinforcement_engine
 )
 
+from app.core.deep_reasoning_engine import (
+    deep_reasoning_engine
+)
+
 
 meta_strategy_engine = MetaStrategyEngine(
     strategy_performance_tracker
@@ -513,6 +517,23 @@ class CognitiveLoop:
                 )
             )
 
+            # ==========================================
+            # Phase 71
+            # Deep Reasoning
+            # ==========================================
+
+            deep_reasoning = (
+                deep_reasoning_engine.analyze(
+                    goal=goal,
+                    business_understanding=business_understanding,
+                    dynamic_reasoning=dynamic_reasoning,
+                    market_intelligence=market_intelligence,
+                    competitive_intelligence=competitive_intelligence,
+                    prediction=prediction,
+                    strategic_simulation=strategic_simulation
+                )
+            )
+
             operational_intelligence = (
                 operational_intelligence_engine.analyze(
                     goal,
@@ -529,6 +550,7 @@ class CognitiveLoop:
             pipeline_result = {
                 "business_dna": business_dna,
                 "dynamic_reasoning": dynamic_reasoning,
+                "deep_reasoning": deep_reasoning,
                 "prediction": prediction,
                 "best_strategy": best,
                 "strategic_simulation": strategic_simulation
@@ -564,6 +586,7 @@ class CognitiveLoop:
         competitive_intelligence,
         business_understanding,
         dynamic_reasoning,
+        deep_reasoning,
         prediction,
         operational_intelligence,
         best
@@ -581,7 +604,8 @@ class CognitiveLoop:
         prediction,
         strategic_simulation,
         operational_intelligence,
-        strategy_reinforcement
+        strategy_reinforcement,
+        deep_reasoning=deep_reasoning
     )
 )
             
@@ -622,6 +646,20 @@ class CognitiveLoop:
     )
 )
             
+                        # ==========================================
+            # Phase 68
+            # Conversational Intelligence
+            # ==========================================
+
+            conversational_response = (
+                conversational_intelligence_engine.generate(
+                    goal=goal,
+                    executive_advisor=executive_advisor,
+                    standardized_output=standardized_output,
+                    executive_synthesis=executive_synthesis
+                )
+            )
+            
             # ==========================================
             # Phase 69
             # Conversation Memory
@@ -639,29 +677,32 @@ class CognitiveLoop:
     message=conversational_response["executive_brief"]
 )
             
-            conversational_response = (
-    conversational_intelligence_engine.generate(
-        goal=goal,
-        executive_advisor=executive_advisor,
-        standardized_output=standardized_output,
-        executive_synthesis=executive_synthesis
-    )
-)
+                        # ==========================================
+            # Phase 70
+            # Chat Response
+            # ==========================================
+
+            chat_response = (
+                chat_response_engine.generate(
+                    goal=goal,
+                    conversational_response=conversational_response,
+                    executive_advisor=executive_advisor,
+                    standardized_output=standardized_output
+                )
+            )
+
+            conversation_history = (
+                conversation_memory_engine.get_history(
+                    "default"
+                )
+            )
             
             # ==========================================
             # Phase 70
             # Chat Response
             # ==========================================
 
-            chat_response = (
-              chat_response_engine.generate(
-              goal=goal,
-              conversational_response=conversational_response,
-              executive_advisor=executive_advisor,
-               standardized_output=standardized_output
-           )
-        )
-
+           
             
             
             print(
@@ -699,6 +740,7 @@ conversation_memory_engine.get_history("default"),
 
     "business_dna": business_dna,
     "dynamic_reasoning": dynamic_reasoning,
+    "deep_reasoning": deep_reasoning,
 
     "strategy_comparison": strategy_comparison,
     "prediction": prediction,

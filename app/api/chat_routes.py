@@ -122,342 +122,81 @@ async def chat(data: ConversationRequest):
     print(result.keys())
     print("====================================\n")
 
+
+        # ==========================================
+    # MODERN AURA RESPONSE
     # ==========================================
-    # SAFE EXTRACTIONS
-    # ==========================================
 
-    business_understanding = (
-        result.get(
-            "business_understanding"
-        )
+    executive_response = (
+        result.get("executive_response")
         or {}
     )
 
-
-    dynamic_reasoning = (
-        result.get(
-            "dynamic_reasoning"
-        )
+    executive_synthesis = (
+        result.get("executive_synthesis")
         or {}
     )
 
-    best_strategy = (
-        result.get(
-            "best_strategy"
-        )
+    final_response = (
+        result.get("final_response")
         or {}
     )
 
-    prediction = (
-        result.get(
-            "prediction"
-        )
+    standardized_output = (
+        result.get("standardized_output")
         or {}
     )
 
-    market = (
-    result.get("market_intelligence")
-    or {}
-)
-
-    operational = (
-    result.get("operational_intelligence")
-    or {}
-)
-
-    simulation = (
-    result.get("strategic_simulation")
-    or {}
-)
-
-    reinforcement = (
-    result.get("strategy_reinforcement")
-    or {}
-)
-
-    memory_summary = (
-        result.get(
-            "memory_summary"
-        )
+    executive_advisor = (
+        result.get("executive_advisor")
         or {}
     )
 
-    # ==========================================
-    # FINAL RESPONSE
-    # ==========================================
+    conversational_response = (
+        result.get("conversational_response")
+        or {}
+    )
+
+    chat_response = (
+        result.get("chat_response")
+        or {}
+    )
+
+    conversation_history = (
+        result.get("conversation_history")
+        or []
+    )
 
     response_data = {
+
         "success": True,
 
-        "response": {
+        "chat_response": chat_response,
 
-            # ==========================================
-            # PHASE 64.6 EXECUTIVE INTELLIGENCE
-            # ==========================================
+        "executive_advisor": executive_advisor,
 
-            "executive_summary":
+        "conversational_response":
+            conversational_response,
 
-                strategic_analysis.get(
-                    "recommended_focus"
-                )
+        "standardized_output":
+            standardized_output,
 
-                or
+        "executive_response":
+            executive_response,
 
-                dynamic_reasoning.get(
-                    "executive_summary"
-                )
+        "executive_synthesis":
+            executive_synthesis,
 
-                or
+        "final_response":
+            final_response,
 
-                f"Strategic analysis completed for: {message}",
+        "conversation_history":
+            conversation_history,
 
-            "strategic_position":
-
-                f"""
-Business Stage:
-{strategic_analysis.get('business_stage', 'unknown')}
-
-Primary Objective:
-{strategic_analysis.get('objective', 'unknown')}
-""",
-
-            "market_analysis":
-
-f"""
-Market:
-{market.get('market_type', 'unknown')}
-
-Opportunity Score:
-{market.get('opportunity_score', 'unknown')}
-
-Threat Score:
-{market.get('threat_score', 'unknown')}
-
-Competition:
-{market.get('competition_level', 'unknown')}
-""",
-
-            "growth_strategy":
-
-                best_strategy.get(
-                    "name"
-                )
-
-                or
-
-                "Balanced Strategic Growth",
-
-            "operational_plan":
-
-operational.get(
-    "recommended_operational_move"
-)
-
-or
-
-"Operational intelligence unavailable.",
-
-            "strategic_warning":
-
-                dynamic_reasoning.get(
-                    "strategic_warning"
-                )
-
-                or
-
-                "No major strategic warnings identified.",
-
-            # ==========================================
-            # LEGACY RESPONSE FIELDS
-            # ==========================================
-
-            "summary":
-
-                dynamic_reasoning.get(
-    "executive_summary"
-)
-
-                or
-
-                dynamic_reasoning.get(
-                    "current_priority"
-                )
-
-                or
-
-                dynamic_reasoning.get(
-                    "executive_summary"
-                )
-
-                or
-
-                business_understanding.get(
-                    "strategic_direction"
-                )
-
-                or
-
-                f"Strategic analysis completed for: {message}",
-
-            "recommended_strategy":
-
-                best_strategy.get(
-                    "name"
-                )
-
-                or
-
-                "Balanced Strategic Growth",
-
-            "strategy_score":
-
-                best_strategy.get(
-                    "decision_score"
-                )
-
-                or 75,
-
-            "risk_level":
-
-                best_strategy.get(
-                    "risk"
-                )
-
-                or "medium",
-
-            "confidence":
-
-                prediction.get(
-                    "confidence"
-                )
-
-                or 0.72,
-
-            "market_insight":
-
-                market.get(
-                    "market_pressure"
-                )
-
-                or
-
-                business_understanding.get(
-                    "market_nature"
-                )
-
-                or
-
-                "Market conditions require strategic positioning.",
-
-            "execution_focus":
-
-                dynamic_reasoning.get(
-                    "execution_focus"
-                )
-
-                or
-
-                strategic_analysis.get(
-                    "recommended_focus"
-                )
-
-                or
-
-                "Focus on disciplined execution and operational efficiency.",
-
-            "next_business_evolution":
-
-                dynamic_reasoning.get(
-                    "next_business_evolution"
-                )
-
-                or
-
-                "Improve systems and validate customer demand.",
-
-            "recommended_operational_move":
-
-                operational.get(
-                    "recommended_operational_move"
-                )
-
-                or
-
-                strategic_analysis.get(
-                    "recommended_focus"
-                )
-
-                or
-
-                "Strengthen operational consistency and execution systems.",
-
-            "growth_projection":
-
-                simulation.get(
-                    "90_day_projection"
-                )
-
-                or
-
-                "Moderate growth potential with disciplined execution.",
-
-            "warning":
-
-                dynamic_reasoning.get(
-                    "strategic_warning"
-                )
-
-                or
-
-                "Avoid scaling too aggressively without validated demand.",
-
-            "reinforcement_status":
-
-                reinforcement.get(
-                    "reinforcement_status"
-                )
-
-                or
-
-                "Learning patterns still evolving.",
-
-            "reinforcement_recommendation":
-
-                reinforcement.get(
-                    "reinforcement_recommendation"
-                )
-
-                or
-
-                "Continue gathering strategic execution data.",
-
-            "memory_summary":
-
-                memory_summary
-
-                or {
-                    "summary":
-                    "Strategic memory systems active."
-                },
-
-            "next_steps":
-
-                operational.get(
-                    "operations_next_steps",
-                    []
-                )
-
-                or [
-
-                    "Validate market demand",
-
-                    "Improve operational systems",
-
-                    "Strengthen strategic positioning"
-                ]
-        }
+        "pipeline": result
     }
 
+    
         # ==========================================
     # SAVE INTELLIGENCE SESSION
     # ==========================================
@@ -490,19 +229,21 @@ or
 
             status="completed",
 
-            summary=response_data[
-                "response"
-            ]["summary"],
+            summary=chat_response.get(
+    "message",
+    ""
+),
 
-            recommended_move=response_data[
-                "response"
-            ]["recommended_strategy"],
+            recommended_move=executive_advisor.get(
+    "advisor_recommendation",
+    ""
+),
 
-            risk_level=response_data[
-                "response"
-            ]["risk_level"],
-
-            report_json=response_data["response"],
+            risk_level=chat_response.get(
+    "warning",
+    "medium"
+),
+            report_json=response_data,
 
             business_model="business",
 

@@ -64,5 +64,11 @@
         "preferred_budget": null,
         "preferred_domain": null,
         "interaction_count": 0
+    },
+    "string": {
+        "preferred_risk": null,
+        "preferred_budget": null,
+        "preferred_domain": null,
+        "interaction_count": 0
     }
 }

@@ -21,8 +21,11 @@ class ExecutiveSynthesisEngine:
         prediction: dict,
         strategic_simulation: dict,
         operational_intelligence: dict,
-        strategy_reinforcement: dict
+        strategy_reinforcement: dict,
+        deep_reasoning: dict | None = None
     ):
+
+        deep_reasoning = deep_reasoning or {}
 
         business_dna = business_understanding.get(
             "business_dna",
@@ -96,8 +99,22 @@ class ExecutiveSynthesisEngine:
             scale_readiness
         ]
 
+        reasoning.extend(
+            deep_reasoning.get(
+                "reasoning_chain",
+                []
+            )
+        )
+
         alternatives = self._alternatives(
             recommended_strategy
+        )
+
+        alternatives.extend(
+            deep_reasoning.get(
+                "alternative_options",
+                []
+            )
         )
 
         risks = []
@@ -107,6 +124,13 @@ class ExecutiveSynthesisEngine:
 
         if operational_warning:
             risks.append(operational_warning)
+
+        root_problem = deep_reasoning.get(
+            "root_problem"
+        )
+
+        if root_problem:
+            risks.append(root_problem)
 
         next_actions = (
             operational_intelligence.get(
@@ -140,6 +164,17 @@ class ExecutiveSynthesisEngine:
 
             "risks":
                 risks,
+
+            "deep_reasoning":
+                deep_reasoning,
+
+            "root_problem":
+                root_problem,
+
+            "recommended_option":
+                deep_reasoning.get(
+                    "recommended_option"
+                ),
 
             "next_actions":
                 next_actions

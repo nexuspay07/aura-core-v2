@@ -1,21 +1,24 @@
 class ExecutiveResponseEngine:
 
     def generate(
-        self,
-        goal,
-        strategic_analysis,
-        market_intelligence,
-        competitive_intelligence,
-        business_understanding,
-        dynamic_reasoning,
-        prediction,
-        operational_intelligence,
-        best_strategy
-    ):
+    self,
+    goal,
+    strategic_analysis,
+    market_intelligence,
+    competitive_intelligence,
+    business_understanding,
+    dynamic_reasoning,
+    deep_reasoning,
+    prediction,
+    operational_intelligence,
+    best_strategy
+):
 
         confidence = int(
             prediction.get("confidence", 0.6) * 100
         )
+
+        deep_reasoning = deep_reasoning or {}
 
         summary = (
             f"For '{goal}', I recommend moving cautiously. "
@@ -29,12 +32,20 @@ class ExecutiveResponseEngine:
             dynamic_reasoning.get(
                 "current_bottleneck",
                 "Execution remains the primary challenge."
+            ),
+            deep_reasoning.get(
+                "root_problem",
+                "No deeper root problem detected."
             )
         ]
 
         recommendations = [
             dynamic_reasoning.get(
                 "current_priority",
+                ""
+            ),
+            deep_reasoning.get(
+                "recommended_option",
                 ""
             ),
             operational_intelligence.get(
@@ -50,6 +61,11 @@ class ExecutiveResponseEngine:
             )
         ]
 
+        if deep_reasoning.get("business_impact"):
+            findings.append(
+                deep_reasoning["business_impact"]
+            )
+
         next_steps = (
             operational_intelligence.get(
                 "operations_next_steps",
@@ -63,6 +79,7 @@ class ExecutiveResponseEngine:
             "recommendations": recommendations,
             "risks": risks,
             "next_steps": next_steps,
+            "deep_reasoning": deep_reasoning,
             "best_strategy": best_strategy,
             "confidence": confidence
         }
