@@ -15,6 +15,14 @@ from app.core.executive_intelligence.market_intelligence_engine import (
     market_intelligence_engine
 )
 
+from app.core.programming_intelligence_engine import (
+    programming_intelligence_engine
+)
+
+from app.core.intent_classification_engine import (
+    intent_classification_engine
+)
+
 from app.core.conversation_memory_engine import (
     conversation_memory_engine
 )
@@ -258,9 +266,97 @@ class CognitiveLoop:
         goal: str,
         scenario: dict,
         profile: dict | None = None
+
+        
     ):
+        
+        # ==========================================
+        # Phase 72
+        # Intent Classification
+        # ==========================================
+
+        intent = (
+             intent_classification_engine.classify(
+              goal
+            )
+        )
+
+        # ==========================================
+        # Phase 72
+        # Request Routing
+        # ==========================================
+
+        intent_type = intent.get(
+    "intent",
+    "general"
+)
+
+         # Programming Requests
+        if intent_type == "programming":
+         programming_analysis = (
+        programming_intelligence_engine.analyze(
+            goal
+        )
+    )
+
+
+         return {
+
+        "status": "success",
+
+        "intent": intent,
+
+        "goal": goal,
+
+        "programming_analysis": programming_analysis,
+
+        "message": programming_analysis.get(
+            "summary"
+        ),
+
+        "recommendation": programming_analysis.get(
+            "recommendation"
+        )
+    }
+
+           # Conversation Requests
+        if intent_type == "conversation":
+
+          return {
+        "status": "success",
+
+        "intent": intent,
+
+        "goal": goal,
+
+        "message": (
+            "Conversation request detected."
+        )
+    }
+
+         # Knowledge Requests
+        if intent_type == "knowledge":
+
+         return {
+        "status": "success",
+
+        "intent": intent,
+
+        "goal": goal,
+
+        "message": (
+            "Knowledge request detected."
+        )
+    }
+
+# Business requests continue through
+# the complete executive pipeline.
+        
+        
 
         try:
+
+        
 
             profile = profile or {}
 
@@ -548,6 +644,7 @@ class CognitiveLoop:
             # ==========================================
 
             pipeline_result = {
+                "intent": intent,
                 "business_dna": business_dna,
                 "dynamic_reasoning": dynamic_reasoning,
                 "deep_reasoning": deep_reasoning,
@@ -716,6 +813,7 @@ class CognitiveLoop:
     "goal": goal,
     "scenario": scenario,
     "profile": profile,
+    "intent": intent,
 
     "executive_synthesis": executive_synthesis,
 
