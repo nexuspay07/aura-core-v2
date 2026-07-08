@@ -1,4 +1,19 @@
 import re
+import uuid
+from app.db.organization_invitation_table import (
+    organization_invitation_table
+)
+
+from app.db.workspace_member_table import (
+    workspace_member_table
+)
+
+from sqlalchemy import (
+    select,
+    insert,
+    update,
+    delete
+)
 
 from fastapi import (
     APIRouter,
@@ -28,6 +43,10 @@ from app.db.workspace_table import (
     workspace_table
 )
 
+from app.db.organization_member_table import (
+    organization_member_table
+)
+
 from app.api.auth_routes import (
     get_current_user_from_token
 )
@@ -49,6 +68,42 @@ class CreateOrganizationRequest(BaseModel):
 
     company_size: str | None = None
 
+class UpdateOrganizationRequest(BaseModel):
+
+    name: str | None = None
+
+    industry: str | None = None
+
+    company_size: str | None = None
+
+    plan: str | None = None
+
+    is_active: bool | None = None
+
+class CreateWorkspaceRequest(BaseModel):
+
+    name: str
+
+    description: str | None = None
+
+    workspace_type: str = "business"
+
+class InviteMemberRequest(BaseModel):
+
+    email: str
+
+    role: str = "employee"
+
+class AcceptInvitationRequest(BaseModel):
+
+    token: str
+
+class AssignWorkspaceMemberRequest(BaseModel):
+
+    user_id: int
+
+    role: str = "member"            
+
 
 def make_slug(name: str):
 
@@ -63,6 +118,19 @@ def make_slug(name: str):
     slug = slug.strip("-")
 
     return slug or "organization"
+
+def make_workspace_slug(
+    organization_slug: str,
+    workspace_name: str
+):
+
+    workspace_slug = make_slug(
+        workspace_name
+    )
+
+    return (
+        f"{organization_slug}-{workspace_slug}"
+    )
 
 
 def clean_organization(row):
@@ -174,6 +242,31 @@ async def create_organization(
         db.commit()
 
         org_id = result.inserted_primary_key[0]
+
+                # -----------------------------
+        # ADD OWNER AS FIRST MEMBER
+        # -----------------------------
+        db.execute(
+
+            insert(
+                organization_member_table
+            ).values(
+
+                organization_id=org_id,
+
+                user_id=user["id"],
+
+                role="owner",
+
+                status="active",
+
+                is_active=True
+
+            )
+
+        )
+
+        db.commit()
 
         # -----------------------------
         # CREATE DEFAULT WORKSPACE
@@ -374,4 +467,675 @@ async def get_organization(
             )
             for row in workspaces
         ],
+    }
+
+# =========================================
+# UPDATE ORGANIZATION
+# =========================================
+
+@router.put("/{organization_id}")
+
+async def update_organization(
+
+    organization_id: int,
+
+    data: UpdateOrganizationRequest,
+
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+
+):
+
+    user = await get_current_user_from_token(
+        credentials
+    )
+
+    db = SessionLocal()
+
+    try:
+
+        result = db.execute(
+
+            select(
+                organization_table
+            ).where(
+
+                organization_table.c.id
+                == organization_id
+
+            )
+
+        )
+
+        organization = result.fetchone()
+
+        if not organization:
+
+            raise HTTPException(
+
+                status_code=404,
+
+                detail="Organization not found"
+
+            )
+
+        organization = dict(
+            organization._mapping
+        )
+
+        if organization["owner_user_id"] != user["id"]:
+
+            raise HTTPException(
+
+                status_code=403,
+
+                detail="Not allowed"
+
+            )
+
+        update_data = {}
+
+        if data.name is not None:
+
+            update_data["name"] = data.name
+
+        if data.industry is not None:
+
+            update_data["industry"] = data.industry
+
+        if data.company_size is not None:
+
+            update_data["company_size"] = (
+                data.company_size
+            )
+
+        if data.plan is not None:
+
+            update_data["plan"] = data.plan
+
+        if data.is_active is not None:
+
+            update_data["is_active"] = (
+                data.is_active
+            )
+
+        if update_data:
+
+        
+
+            db.execute(
+
+                update(
+                    organization_table
+                )
+
+                .where(
+
+                    organization_table.c.id
+                    == organization_id
+
+                )
+
+                .values(
+                    **update_data
+                )
+
+            )
+
+            db.commit()
+
+        updated = db.execute(
+
+            select(
+                organization_table
+            )
+
+            .where(
+
+                organization_table.c.id
+                == organization_id
+
+            )
+
+        ).fetchone()
+
+    finally:
+
+        db.close()
+
+    return {
+
+        "success": True,
+
+        "message": "Organization updated successfully.",
+
+        "organization": clean_organization(
+
+            dict(updated._mapping)
+
+        )
+
+    }
+
+# =========================================
+# CREATE WORKSPACE
+# =========================================
+
+@router.post(
+    "/{organization_id}/workspaces"
+)
+async def create_workspace(
+
+    organization_id: int,
+
+    data: CreateWorkspaceRequest,
+
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+
+):
+
+    user = await get_current_user_from_token(
+        credentials
+    )
+
+    db = SessionLocal()
+
+    try:
+
+        result = db.execute(
+
+            select(
+                organization_table
+            ).where(
+
+                organization_table.c.id
+                == organization_id
+
+            )
+
+        )
+
+        organization = result.fetchone()
+
+        if not organization:
+
+            raise HTTPException(
+
+                status_code=404,
+
+                detail="Organization not found"
+
+            )
+
+        organization = dict(
+            organization._mapping
+        )
+
+        if organization["owner_user_id"] != user["id"]:
+
+            raise HTTPException(
+
+                status_code=403,
+
+                detail="Not allowed"
+
+            )
+
+        workspace_slug = make_workspace_slug(
+
+            organization["slug"],
+
+            data.name
+
+        )
+
+        counter = 1
+
+        while True:
+
+            existing = db.execute(
+
+                select(
+                    workspace_table
+                ).where(
+
+                    workspace_table.c.slug
+                    == workspace_slug
+
+                )
+
+            ).fetchone()
+
+            if not existing:
+
+                break
+
+            workspace_slug = (
+                f"{organization['slug']}-"
+                f"{make_slug(data.name)}-{counter}"
+            )
+
+            counter += 1
+
+        result = db.execute(
+
+            insert(
+                workspace_table
+            ).values(
+
+                organization_id=organization_id,
+
+                name=data.name,
+
+                slug=workspace_slug,
+
+                description=data.description,
+
+                workspace_type=data.workspace_type,
+
+                created_by_user_id=user["id"],
+
+                is_active=True
+
+            )
+
+        )
+
+        db.commit()
+
+        workspace_id = (
+            result.inserted_primary_key[0]
+        )
+
+        workspace = db.execute(
+
+            select(
+                workspace_table
+            ).where(
+
+                workspace_table.c.id
+                == workspace_id
+
+            )
+
+        ).fetchone()
+
+    finally:
+
+        db.close()
+
+    return {
+
+        "success": True,
+
+        "message": (
+            "Workspace created successfully."
+        ),
+
+        "workspace": clean_workspace(
+
+            dict(
+                workspace._mapping
+            )
+
+        )
+
+    }
+
+# =========================================
+# INVITE MEMBER
+# =========================================
+
+@router.post(
+    "/{organization_id}/members/invite"
+)
+async def invite_member(
+
+    organization_id: int,
+
+    data: InviteMemberRequest,
+
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+
+):
+
+    user = await get_current_user_from_token(
+        credentials
+    )
+
+    db = SessionLocal()
+
+    try:
+
+        organization = db.execute(
+
+            select(
+                organization_table
+            ).where(
+
+                organization_table.c.id
+                == organization_id
+
+            )
+
+        ).fetchone()
+
+        if not organization:
+
+            raise HTTPException(
+
+                status_code=404,
+
+                detail="Organization not found."
+
+            )
+
+        organization = dict(
+            organization._mapping
+        )
+
+        if organization["owner_user_id"] != user["id"]:
+
+            raise HTTPException(
+
+                status_code=403,
+
+                detail="Only organization owners can invite members."
+
+            )
+
+        invitation_token = str(
+            uuid.uuid4()
+        )
+
+        db.execute(
+
+            insert(
+                organization_invitation_table
+            ).values(
+
+                organization_id=organization_id,
+
+                email=data.email,
+
+                role=data.role,
+
+                status="pending",
+
+                token=invitation_token,
+
+                created_by_user_id=user["id"],
+
+                is_active=True
+
+            )
+
+        )
+
+        db.commit()
+
+    finally:
+
+        db.close()
+
+    return {
+
+        "success": True,
+
+        "message": "Invitation created successfully.",
+
+        "invitation_token": invitation_token
+    }
+
+# =========================================
+# ACCEPT INVITATION
+# =========================================
+
+@router.post(
+    "/members/accept"
+)
+async def accept_invitation(
+
+    data: AcceptInvitationRequest,
+
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+
+):
+
+    user = await get_current_user_from_token(
+        credentials
+    )
+
+    db = SessionLocal()
+
+    try:
+
+        invitation = db.execute(
+
+            select(
+                organization_invitation_table
+            ).where(
+
+                organization_invitation_table.c.token
+                == data.token
+
+            )
+
+        ).fetchone()
+
+        if not invitation:
+
+            raise HTTPException(
+
+                status_code=404,
+
+                detail="Invitation not found."
+
+            )
+
+        invitation = dict(
+            invitation._mapping
+        )
+
+        if invitation["status"] != "pending":
+
+            raise HTTPException(
+
+                status_code=400,
+
+                detail="Invitation already used."
+
+            )
+
+        db.execute(
+
+            insert(
+                organization_member_table
+            ).values(
+
+                organization_id=invitation["organization_id"],
+
+                user_id=user["id"],
+
+                role=invitation["role"],
+
+                status="active",
+
+                is_active=True
+
+            )
+
+        )
+
+        db.execute(
+
+            update(
+                organization_invitation_table
+            )
+
+            .where(
+
+                organization_invitation_table.c.id
+                == invitation["id"]
+
+            )
+
+            .values(
+
+                status="accepted"
+
+            )
+
+        )
+
+        db.commit()
+
+    finally:
+
+        db.close()
+
+    return {
+
+        "success": True,
+
+        "message": "Invitation accepted successfully."
+
+    }
+
+# =========================================
+# ASSIGN USER TO WORKSPACE
+# =========================================
+
+@router.post(
+    "/workspaces/{workspace_id}/members"
+)
+async def assign_workspace_member(
+
+    workspace_id: int,
+
+    data: AssignWorkspaceMemberRequest,
+
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+
+):
+
+    user = await get_current_user_from_token(
+        credentials
+    )
+
+    db = SessionLocal()
+
+    try:
+
+        workspace = db.execute(
+
+            select(
+                workspace_table
+            ).where(
+
+                workspace_table.c.id
+                == workspace_id
+
+            )
+
+        ).fetchone()
+
+        if not workspace:
+
+            raise HTTPException(
+
+                status_code=404,
+
+                detail="Workspace not found."
+
+            )
+
+        workspace = dict(
+            workspace._mapping
+        )
+
+        organization = db.execute(
+
+            select(
+                organization_table
+            ).where(
+
+                organization_table.c.id
+                == workspace["organization_id"]
+
+            )
+
+        ).fetchone()
+
+        organization = dict(
+            organization._mapping
+        )
+
+        if organization["owner_user_id"] != user["id"]:
+
+            raise HTTPException(
+
+                status_code=403,
+
+                detail="Only owners can assign workspace members."
+
+            )
+
+        existing = db.execute(
+
+            select(
+                workspace_member_table
+            ).where(
+
+                workspace_member_table.c.workspace_id
+                == workspace_id,
+
+                workspace_member_table.c.user_id
+                == data.user_id
+
+            )
+
+        ).fetchone()
+
+        if existing:
+
+            raise HTTPException(
+
+                status_code=400,
+
+                detail="User already belongs to this workspace."
+
+            )
+
+        db.execute(
+
+            insert(
+                workspace_member_table
+            ).values(
+
+                workspace_id=workspace_id,
+
+                user_id=data.user_id,
+
+                role=data.role,
+
+                status="active",
+
+                is_active=True
+
+            )
+
+        )
+
+        db.commit()
+
+    finally:
+
+        db.close()
+
+    return {
+
+        "success": True,
+
+        "message": "Workspace member assigned successfully."
+
     }

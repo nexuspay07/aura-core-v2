@@ -1,10 +1,11 @@
 class ResponseComposerEngine:
     """
-    Phase 66.5
+    Phase 74
 
-    Converts raw intelligence outputs into a
-    clean executive-level answer suitable
-    for real users.
+    Executive Narrative Intelligence
+
+    Converts Aura's intelligence pipeline into
+    a business-aware executive response.
     """
 
     def compose(
@@ -15,12 +16,27 @@ class ResponseComposerEngine:
         competitive_intelligence: dict,
         dynamic_reasoning: dict,
         operational_intelligence: dict,
-        simulation: dict
+        simulation: dict,
+        business_understanding: dict
     ):
 
-        summary = executive_synthesis.get(
-            "executive_recommendation",
-            "No recommendation available."
+        business_understanding = business_understanding or {}
+
+        business_dna = business_understanding.get(
+            "business_dna",
+            {}
+        )
+
+        business_context = business_understanding.get(
+            "business_context",
+            {}
+        )
+
+        summary = self._build_executive_summary(
+            goal,
+            executive_synthesis,
+            business_dna,
+            business_context
         )
 
         confidence = executive_synthesis.get(
@@ -31,7 +47,8 @@ class ResponseComposerEngine:
         findings = self._build_findings(
             market_intelligence,
             competitive_intelligence,
-            dynamic_reasoning
+            dynamic_reasoning,
+            business_dna
         )
 
         recommendations = self._build_recommendations(
@@ -55,20 +72,161 @@ class ResponseComposerEngine:
         )
 
         return {
+
             "executive_summary": summary,
-            "key_findings": findings,
-            "recommendations": recommendations,
-            "risks": risks,
-            "next_steps": next_steps,
-            "recommended_strategy": best_strategy,
-            "confidence": confidence
+
+            "organization":
+                business_context.get(
+                    "organization_name"
+                ),
+
+            "workspace":
+                business_context.get(
+                    "workspace_name"
+                ),
+
+            "business_stage":
+                business_dna.get(
+                    "business_stage"
+                ),
+
+            "mission":
+                business_dna.get(
+                    "mission"
+                ),
+
+            "business_goals":
+                business_dna.get(
+                    "business_goals"
+                ),
+
+            "current_challenges":
+                business_dna.get(
+                    "current_challenges"
+                ),
+
+            "key_findings":
+                findings,
+
+            "recommendations":
+                recommendations,
+
+            "risks":
+                risks,
+
+            "next_steps":
+                next_steps,
+
+            "recommended_strategy":
+                best_strategy,
+
+            "confidence":
+                confidence
         }
+
+    # ====================================================
+    # Executive Narrative
+    # ====================================================
+
+    def _build_executive_summary(
+        self,
+        goal,
+        executive_synthesis,
+        business_dna,
+        business_context
+    ):
+
+        recommendation = executive_synthesis.get(
+            "executive_recommendation",
+            "No recommendation available."
+        )
+
+        organization = business_context.get(
+            "organization_name"
+        )
+
+        workspace = business_context.get(
+            "workspace_name"
+        )
+
+        mission = business_dna.get(
+            "mission"
+        )
+
+        stage = business_dna.get(
+            "business_stage"
+        )
+
+        goals = business_dna.get(
+            "business_goals"
+        )
+
+        challenge = business_dna.get(
+            "current_challenges"
+        )
+
+        summary = recommendation
+
+        if organization:
+
+            summary += (
+                f"\n\nOrganization: {organization}"
+            )
+
+        if workspace:
+
+            summary += (
+                f"\nWorkspace: {workspace}"
+            )
+
+        if mission:
+
+            summary += (
+                f"\nMission: {mission}"
+            )
+
+        if stage:
+
+            summary += (
+                f"\nBusiness Stage: {stage}"
+            )
+
+        if goals:
+
+            summary += (
+                f"\nBusiness Goals: {goals}"
+            )
+
+        if challenge:
+
+            summary += (
+                f"\nCurrent Challenges: {challenge}"
+            )
+
+        summary += (
+
+            "\n\nThis recommendation is based on "
+
+            "your organization's business context, "
+
+            "market intelligence, strategic analysis "
+
+            "and operational understanding."
+
+        )
+
+        return summary
+
+    # ====================================================
+    # Findings
+    # ====================================================
 
     def _build_findings(
         self,
         market_intelligence,
         competitive_intelligence,
-        dynamic_reasoning
+        dynamic_reasoning,
+        business_dna
     ):
 
         findings = []
@@ -77,9 +235,10 @@ class ResponseComposerEngine:
             "opportunity_score"
         )
 
-        if opportunity:
+        if opportunity is not None:
+
             findings.append(
-                f"Market opportunity score is {opportunity}."
+                f"Market opportunity score: {opportunity}"
             )
 
         competition = market_intelligence.get(
@@ -87,8 +246,9 @@ class ResponseComposerEngine:
         )
 
         if competition:
+
             findings.append(
-                f"Competition level is {competition}."
+                f"Competition level: {competition}"
             )
 
         bottleneck = dynamic_reasoning.get(
@@ -96,9 +256,36 @@ class ResponseComposerEngine:
         )
 
         if bottleneck:
-            findings.append(bottleneck)
+
+            findings.append(
+                bottleneck
+            )
+
+        stage = business_dna.get(
+            "business_stage"
+        )
+
+        if stage:
+
+            findings.append(
+                f"Business stage: {stage}"
+            )
+
+        challenge = business_dna.get(
+            "current_challenges"
+        )
+
+        if challenge:
+
+            findings.append(
+                f"Primary challenge: {challenge}"
+            )
 
         return findings
+
+    # ====================================================
+    # Recommendations
+    # ====================================================
 
     def _build_recommendations(
         self,
@@ -113,16 +300,26 @@ class ResponseComposerEngine:
         )
 
         if priority:
-            recommendations.append(priority)
+
+            recommendations.append(
+                priority
+            )
 
         move = operational_intelligence.get(
             "recommended_operational_move"
         )
 
         if move:
-            recommendations.append(move)
+
+            recommendations.append(
+                move
+            )
 
         return recommendations
+
+    # ====================================================
+    # Risks
+    # ====================================================
 
     def _build_risks(
         self,
@@ -137,16 +334,25 @@ class ResponseComposerEngine:
         )
 
         if warning:
-            risks.append(warning)
+
+            risks.append(
+                warning
+            )
 
         for item in executive_synthesis.get(
             "risks",
             []
         ):
+
             if item not in risks:
-                risks.append(item)
+
+                risks.append(
+                    item
+                )
 
         return risks
 
 
-response_composer_engine = ResponseComposerEngine()
+response_composer_engine = (
+    ResponseComposerEngine()
+)

@@ -270,6 +270,16 @@ class CognitiveLoop:
         
     ):
         
+        business_context = scenario.get(
+    "business_context",
+    {}
+)
+
+        unified_context = scenario.get(
+    "unified_context",
+    {}
+)
+        
         # ==========================================
         # Phase 72
         # Intent Classification

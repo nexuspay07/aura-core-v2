@@ -21,17 +21,42 @@ class BusinessUnderstandingEngine:
         competitive_intelligence: dict | None = None,
     ):
         scenario = scenario or {}
+        business_context = scenario.get(
+           "business_context",
+            {}
+        )
+
+        business_profile = business_context.get(
+          "business_profile",
+           {}
+        )
         strategic_analysis = strategic_analysis or {}
         market_intelligence = market_intelligence or {}
         competitive_intelligence = competitive_intelligence or {}
         text = goal.lower()
 
-        budget = scenario.get("budget") or self._extract_budget(text) or 10000
+        budget = (
+
+    scenario.get("budget")
+
+    or business_profile.get("budget")
+
+    or self._extract_budget(text)
+
+    or 10000
+
+)
         market = scenario.get("market") or self._detect_market(text)
         business_model = self._detect_business_model(text)
         customer_type = self._detect_customer_type(text)
         channel = self._detect_channel(text)
-        stage = self._detect_stage(text)
+        stage = (
+
+    business_profile.get("business_stage")
+
+    or self._detect_stage(text)
+
+)
 
         dna = {
             "business_model": business_model,
@@ -40,6 +65,45 @@ class BusinessUnderstandingEngine:
             "business_stage": stage,
             "budget": budget,
             "market": market,
+            "organization_name":
+    business_context.get(
+        "organization_name"
+    ),
+
+"workspace_name":
+    business_context.get(
+        "workspace_name"
+    ),
+
+"mission":
+    business_profile.get(
+        "mission"
+    ),
+
+"vision":
+    business_profile.get(
+        "vision"
+    ),
+
+"target_market":
+    business_profile.get(
+        "target_market"
+    ),
+
+"business_goals":
+    business_profile.get(
+        "business_goals"
+    ),
+
+"current_challenges":
+    business_profile.get(
+        "current_challenges"
+    ),
+
+"competitive_advantage":
+    business_profile.get(
+        "competitive_advantage"
+    ),
             "trust_dependency": self._score_trust_dependency(text, business_model),
             "repeat_purchase_potential": self._score_repeat_purchase(
                 text, business_model
@@ -65,14 +129,35 @@ class BusinessUnderstandingEngine:
         )
 
         return {
-            "business_dna": dna,
-            "executive_context": executive_context,
-            "business_nature": self._describe_business_nature(dna),
-            "market_nature": self._describe_market_nature(dna),
-            "customer_nature": self._describe_customer_nature(dna),
-            "execution_reality": self._describe_execution_reality(dna),
-            "strategic_direction": self._strategic_direction(dna, executive_context),
-        }
+
+    "business_context":
+        business_context,
+
+    "business_dna":
+        dna,
+
+    "executive_context":
+        executive_context,
+
+    "business_nature":
+        self._describe_business_nature(dna),
+
+    "market_nature":
+        self._describe_market_nature(dna),
+
+    "customer_nature":
+        self._describe_customer_nature(dna),
+
+    "execution_reality":
+        self._describe_execution_reality(dna),
+
+    "strategic_direction":
+        self._strategic_direction(
+            dna,
+            executive_context
+        )
+
+}
 
     def _extract_budget(self, text: str):
         match = re.search(r"\$?\s?(\d{3,9})", text)

@@ -3,17 +3,18 @@ from sqlalchemy import (
     Integer,
     String,
     DateTime,
-    Boolean
+    ForeignKey
 )
 
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.database import Base
 
 
-class User(Base):
+class Workspace(Base):
 
-    __tablename__ = "users"
+    __tablename__ = "workspaces"
 
     id = Column(
         Integer,
@@ -21,36 +22,42 @@ class User(Base):
         index=True
     )
 
-    first_name = Column(
+    name = Column(
         String,
         nullable=False
     )
 
-    last_name = Column(
-        String,
-        nullable=False
-    )
-
-    email = Column(
+    slug = Column(
         String,
         unique=True,
         index=True,
         nullable=False
     )
 
-    password_hash = Column(
+    industry = Column(
         String,
         nullable=False
     )
 
-    is_verified = Column(
-        Boolean,
-        default=False
+    business_size = Column(
+        String,
+        nullable=False
     )
 
-    is_active = Column(
-        Boolean,
-        default=True
+    country = Column(
+        String,
+        nullable=False
+    )
+
+    subscription = Column(
+        String,
+        default="free"
+    )
+
+    owner_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False
     )
 
     created_at = Column(
@@ -63,3 +70,5 @@ class User(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    owner = relationship("User")

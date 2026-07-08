@@ -1,162 +1,233 @@
-from app.services.memory_service import (
-    save_session_memory,
-    get_session_memory,
+from app.db.database import SessionLocal
+
+from app.core.cognitive_loop import (
+    cognitive_loop
 )
 
-from app.core.cognitive_loop import cognitive_loop
-from app.core.user_profile_engine import user_profile_engine
+from app.core.user_profile_engine import (
+    user_profile_engine
+)
+
+from app.services.memory_service import (
+    save_session_memory,
+    get_session_memory
+)
+
+from app.services.aura_context_service import (
+    aura_context_service
+)
+
+from app.services.response_service import (
+    response_service
+)
+
+from app.services.session_service import (
+    session_service
+)
 
 
-async def process_chat_message(message: str, session_id: str):
+class ChatService:
+    """
+    =====================================================
 
-    # -------------------------
-    # USER PROFILE
-    # -------------------------
+                    CHAT SERVICE
 
-    profile = user_profile_engine.get_profile(session_id)
+    Enterprise orchestration layer for Aura.
 
-    # -------------------------
-    # SESSION MEMORY
-    # -------------------------
+    Responsibilities
 
-    previous_memories = get_session_memory(session_id)
+    • Build Aura Context
+    • Load Memory
+    • Execute Intelligence Pipeline
+    • Normalize Response
+    • Persist Intelligence Session
 
-    # -------------------------
-    # SCENARIO
-    # -------------------------
+    This service MUST NOT contain
+    HTTP or FastAPI logic.
 
-    scenario = {
-        "goal": message,
-        "risk_tolerance": profile.get("risk_tolerance", 0.5),
-        "budget": profile.get("budget", 10000),
-        "market": "normal"
-    }
+    =====================================================
+    """
 
-    # -------------------------
-    # COGNITIVE PIPELINE
-    # -------------------------
+    async def process_chat(
 
-    result = cognitive_loop.run_intelligence_pipeline(
-        message,
-        scenario,
-        profile
-    )
+        self,
 
-    # -------------------------
-    # SAVE SESSION MEMORY
-    # -------------------------
+        *,
 
-    save_session_memory(
-        session_id,
-        "assistant",
-        str(result)
-    )
+        message: str,
 
-    # -------------------------
-    # RESPONSE NORMALIZATION
-    # -------------------------
+        session_id: str,
 
-    best_strategy = result.get(
-        "best_strategy",
-        {}
-    )
+        organization_id: int,
 
-    dynamic_reasoning = result.get(
-        "dynamic_reasoning",
-        {}
-    )
+        workspace_id: int,
 
-    prediction = result.get(
-        "prediction",
-        {}
-    )
+        user: dict
 
-    operational = result.get(
-        "operational_intelligence",
-        {}
-    )
+    ) -> dict:
 
-    market = result.get(
-        "market_intelligence",
-        {}
-    )
+        # ------------------------------------
+        # USER PROFILE
+        # ------------------------------------
 
-    simulation = result.get(
-        "strategic_simulation",
-        {}
-    )
+        profile = user_profile_engine.get_profile(
+            session_id
+        )
 
-    return {
+        # ------------------------------------
+        # SESSION MEMORY
+        # ------------------------------------
 
-        "status": "success",
+        previous_memories = get_session_memory(
+            session_id
+        )
 
-        "session_id": session_id,
+        # ------------------------------------
+        # BUILD AURA CONTEXT
+        # ------------------------------------
 
-        "profile": profile,
+        db = SessionLocal()
 
-        "memory_count": len(previous_memories),
+        try:
 
-        "response": {
+            aura_context = (
+                aura_context_service.build(
 
-            "summary":
-                dynamic_reasoning.get(
-                    "current_priority"
-                ),
+                    db=db,
 
-            "recommended_strategy":
-                best_strategy.get(
-                    "name"
-                ),
+                    organization_id=organization_id,
 
-            "strategy_score":
-                best_strategy.get(
-                    "decision_score"
-                ),
+                    workspace_id=workspace_id,
 
-            "risk_level":
-                best_strategy.get(
-                    "risk"
-                ),
+                    user=user
 
-            "confidence":
-                prediction.get(
-                    "confidence"
-                ),
-
-            "market_insight":
-                market.get(
-                    "market_pressure"
-                ),
-
-            "execution_focus":
-                dynamic_reasoning.get(
-                    "execution_focus"
-                ),
-
-            "next_business_evolution":
-                dynamic_reasoning.get(
-                    "next_business_evolution"
-                ),
-
-            "recommended_operational_move":
-                operational.get(
-                    "recommended_operational_move"
-                ),
-
-            "growth_projection":
-                simulation.get(
-                    "90_day_projection"
-                ),
-
-            "warning":
-                dynamic_reasoning.get(
-                    "strategic_warning"
-                ),
-
-            "next_steps":
-                operational.get(
-                    "operations_next_steps",
-                    []
                 )
+            )
+
+        finally:
+
+            db.close()
+
+        # ------------------------------------
+        # BUILD SCENARIO
+        # ------------------------------------
+
+        scenario = {
+
+            "goal": message,
+
+            "aura_context": aura_context
+
         }
-    }
+
+        # ------------------------------------
+        # RUN INTELLIGENCE
+        # ------------------------------------
+
+        result = (
+            cognitive_loop.run_intelligence_pipeline(
+
+                goal=message,
+
+                scenario=scenario,
+
+                profile=profile
+
+            )
+        )
+
+        # ------------------------------------
+        # SAVE MEMORY
+        # ------------------------------------
+
+        save_session_memory(
+
+            session_id,
+
+            "assistant",
+
+            str(result)
+
+        )
+
+        # ------------------------------------
+        # BUILD API RESPONSE
+        # ------------------------------------
+
+        response = (
+            response_service.build_response(
+
+                pipeline_result=result,
+
+                session_id=session_id,
+
+                organization_name=(
+                    aura_context["business"]
+                    .get("organization_name")
+                ),
+
+                workspace_name=(
+                    aura_context["business"]
+                    .get("workspace_name")
+                ),
+
+                profile=profile,
+
+                memory_count=len(
+                    previous_memories
+                )
+
+            )
+        )
+
+        # ------------------------------------
+        # SAVE SESSION
+        # ------------------------------------
+
+        session_service.create_session(
+
+            organization_id=organization_id,
+
+            workspace_id=workspace_id,
+
+            created_by_user_id=user["id"],
+
+            title=message[:100],
+
+            goal=message,
+
+            domain="business",
+
+            session_type="decision_analysis",
+
+            status="completed",
+
+            summary=response["chat_response"].get(
+                "message",
+                ""
+            ),
+
+            recommended_move=response[
+                "executive_advisor"
+            ].get(
+                "advisor_recommendation",
+                ""
+            ),
+
+            risk_level=response[
+                "chat_response"
+            ].get(
+                "warning",
+                "unknown"
+            ),
+
+            report_json=response,
+
+            business_model="business"
+
+        )
+
+        return response
+
+
+chat_service = ChatService()
