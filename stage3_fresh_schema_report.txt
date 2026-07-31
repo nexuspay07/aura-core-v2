@@ -1,0 +1,2 @@
+DATABASE URL: sqlite:///K:/DEV/AURA/AURA_CORE_V2/aura_stage3_test.db
+TABLE COUNT: 0

@@ -1,25 +1,41 @@
-# app/learning/strategy_discovery_engine.py
-
+import logging
 import random
 import uuid
+from typing import Any, Dict, List, Optional
 
-from app.learning.strategy_registry import strategy_registry, Strategy
+from app.learning.strategy_registry import Strategy, strategy_registry
+from app.services.kpi_service import kpi_service
+
+logger = logging.getLogger(__name__)
 
 
 class StrategyDiscoveryEngine:
+    """
+    Strategy Discovery Engine.
+
+    Responsible for learning new strategies from
+    successful execution plans.
+    """
 
     def __init__(self):
 
-        self.discovery_rate = 0.3  # probability of discovering a strategy
+        self.discovery_rate = 0.30
 
-        print("[STRATEGY DISCOVERY] Engine Initialized")
+        logger.info("Strategy Discovery Engine initialized.")
 
-    # -----------------------------------------------------
+    # ==========================================================
+    # DISCOVER STRATEGY
+    # ==========================================================
 
-    def discover_strategy(self, goal, plan, score):
-
+    def discover_strategy(
+        self,
+        goal: str,
+        plan: List[Any],
+        score: float,
+    ) -> Optional[Strategy]:
         """
-        Analyze a successful plan and possibly create a new strategy
+        Analyze a successful execution and create a
+        reusable strategy if appropriate.
         """
 
         if score < 0.7:
@@ -28,44 +44,58 @@ class StrategyDiscoveryEngine:
         if random.random() > self.discovery_rate:
             return None
 
-        strategy_id = str(uuid.uuid4())[:8]
-
-        strategy_name = f"Discovered Strategy {strategy_id}"
-
-        parameters = self.extract_parameters_from_plan(plan)
-
-        new_strategy = Strategy(
-            strategy_id=strategy_id,
-            name=strategy_name,
-            parameters=parameters
+        strategy = Strategy(
+            strategy_id=f"strategy_{uuid.uuid4().hex[:8]}",
+            name=f"Discovered Strategy",
+            parameters=self.extract_parameters_from_plan(plan),
         )
 
-        strategy_registry.register_strategy(new_strategy)
+        strategy_registry.register_strategy(strategy)
 
-        print(
-            f"[STRATEGY DISCOVERY] New strategy discovered: {strategy_name}"
+        kpi_service.record_strategy_discovered()
+
+        logger.info(
+            "Discovered new strategy: %s",
+            strategy.strategy_id,
         )
 
-        return new_strategy
+        return strategy
 
-    # -----------------------------------------------------
+    # ==========================================================
+    # PARAMETER EXTRACTION
+    # ==========================================================
 
-    def extract_parameters_from_plan(self, plan):
-
-        """
-        Extract simple behavioral parameters from the plan
-        """
+    def extract_parameters_from_plan(
+        self,
+        plan: List[Any],
+    ) -> Dict[str, Any]:
 
         step_count = len(plan)
 
-        parameters = {
+        return {
             "complexity": step_count,
             "planning_depth": min(step_count, 10),
-            "risk": round(random.uniform(0.2, 0.8), 2)
+            "risk": round(random.uniform(0.2, 0.8), 2),
         }
 
-        return parameters
+    # ==========================================================
+    # CONFIGURATION
+    # ==========================================================
+
+    def set_discovery_rate(
+        self,
+        rate: float,
+    ) -> None:
+
+        self.discovery_rate = max(0.0, min(rate, 1.0))
+
+    def get_discovery_rate(self) -> float:
+
+        return self.discovery_rate
 
 
-# Singleton
+# ==========================================================
+# GLOBAL INSTANCE
+# ==========================================================
+
 strategy_discovery_engine = StrategyDiscoveryEngine()

@@ -1,0 +1,7 @@
+from alembic import op
+import sqlalchemy as sa
+revision="20260728_0012"; down_revision="20260728_0011"; branch_labels=None; depends_on=None
+def upgrade():
+ op.create_table("credit_note_applications",sa.Column("id",sa.Integer(),primary_key=True),sa.Column("organization_id",sa.Integer(),sa.ForeignKey("organizations.id"),nullable=False),sa.Column("credit_note_id",sa.Integer(),sa.ForeignKey("credit_notes.id"),nullable=False),sa.Column("invoice_id",sa.Integer(),sa.ForeignKey("invoices.id"),nullable=False),sa.Column("idempotency_key",sa.String(255),nullable=False),sa.Column("amount",sa.Numeric(18,4),nullable=False),sa.Column("currency",sa.String(3),nullable=False),sa.Column("applied_at",sa.DateTime(timezone=True),nullable=False),sa.Column("created_at",sa.DateTime(timezone=True),nullable=False),sa.Column("version",sa.Integer(),nullable=False,server_default="1"),sa.UniqueConstraint("organization_id","idempotency_key",name="uq_credit_note_applications_organization_key"),sa.CheckConstraint("amount > 0",name="ck_credit_note_applications_amount_positive"),sa.CheckConstraint("version > 0",name="ck_credit_note_applications_version"))
+ for n,c in [("ix_credit_note_applications_organization_id",["organization_id"]),("ix_credit_note_applications_credit_note_id",["credit_note_id"]),("ix_credit_note_applications_invoice_id",["invoice_id"])]:op.create_index(n,"credit_note_applications",c)
+def downgrade():op.drop_table("credit_note_applications")

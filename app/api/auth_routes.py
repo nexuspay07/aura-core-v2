@@ -6,6 +6,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.db.database import SessionLocal
 from app.db.user_table import user_table
 from app.core.auth_engine import auth_engine
+from app.services.identity_service import (
+    identity_service
+)
+from app.services.onboarding_service import (
+    onboarding_service
+)
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -59,47 +65,51 @@ async def get_current_user_from_token(
 
     user_id = int(payload["sub"])
 
-    query = select(user_table).where(
-        user_table.c.id == user_id
-    )
-
     db = SessionLocal()
 
     try:
 
+        query = select(user_table).where(
+            user_table.c.id == user_id
+        )
+
         result = db.execute(query)
+
         user = result.fetchone()
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found"
+            )
+
+        user = dict(user._mapping)
+
+        identity = identity_service.resolve(
+
+            db=db,
+
+            user_id=user["id"]
+
+        )
+
+        return identity
 
     finally:
 
         db.close()
 
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
-
-    user = dict(user._mapping)
-
-    return {
-        "id": user["id"],
-        "email": user["email"],
-        "full_name": user["full_name"],
-        "role": user["role"],
-        "is_active": user["is_active"],
-        "is_verified": user["is_verified"],
-        "created_at": user["created_at"],
-    }
-
-
 @router.post("/register")
 async def register(data: RegisterRequest):
 
     if len(data.password) < 8:
+
         raise HTTPException(
+
             status_code=400,
+
             detail="Password must be at least 8 characters"
+
         )
 
     db = SessionLocal()
@@ -107,61 +117,110 @@ async def register(data: RegisterRequest):
     try:
 
         existing_query = select(user_table).where(
+
             user_table.c.email == data.email.lower()
+
         )
 
         existing_result = db.execute(existing_query)
+
         existing_user = existing_result.fetchone()
 
         if existing_user:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Email already registered"
+
             )
 
         password_hash = auth_engine.hash_password(
+
             data.password
+
         )
 
         query = insert(user_table).values(
+
             email=data.email.lower(),
+
             password_hash=password_hash,
+
             full_name=data.full_name,
+
             role="user",
+
             is_active=True,
+
             is_verified=False,
+
         )
 
         result = db.execute(query)
-        db.commit()
 
         user_id = result.inserted_primary_key[0]
+
+        onboarding_service.initialize(
+
+            db=db,
+
+            user_id=user_id,
+
+            full_name=data.full_name
+
+        )
+
+        db.commit()
+
+    except Exception:
+
+        db.rollback()
+
+        raise
 
     finally:
 
         db.close()
 
     token = auth_engine.create_access_token(
+
         user_id=user_id,
+
         email=data.email.lower(),
+
         role="user"
+
     )
 
     return {
-        "success": True,
-        "message": "Account created successfully",
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user_id,
-            "email": data.email.lower(),
-            "full_name": data.full_name,
-            "role": "user",
-            "is_active": True,
-            "is_verified": False,
-        }
-    }
 
+        "success": True,
+
+        "message": "Account created successfully",
+
+        "access_token": token,
+
+        "token_type": "bearer",
+
+        "user": {
+
+            "id": user_id,
+
+            "email": data.email.lower(),
+
+            "full_name": data.full_name,
+
+            "role": "user",
+
+            "is_active": True,
+
+            "is_verified": False
+
+        }
+
+    }
 
 
 
@@ -173,92 +232,92 @@ async def login(data: LoginRequest):
     try:
 
         query = select(user_table).where(
+
             user_table.c.email == data.email.lower()
+
         )
 
         result = db.execute(query)
+
         user = result.fetchone()
 
-    finally:
+        if not user:
 
-        db.close()
+            raise HTTPException(
 
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password"
+                status_code=401,
+
+                detail="Invalid email or password"
+
+            )
+
+        user = dict(user._mapping)
+
+        if not auth_engine.verify_password(
+
+            data.password,
+
+            user["password_hash"]
+
+        ):
+
+            raise HTTPException(
+
+                status_code=401,
+
+                detail="Invalid email or password"
+
+            )
+
+        if not user["is_active"]:
+
+            raise HTTPException(
+
+                status_code=403,
+
+                detail="User account is disabled"
+
+            )
+
+        token = auth_engine.create_access_token(
+
+            user_id=user["id"],
+
+            email=user["email"],
+
+            role=user["role"]
+
         )
-
-    user = dict(user._mapping)
-
-    if not auth_engine.verify_password(
-        data.password,
-        user["password_hash"]
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password"
-        )
-
-    if not user["is_active"]:
-        raise HTTPException(
-            status_code=403,
-            detail="User account is disabled"
-        )
-
-    token = auth_engine.create_access_token(
-        user_id=user["id"],
-        email=user["email"],
-        role=user["role"]
-    )
-
-    return {
-        "success": True,
-        "message": "Login successful",
-        "access_token": token,
-        "token_type": "bearer",
-        "user": clean_user(user)
-    }
-
-@router.get("/debug-users")
-async def debug_users():
-
-    db = SessionLocal()
-
-    try:
-
-        query = select(user_table)
-
-        result = db.execute(query)
-
-        users = result.fetchall()
 
         return {
-            "count": len(users),
-            "users": [
-                {
-                    "id": u.id,
-                    "email": u.email,
-                }
-                for u in users
-            ]
+
+            "success": True,
+
+            "message": "Login successful",
+
+            "access_token": token,
+
+            "token_type": "bearer",
+
+            "user": clean_user(user)
+
         }
 
     finally:
 
         db.close()
 
-
 @router.get("/me")
 async def me(
+
     credentials: HTTPAuthorizationCredentials = Depends(security)
+
 ):
 
-    user = await get_current_user_from_token(
+    identity = await get_current_user_from_token(
+
         credentials
+
     )
 
-    return {
-        "success": True,
-        "user": clean_user(user)
-    }
+    return {"success": True, "identity": identity, **identity}

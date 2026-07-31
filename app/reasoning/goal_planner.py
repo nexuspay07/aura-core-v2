@@ -1,40 +1,54 @@
-# app/reasoning/goal_planner.py
+from typing import List
+
 
 class GoalPlanner:
     """
-    Breaks a goal into sequential actionable steps.
+    Breaks a high-level goal into sequential actionable steps.
     """
 
-    def __init__(self):
-        pass
-
-    def plan(self, goal: str):
+    def plan(
+        self,
+        goal: str,
+    ) -> List[str]:
         """
-        Returns a list of steps for a given goal.
-        For now, uses simple keyword-based decomposition.
+        Generate a sequence of execution steps for a goal.
         """
-        steps = []
 
         goal_lower = goal.lower()
 
         if "meeting" in goal_lower:
-            steps.append("Check calendar availability")
-            steps.append("Send meeting invitation")
-            steps.append("Confirm meeting")
+            return [
+                "Check calendar availability",
+                "Send meeting invitation",
+                "Confirm meeting",
+            ]
 
-        elif "summarize" in goal_lower:
-            steps.append("Retrieve relevant memories")
-            steps.append("Extract key points")
-            steps.append("Generate summary")
+        if "summarize" in goal_lower:
+            return [
+                "Retrieve relevant memories",
+                "Extract key points",
+                "Generate summary",
+            ]
 
-        elif "email" in goal_lower or "message" in goal_lower:
-            steps.append("Draft message content")
-            steps.append("Send message")
-            steps.append("Log sent message in memory")
+        if "email" in goal_lower or "message" in goal_lower:
+            return [
+                "Draft message content",
+                "Send message",
+                "Log sent message in memory",
+            ]
 
-        else:
-            steps.append("Analyze goal")
-            steps.append("Break goal into micro-steps")
-            steps.append("Execute micro-steps")
+        return self._default_plan()
 
-        return steps
+    def _default_plan(self) -> List[str]:
+        """
+        Fallback planning strategy.
+        """
+
+        return [
+            "Analyze goal",
+            "Break goal into micro-steps",
+            "Execute micro-steps",
+        ]
+
+
+goal_planner = GoalPlanner()

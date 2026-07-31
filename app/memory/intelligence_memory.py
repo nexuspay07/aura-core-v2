@@ -1,59 +1,59 @@
-import json
-import os
-from datetime import datetime
-from typing import List, Dict, Any
+from typing import Dict, List
 
 
-class IntelligenceMemory:
+class MemorySelector:
+    """
+    Filters memories after retrieval.
 
-    def __init__(self):
+    If semantic search is unavailable,
+    falls back to lightweight keyword matching.
+    """
 
-        self.memory_file = "intelligence_memory.json"
-        self.memories: List[Dict[str, Any]] = []
+    def select_relevant(
+        self,
+        memories: List[Dict],
+        query: str,
+        max_memories: int = 3,
+    ) -> List[Dict]:
 
-        self._load_memory()
+        query_words = set(query.lower().split())
 
-    def _load_memory(self):
+        scored = []
 
-        if os.path.exists(self.memory_file):
+        for memory in memories:
 
-            try:
-                with open(self.memory_file, "r") as f:
-                    self.memories = json.load(f)
+            content = (
+                memory.get("content")
+                or ""
+            )
 
-            except Exception:
-                self.memories = []
+            memory_words = set(
+                content.lower().split()
+            )
 
-        else:
-            self.memories = []
+            overlap = len(
+                query_words.intersection(
+                    memory_words
+                )
+            )
 
-    def _save_memory(self):
+            scored.append(
+                (
+                    overlap,
+                    memory,
+                )
+            )
 
-        with open(self.memory_file, "w") as f:
-            json.dump(self.memories, f, indent=4)
+        scored.sort(
+            key=lambda item: item[0],
+            reverse=True,
+        )
 
-    def store(self, memory: Dict[str, Any]):
-
-        memory_record = {
-            "id": len(self.memories) + 1,
-            "timestamp": datetime.utcnow().isoformat(),
-            "data": memory
-        }
-
-        self.memories.append(memory_record)
-
-        self._save_memory()
-
-        return memory_record
-
-    def recall(self, limit: int = 10):
-
-        return self.memories[-limit:]
-
-    def total_memories(self):
-
-        return len(self.memories)
+        return [
+            item[1]
+            for item in scored[:max_memories]
+            if item[0] > 0
+        ]
 
 
-# global instance
-intelligence_memory = IntelligenceMemory()
+memory_selector = MemorySelector()

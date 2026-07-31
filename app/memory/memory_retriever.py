@@ -1,82 +1,70 @@
 import json
+from typing import List
+
 import numpy as np
+from sqlalchemy.orm import Session
 
-from sqlalchemy import select
-
-from app.db.database import SessionLocal
-
-from app.db.conversation_memory_model import (
-    conversation_memory_table
-)
-
+from app.memory.memory_repository import memory_repository
 from app.memory.vector_engine import (
     embed_text,
     cosine_similarity,
 )
 
 
-async def retrieve_relevant_memories(
-    tenant_id,
-    domain,
-    query,
-    limit=5
-):
+class MemoryRetriever:
 
-    db = SessionLocal()
+    def retrieve(
+        self,
+        db: Session,
+        organization_id: int,
+        query: str,
+        limit: int = 5,
+    ) -> List[dict]:
 
-    try:
-
-        result = db.execute(
-            select(conversation_memory_table)
-            .where(
-                conversation_memory_table.c.tenant_id
-                == tenant_id
-            )
-            .where(
-                conversation_memory_table.c.domain
-                == domain
-            )
+        memories = memory_repository.retrieve(
+            db=db,
+            organization_id=organization_id,
+            limit=100,
         )
 
-        rows = result.fetchall()
+        query_vector = np.array(embed_text(query))
 
-    finally:
+        scored = []
 
-        db.close()
+        for memory in memories:
 
-    query_vector = embed_text(query)
+            embedding = memory.get("embedding")
 
-    scored_memories = []
+            if embedding:
 
-    for memory in rows:
+                vector = np.array(json.loads(embedding))
 
-        memory_data = dict(memory._mapping)
+            else:
 
-        if memory_data["embedding"]:
+                vector = np.array(
+                    embed_text(
+                        memory["content"]
+                    )
+                )
 
-            memory_vector = np.array(
-                json.loads(memory_data["embedding"])
+            score = cosine_similarity(
+                query_vector,
+                vector,
             )
 
-        else:
-
-            memory_vector = embed_text(
-                memory_data["user_message"]
+            scored.append(
+                {
+                    "score": float(score),
+                    "memory": memory,
+                }
             )
 
-        score = cosine_similarity(
-            query_vector,
-            memory_vector
+        scored.sort(
+            key=lambda item: item["score"],
+            reverse=True,
         )
 
-        scored_memories.append({
-            "score": float(score),
-            "memory": memory_data
-        })
+        return scored[:limit]
 
-    scored_memories.sort(
-        key=lambda x: x["score"],
-        reverse=True
-    )
 
-    return scored_memories[:limit]
+memory_retriever = MemoryRetriever()

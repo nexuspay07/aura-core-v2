@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 
 from app.db.database import SessionLocal
-from app.models.strategy import strategies
+from app.db.strategy import strategies
 
 router = APIRouter(
     prefix="/marketplace",

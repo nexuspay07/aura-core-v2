@@ -1,126 +1,151 @@
-def get_market_context():
-     return {
-        "economy": "high inflation",
-        "consumer_behavior": "price sensitive",
-        "risk_level": "high uncertainty",
-        "trend": "reduced discretionary spending"
-    }
+"""
+=========================================================
+
+                PREDICTION ENGINE V2
+
+Produces a standardized prediction object used by
+Strategic Simulation, Deep Reasoning and Operational
+Intelligence.
+
+=========================================================
+"""
+
 
 class PredictionEngine:
 
-    def simulate_strategy(self, strategy, world_state):
-        predicted_score = strategy.get("final_score", strategy.get("score", 1))
+    def predict(
+        self,
+        goal: str,
+        business_dna: dict,
+        simulation: dict,
+    ) -> dict:
+
+        stage = business_dna.get(
+            "business_stage",
+            "unknown",
+        )
+
+        competition = business_dna.get(
+            "competition_pressure",
+            "medium",
+        )
+
+        capital = business_dna.get(
+            "capital_intensity",
+            "medium",
+        )
+
+        confidence = self._confidence(
+            stage,
+            competition,
+            capital,
+        )
 
         return {
-            "strategy": strategy.get("name", "Unknown"),
-            "predicted_score": predicted_score,
-            "probability": strategy.get("confidence", 0.7),
-            "expected_value": predicted_score * strategy.get("confidence", 0.7),
-            "uncertainty_risk": 1 - strategy.get("confidence", 0.7),
-            "prediction_range": {
-                "low": round(predicted_score * 0.8, 2),
-                "high": round(predicted_score * 1.2, 2)
-            }
+
+            "goal": goal,
+
+            "confidence": confidence,
+
+            "success_probability": self._success(
+                confidence
+            ),
+
+            "risk_level": self._risk(
+                confidence
+            ),
+
+            "expected_outcome": self._expected(
+                confidence
+            ),
+
+            "assumptions": [
+
+                "Execution remains consistent",
+
+                "Market conditions stay relatively stable",
+
+                "No major external disruption",
+
+            ],
+
+            "simulation_summary": simulation,
+
         }
 
-    def simulate_multiple(self, strategies, world_state):
-        return [
-            self.simulate_strategy(strategy, world_state)
-            for strategy in strategies
-        ]
-    
+    def _confidence(
+        self,
+        stage,
+        competition,
+        capital,
+    ):
 
-    def predict_outcome(self, intent: str, strategy: str, scenario: dict):
-        intent = intent.lower()
+        score = 0.65
 
-        risk = scenario.get("risk", "medium")
-        budget = scenario.get("budget", 10000)
-        market = scenario.get("market", "normal")
+        if stage == "growth_stage":
+            score += 0.10
 
-        # --------------------------
-        # Adjust multipliers
-        # --------------------------
-        budget_factor = 1.0
-        if budget < 5000:
-            budget_factor = 0.8
-        elif budget > 30000:
-            budget_factor = 1.2
+        if competition in [
+            "high",
+            "very_high",
+        ]:
+            score -= 0.05
 
-        risk_factor = 1.0
-        if risk == "low":
-            risk_factor = 0.85
-        elif risk == "high":
-            risk_factor = 1.15
+        if capital in [
+            "high",
+            "very_high",
+        ]:
+            score -= 0.05
 
-        market_factor = 1.0
-        if market == "competitive":
-            market_factor = 0.8
-        elif market == "monopoly":
-            market_factor = 1.25
+        return max(
+            0.40,
+            min(score, 0.95),
+        )
 
-        final_factor = budget_factor * risk_factor * market_factor
+    def _success(
+        self,
+        confidence,
+    ):
 
-        # --------------------------
-        # PRICING
-        # --------------------------
-        if "pricing" in intent:
-            base_low, base_high = 20, 30
+        if confidence >= 0.80:
+            return "high"
 
-            low = round(base_low * final_factor)
-            high = round(base_high * final_factor)
+        if confidence >= 0.60:
+            return "medium"
 
-            return {
-                "impact": f"Expected conversion increase ~{low}–{high}%",
-                "tradeoff": "Lower margins in early stages",
-                "timeframe": "Short-term (1–4 weeks)",
-                "confidence": 0.7,
-                "context_note": f"Based on your budget (${budget}) and {market} market conditions"
-            }
+        return "low"
 
-        # --------------------------
-        # GROWTH
-        # --------------------------
-        if "growth" in intent:
-            base_low, base_high = 2, 3
+    def _risk(
+        self,
+        confidence,
+    ):
 
-            low = round(base_low * final_factor, 1)
-            high = round(base_high * final_factor, 1)
+        if confidence >= 0.80:
+            return "low"
 
-            return {
-                "impact": f"Growth efficiency improvement ~{low}–{high}x",
-                "tradeoff": "Slower early scaling while testing",
-                "timeframe": "Medium-term (1–3 months)",
-                "confidence": 0.65,
-                "context_note": f"Adjusted for budget ${budget} and {market} competition"
-            }
+        if confidence >= 0.60:
+            return "medium"
 
-        # --------------------------
-        # COST
-        # --------------------------
-        if "cost" in intent or "expenses" in intent:
-            base_low, base_high = 20, 40
+        return "high"
 
-            low = round(base_low * final_factor)
-            high = round(base_high * final_factor)
+    def _expected(
+        self,
+        confidence,
+    ):
 
-            return {
-                "impact": f"Runway extension ~{low}–{high}%",
-                "tradeoff": "Reduced operational capacity",
-                "timeframe": "Immediate",
-                "confidence": 0.75,
-                "context_note": f"Based on current cost sensitivity and budget ${budget}"
-            }
+        if confidence >= 0.80:
+            return (
+                "Strong likelihood of successful execution."
+            )
 
-        # --------------------------
-        # DEFAULT
-        # --------------------------
-        return {
-            "impact": "Moderate improvement expected depending on execution",
-            "tradeoff": "Balanced risk vs reward",
-            "timeframe": "Medium-term",
-            "confidence": 0.6,
-            "context_note": f"General estimate for {market} conditions"
-        }
+        if confidence >= 0.60:
+            return (
+                "Moderate success expected with disciplined execution."
+            )
+
+        return (
+            "Execution is likely to require significant adjustment."
+        )
 
 
 prediction_engine = PredictionEngine()

@@ -1,5 +1,13 @@
-from sqlalchemy import Table, Column, Integer, String, DateTime, Boolean, ForeignKey
-from datetime import datetime, timezone
+from sqlalchemy import (
+    Table,
+    Column,
+    Integer,
+    String,
+    DateTime,
+    Boolean,
+    ForeignKey,
+    func,
+)
 
 from app.db.database import metadata
 
@@ -8,36 +16,122 @@ organization_table = Table(
     "organizations",
     metadata,
 
-    Column("id", Integer, primary_key=True),
+    # ==========================================================
+    # PRIMARY KEY
+    # ==========================================================
 
-    Column("name", String, nullable=False),
-    Column("slug", String, unique=True, index=True, nullable=False),
-
-    Column("owner_user_id", Integer, ForeignKey("users.id"), nullable=False),
-
-    Column("plan", String, default="free"),  # free, pro, business, enterprise
     Column(
-    "subscription_status",
-    String,
-    default="inactive"
-),
+        "id",
+        Integer,
+        primary_key=True,
+    ),
 
-Column(
-    "payment_provider",
-    String,
-    nullable=True
-),
+    # ==========================================================
+    # ORGANIZATION DETAILS
+    # ==========================================================
 
-Column(
-    "external_subscription_id",
-    String,
-    nullable=True
-),
-    Column("industry", String, nullable=True),
-    Column("company_size", String, nullable=True),
+    Column(
+        "name",
+        String(255),
+        nullable=False,
+    ),
 
-    Column("is_active", Boolean, default=True),
+    Column(
+        "slug",
+        String(255),
+        unique=True,
+        index=True,
+        nullable=False,
+    ),
 
-    Column("created_at", DateTime, default=lambda: datetime.now(timezone.utc)),
-    Column("updated_at", DateTime, default=lambda: datetime.now(timezone.utc)),
+    # ==========================================================
+    # OWNER
+    # ==========================================================
+
+    Column(
+        "owner_user_id",
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    ),
+
+    # ==========================================================
+    # SUBSCRIPTION
+    # ==========================================================
+
+    Column(
+        "plan",
+        String(50),
+        nullable=False,
+        default="free",
+        index=True,
+    ),
+
+    Column(
+        "subscription_status",
+        String(50),
+        nullable=False,
+        default="inactive",
+        index=True,
+    ),
+
+    Column(
+        "payment_provider",
+        String(100),
+        nullable=True,
+    ),
+
+    Column(
+        "external_subscription_id",
+        String(255),
+        nullable=True,
+    ),
+
+    # ==========================================================
+    # BUSINESS PROFILE
+    # ==========================================================
+
+    Column(
+        "industry",
+        String(100),
+        nullable=True,
+    ),
+
+    Column(
+        "company_size",
+        String(50),
+        nullable=True,
+    ),
+
+    # ==========================================================
+    # STATUS
+    # ==========================================================
+
+    Column(
+        "is_active",
+        Boolean,
+        nullable=False,
+        default=True,
+        index=True,
+    ),
+
+    # ==========================================================
+    # AUDIT
+    # ==========================================================
+
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    ),
+
+    Column(
+        "updated_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    ),
 )

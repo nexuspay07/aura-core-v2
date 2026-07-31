@@ -1,23 +1,59 @@
-def get_tenant_config(tenant_id: str):
+from dataclasses import dataclass
+from typing import Optional
 
-    configs = {
 
-        "hospital_001": {
-            "name": "City Hospital",
-            "model_provider": "local"
-        },
+@dataclass
+class TenantConfig:
+    """
+    Tenant configuration model.
 
-        "enterprise_001": {
-            "name": "Enterprise Corp",
-            "model_provider": "openai"
-        }
+    This class represents a single tenant's configuration.
 
-    }
+    Future versions may include:
+    - AI model selection
+    - Vector database provider
+    - Memory limits
+    - Token quotas
+    - Feature flags
+    - Billing information
+    """
 
-    return configs.get(
-        tenant_id,
-        {
-            "name": "Default Tenant",
-            "model_provider": "local"
-        }
-    )
+    # ==========================================================
+    # IDENTITY
+    # ==========================================================
+
+    tenant_id: str
+
+    # ==========================================================
+    # AI
+    # ==========================================================
+
+    adapter: str = "local"
+
+    model: str = "default"
+
+    # ==========================================================
+    # SUBSCRIPTION
+    # ==========================================================
+
+    plan: str = "free"
+
+    # ==========================================================
+    # FEATURES
+    # ==========================================================
+
+    memory_enabled: bool = True
+
+    knowledge_enabled: bool = True
+
+    vector_enabled: bool = True
+
+    telemetry_enabled: bool = True
+
+    # ==========================================================
+    # OPTIONAL SETTINGS
+    # ==========================================================
+
+    organization_id: Optional[int] = None
+
+    workspace_id: Optional[int] = None

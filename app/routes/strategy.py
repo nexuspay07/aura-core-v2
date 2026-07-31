@@ -11,7 +11,7 @@ from app.db.database import (
     SessionLocal
 )
 
-from app.models.strategy import (
+from app.db.strategy import (
     strategies
 )
 

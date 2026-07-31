@@ -1,5 +1,3 @@
-# app/core/multi_agent_engine.py
-
 class Agent:
     def __init__(self, name, role):
         self.name = name
@@ -21,21 +19,33 @@ class Agent:
 
     def plan(self, goal):
         return [
-            {"step_id": 1, "description": f"Analyze {goal['name']}", "status": "pending"},
-            {"step_id": 2, "description": f"Design solution for {goal['name']}", "status": "pending"},
-            {"step_id": 3, "description": f"Execute solution for {goal['name']}", "status": "pending"},
+            {
+                "step_id": 1,
+                "description": f"Analyze {goal['name']}",
+                "status": "pending",
+            },
+            {
+                "step_id": 2,
+                "description": f"Design solution for {goal['name']}",
+                "status": "pending",
+            },
+            {
+                "step_id": 3,
+                "description": f"Execute solution for {goal['name']}",
+                "status": "pending",
+            },
         ]
 
     def execute(self, step):
         return {
             "action": step,
-            "status": "executed"
+            "status": "executed",
         }
 
     def analyze(self, results):
         return {
             "summary": "Execution successful",
-            "steps_executed": len(results)
+            "steps_executed": len(results),
         }
 
 
@@ -59,11 +69,21 @@ class MultiAgentEngine:
         executor = self.get_agent_by_role("executor")
         analyst = self.get_agent_by_role("analyst")
 
+        if planner is None:
+            raise RuntimeError("Planner agent not registered.")
+
+        if executor is None:
+            raise RuntimeError("Executor agent not registered.")
+
+        if analyst is None:
+            raise RuntimeError("Analyst agent not registered.")
+
         # Step 1 — Plan
         plan = planner.act(goal)
 
         # Step 2 — Execute
         results = []
+
         for step in plan:
             result = executor.act(step)
             results.append(result)
@@ -75,9 +95,9 @@ class MultiAgentEngine:
             "goal": goal,
             "plan": plan,
             "results": results,
-            "analysis": analysis
+            "analysis": analysis,
         }
 
 
-# GLOBAL INSTANCE
+# Global instance
 multi_agent_engine = MultiAgentEngine()

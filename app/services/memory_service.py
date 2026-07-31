@@ -1,124 +1,75 @@
-from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy.orm import Session
+
+from app.memory.memory_repository import memory_repository
+from app.memory.memory_retriever import memory_retriever
+from app.memory.vector_engine import embed_text
 
 
-# =====================================================
-# IN-MEMORY STORE
-# (Temporary phase before vector database)
-# =====================================================
+class MemoryService:
+    """
+    Orchestrates Aura's memory subsystem.
+    """
 
-memory_store = {
-    "users": {},
-    "organizations": {},
-    "sessions": {},
-}
+    def store_memory(
+        self,
+        db: Session,
+        organization_id: int,
+        content: str,
+        memory_type: str = "conversation",
+        response: Optional[str] = None,
+        **kwargs,
+    ) -> int:
 
+        embedding = embed_text(content)
 
-# =====================================================
-# SAVE USER MEMORY
-# =====================================================
+        return memory_repository.store(
+            db=db,
+            organization_id=organization_id,
+            content=content,
+            response=response,
+            memory_type=memory_type,
+            embedding=str(embedding),
+            **kwargs,
+        )
 
-def save_user_memory(
-    user_id: str,
-    memory_type: str,
-    content: dict
-):
+    def retrieve_memories(
+        self,
+        db: Session,
+        organization_id: int,
+        query: str,
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
 
-    if user_id not in memory_store["users"]:
-        memory_store["users"][user_id] = []
+        return memory_retriever.retrieve(
+            db=db,
+            organization_id=organization_id,
+            query=query,
+            limit=limit,
+        )
 
-    memory_store["users"][user_id].append({
-        "type": memory_type,
-        "content": content,
-        "timestamp": str(datetime.utcnow())
-    })
+    def get_memory(
+        self,
+        db: Session,
+        memory_id: int,
+    ):
 
+        return memory_repository.get(
+            db=db,
+            memory_id=memory_id,
+        )
 
-# =====================================================
-# GET USER MEMORIES
-# =====================================================
+    def increment_recall(
+        self,
+        db: Session,
+        memory_id: int,
+    ):
 
-def get_user_memories(
-    user_id: str,
-    limit: int = 10
-):
-
-    memories = memory_store["users"].get(
-        user_id,
-        []
-    )
-
-    return memories[-limit:]
-
-
-# =====================================================
-# SAVE ORGANIZATION MEMORY
-# =====================================================
-
-def save_organization_memory(
-    organization_id: str,
-    memory_type: str,
-    content: dict
-):
-
-    if organization_id not in memory_store["organizations"]:
-        memory_store["organizations"][organization_id] = []
-
-    memory_store["organizations"][organization_id].append({
-        "type": memory_type,
-        "content": content,
-        "timestamp": str(datetime.utcnow())
-    })
+        memory_repository.increment_recall(
+            db=db,
+            memory_id=memory_id,
+        )
 
 
-# =====================================================
-# GET ORGANIZATION MEMORIES
-# =====================================================
-
-def get_organization_memories(
-    organization_id: str,
-    limit: int = 20
-):
-
-    memories = memory_store["organizations"].get(
-        organization_id,
-        []
-    )
-
-    return memories[-limit:]
-
-
-# =====================================================
-# SAVE SESSION MEMORY
-# =====================================================
-
-def save_session_memory(
-    session_id: str,
-    role: str,
-    message: str
-):
-
-    if session_id not in memory_store["sessions"]:
-        memory_store["sessions"][session_id] = []
-
-    memory_store["sessions"][session_id].append({
-        "role": role,
-        "message": message,
-        "timestamp": str(datetime.utcnow())
-    })
-
-
-# =====================================================
-# GET SESSION MEMORY
-# =====================================================
-
-def get_session_memory(
-    session_id: str,
-    limit: int = 20
-):
-
-    memories = memory_store["sessions"].get(
-        session_id,
-        []
-    )
-
-    return memories[-limit:]
+memory_service = MemoryService()

@@ -16,7 +16,7 @@ class DeepReasoningEngine:
         market_intelligence: dict,
         competitive_intelligence: dict,
         prediction: dict,
-        strategic_simulation: dict
+        strategic_simulation: dict  
     ):
 
         business_dna = business_understanding.get(

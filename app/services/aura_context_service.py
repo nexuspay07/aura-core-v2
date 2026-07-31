@@ -35,7 +35,7 @@ class AuraContextService:
     =======================================================
     """
 
-    def build(
+    async def build(
 
         self,
 
@@ -49,17 +49,11 @@ class AuraContextService:
 
     ):
 
-        unified_context = (
-            unified_context_service.build(
-
-                db=db,
-
-                organization_id=organization_id,
-
-                workspace_id=workspace_id
-
-            )
-        )
+        unified_context = await unified_context_service.build(
+    db=db,
+    organization_id=organization_id,
+    workspace_id=workspace_id,
+)
 
         return {
 

@@ -1,18 +1,39 @@
-# app/reasoning/thought_chain.py
+from typing import Dict, List
+
 
 class ThoughtChain:
     """
-    Evaluates a sequence of steps and their dependencies.
+    Evaluates a sequence of planned steps and assigns
+    reasoning metadata to each one.
     """
 
-    def __init__(self):
-        pass
+    DEFAULT_CONFIDENCE = 0.80
 
-    def evaluate(self, steps: list):
+    def evaluate(
+        self,
+        steps: List[str],
+    ) -> List[Dict]:
+
+        return [
+            self._evaluate_step(step, index)
+            for index, step in enumerate(steps)
+        ]
+
+    def _evaluate_step(
+        self,
+        step: str,
+        index: int,
+    ) -> Dict:
         """
-        For now, simply returns steps with confidence scores.
+        Evaluate a single reasoning step.
         """
-        evaluated_steps = []
-        for step in steps:
-            evaluated_steps.append({"step": step, "confidence": 0.8})
-        return evaluated_steps
+
+        return {
+            "order": index + 1,
+            "step": step,
+            "confidence": self.DEFAULT_CONFIDENCE,
+            "status": "pending",
+        }
+
+
+thought_chain = ThoughtChain()

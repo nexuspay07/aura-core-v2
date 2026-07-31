@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 
 from app.db.database import SessionLocal
-from app.models.simulation import simulations
+from app.db.simulation import simulations
 
 router = APIRouter()
 

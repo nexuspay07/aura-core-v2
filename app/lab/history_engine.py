@@ -1,41 +1,67 @@
-# app/lab/history_engine.py
+from typing import Dict, List
 
-import datetime
+from sqlalchemy.orm import Session
+
+from app.lab.history_repository import history_repository
+
 
 class HistoryEngine:
-    def __init__(self):
-        self.storage = {}
+    """
+    Coordinates simulation history operations.
+    """
 
-    async def save(self, username, data):
-        if username not in self.storage:
-            self.storage[username] = []
+    def save(
+        self,
+        db: Session,
+        organization_id: int,
+        goal: str,
+        scenario: Dict,
+        result: Dict,
+        **kwargs,
+    ) -> int:
 
-        sim_id = len(self.storage[username]) + 1
+        return history_repository.save(
+            db=db,
+            organization_id=organization_id,
+            goal=goal,
+            scenario=scenario,
+            result=result,
+            **kwargs,
+        )
 
-        record = {
-            "id": sim_id,
-            "timestamp": str(datetime.datetime.utcnow()),
-            "goal": data["goal"],
-            "scenario": data["scenario"],
-            "result": data["result"]
-        }
+    def get(
+        self,
+        db: Session,
+        organization_id: int,
+        limit: int = 100,
+    ) -> List[Dict]:
 
-        self.storage[username].append(record)
+        return history_repository.get(
+            db=db,
+            organization_id=organization_id,
+            limit=limit,
+        )
 
-    async def get(self, username):
-        return self.storage.get(username, [])
-
-    async def analyze_patterns(self, username):
-        history = self.storage.get(username, [])
+    def analyze_patterns(
+        self,
+        histories: List[Dict],
+    ) -> Dict[str, int]:
 
         patterns = {}
 
-        for sim in history:
-            best = sim["result"].get("best_strategy", {})
+        for history in histories:
+
+            best = (
+                history.get("result", {})
+                .get("best_strategy", {})
+            )
+
             name = best.get("name")
 
             if name:
-                patterns[name] = patterns.get(name, 0) + 1
+                patterns[name] = (
+                    patterns.get(name, 0) + 1
+                )
 
         return patterns
 

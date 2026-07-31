@@ -1,22 +1,25 @@
-import uuid
+import logging
 import random
+import uuid
+from typing import Dict, List, Optional
 
-from app.telemetry.kpi_tracker import kpi_tracker
+from app.services.kpi_service import kpi_service
 from app.strategies.strategy_registry import strategy_registry
+
+logger = logging.getLogger(__name__)
 
 
 class StrategyDiscoveryEngine:
     """
     Phase 174
-    Autonomous Strategy Discovery Engine
+    Autonomous Strategy Discovery Engine.
 
-    This engine creates new strategies automatically
-    and tracks discovered strategies.
+    Responsible for generating new candidate strategies,
+    registering them, and tracking their fitness.
     """
 
     def __init__(self):
-
-        self.discovered_strategies = {}
+        self.discovered_strategies: Dict[str, Dict] = {}
 
         self.strategy_templates = [
             "explore_then_optimize",
@@ -29,57 +32,114 @@ class StrategyDiscoveryEngine:
             "memory_guided",
         ]
 
-        print("[STRATEGY DISCOVERY ENGINE] Initialized")
+        logger.info("Strategy Discovery Engine initialized.")
 
     # ---------------------------------------------------
+    # DISCOVER STRATEGY
+    # ---------------------------------------------------
 
-    def discover_strategy(self):
+    def discover_strategy(self) -> Dict:
+        """
+        Generate a new strategy candidate.
+        """
 
         template = random.choice(self.strategy_templates)
 
-        strategy_id = f"strategy_{uuid.uuid4().hex[:6]}"
-
         strategy = {
-            "id": strategy_id,
+            "id": f"strategy_{uuid.uuid4().hex[:6]}",
             "template": template,
             "fitness": 0,
-            "uses": 0
+            "uses": 0,
         }
 
-        kpi_tracker.track_strategy_discovered()
+        self.discovered_strategies[strategy["id"]] = strategy
 
-        self.discovered_strategies[strategy_id] = strategy
+        # Register globally (if supported)
+        if hasattr(strategy_registry, "register_strategy"):
+            strategy_registry.register_strategy(strategy)
 
-        print(f"[STRATEGY DISCOVERY] New Strategy Created -> {strategy_id}")
+        # Record KPI
+        try:
+            kpi_service.record_strategy_discovered()
+        except Exception:
+            logger.exception("Failed to record strategy discovery KPI.")
+
+        logger.info(
+            "Discovered strategy %s (%s)",
+            strategy["id"],
+            template,
+        )
 
         return strategy
 
     # ---------------------------------------------------
+    # GET STRATEGY
+    # ---------------------------------------------------
 
-    def get_strategy(self, strategy_id):
+    def get_strategy(
+        self,
+        strategy_id: str,
+    ) -> Optional[Dict]:
 
         return self.discovered_strategies.get(strategy_id)
 
     # ---------------------------------------------------
+    # LIST STRATEGIES
+    # ---------------------------------------------------
 
-    def list_strategies(self):
+    def list_strategies(self) -> List[Dict]:
 
         return list(self.discovered_strategies.values())
 
     # ---------------------------------------------------
+    # UPDATE FITNESS
+    # ---------------------------------------------------
 
-    def update_fitness(self, strategy_id, reward):
+    def update_fitness(
+        self,
+        strategy_id: str,
+        reward: float,
+    ) -> Optional[Dict]:
 
-        if strategy_id not in self.discovered_strategies:
+        strategy = self.discovered_strategies.get(strategy_id)
+
+        if strategy is None:
             return None
-
-        strategy = self.discovered_strategies[strategy_id]
 
         strategy["fitness"] += reward
         strategy["uses"] += 1
 
+        logger.info(
+            "Updated strategy %s | reward=%s | fitness=%s | uses=%s",
+            strategy_id,
+            reward,
+            strategy["fitness"],
+            strategy["uses"],
+        )
+
         return strategy
 
+    # ---------------------------------------------------
+    # TOTAL DISCOVERED
+    # ---------------------------------------------------
 
-# GLOBAL ENGINE INSTANCE
+    def total_strategies(self) -> int:
+
+        return len(self.discovered_strategies)
+
+    # ---------------------------------------------------
+    # CLEAR
+    # ---------------------------------------------------
+
+    def clear(self):
+
+        self.discovered_strategies.clear()
+
+        logger.info("Strategy Discovery Engine cleared.")
+
+
+# ==========================================================
+# GLOBAL INSTANCE
+# ==========================================================
+
 strategy_discovery_engine = StrategyDiscoveryEngine()

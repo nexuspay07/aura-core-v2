@@ -1,24 +1,45 @@
-from app.db.database import SessionLocal
-from app.db.knowledge_models import Knowledge
+from typing import Any, Dict, Optional
+
+from sqlalchemy.orm import Session
+
+from app.knowledge.knowledge_repository import knowledge_repository
 
 
+class KnowledgeRetriever:
+    """
+    High-level interface for retrieving knowledge.
 
-def retrieve_knowledge(tenant_id, domain, fact_type):
+    Delegates retrieval to KnowledgeRepository.
+    """
 
-    db = SessionLocal()
+    def retrieve(
+        self,
+        db: Session,
+        organization_id: int,
+        fact_type: str,
+    ) -> Optional[Dict[str, Any]]:
 
-    try:
-
-        knowledge = (
-            db.query(KnowledgeBase)
-            .filter(KnowledgeBase.tenant_id == tenant_id)
-            .filter(KnowledgeBase.domain == domain)
-            .filter(KnowledgeBase.fact_type == fact_type)
-            .order_by(KnowledgeBase.created_at.desc())
-            .first()
+        return knowledge_repository.retrieve_fact(
+            db=db,
+            organization_id=organization_id,
+            fact_type=fact_type,
         )
 
-        return knowledge
+    def exists(
+        self,
+        db: Session,
+        organization_id: int,
+        fact_type: str,
+    ) -> bool:
 
-    finally:
-        db.close()
+        return (
+            self.retrieve(
+                db=db,
+                organization_id=organization_id,
+                fact_type=fact_type,
+            )
+            is not None
+        )
+
+
+knowledge_retriever = KnowledgeRetriever()

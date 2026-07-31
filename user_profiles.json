@@ -70,5 +70,17 @@
         "preferred_budget": null,
         "preferred_domain": null,
         "interaction_count": 0
+    },
+    "test-session-001": {
+        "preferred_risk": null,
+        "preferred_budget": null,
+        "preferred_domain": null,
+        "interaction_count": 0
+    },
+    "test-session": {
+        "preferred_risk": null,
+        "preferred_budget": null,
+        "preferred_domain": null,
+        "interaction_count": 0
     }
 }

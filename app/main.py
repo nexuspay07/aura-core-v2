@@ -1,10 +1,4 @@
-from app.memory.memory_service import (
-    save_memory
-)
 
-from app.memory.memory_retriever import (
-    retrieve_relevant_memories
-)
 
 from app.db.business_profile_table import (
     business_profile_table
@@ -19,21 +13,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.db.database import (
-    Base,
-    engine
-)
+from app.db.strategy import strategies
 
-from app.models.strategy import strategies
-from app.models.simulation import simulations
-from app.models.strategy import metadata as strategy_metadata
 from app.core.output_standardization_engine import (
     output_standardization_engine
 )
-
-
-Base.metadata.create_all(bind=engine)
-strategy_metadata.create_all(bind=engine)
 
 app = FastAPI(title="AURA AI")
 
@@ -71,12 +55,11 @@ from app.lab.debate_engine import debate_engine
 from app.db.user_table import user_table
 from app.api.auth_routes import router as auth_router
 from app.api.chat_routes import router as chat_router
-from app.core.conversation_memory import conversation_memory
 from app.core.decision_memory_engine import decision_memory_engine
 from app.core.agents.multi_agent_engine import multi_agent_engine
 
-from app.core.cognitive_loop import cognitive_loop
-from app.control.control_engine import control_engine
+from app.core.cognitive_loop_v2 import cognitive_loop
+
 
 from app.api.strategy_routes import router as strategy_router
 from app.api.marketplace_routes import router as marketplace_router
@@ -94,26 +77,26 @@ from app.db.decision_memory_table import decision_memory_table
 from app.db.organization_table import organization_table
 from app.db.workspace_table import workspace_table
 from app.api.organization_routes import router as organization_router
+from app.api.dashboard_routes import router as dashboard_router
+from app.platform_router import router as platform_router
 from app.db.intelligence_session_table import intelligence_session_table
 from sqlalchemy import select, insert
 from app.db.organization_table import organization_table
 from app.db.workspace_table import workspace_table
 from app.db.intelligence_session_table import intelligence_session_table
 from app.api.intelligence_session_routes import router as intelligence_session_router
+from app.api.invoice_routes import router as invoice_router
+from app.api.credit_note_routes import router as credit_note_router
+from app.api.refund_routes import router as refund_router
+from app.api.subscription_routes import router as subscription_router
+from app.api.billing_account_routes import router as billing_account_router
+from app.api.usage_meter_routes import router as usage_meter_router
 
 from app.core.simulation.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
 from app.core.adaptive_learning_v2_engine import adaptive_learning_v2_engine
 from app.core.strategy_reinforcement_engine import strategy_reinforcement_engine
 from app.core.reasoning.causal_reasoning_engine import causal_reasoning_engine
-from app.services.memory_service import (
-    save_user_memory,
-    get_user_memories,
-    save_organization_memory,
-    get_organization_memories,
-    save_session_memory,
-    get_session_memory,
-)
 
 app.include_router(chat_router)
 app.include_router(payment_router)
@@ -123,6 +106,14 @@ app.include_router(marketplace_router)
 app.include_router(organization_router)
 app.include_router(intelligence_session_router)
 app.include_router(auth_router)
+app.include_router(dashboard_router)
+app.include_router(platform_router)
+app.include_router(invoice_router)
+app.include_router(credit_note_router)
+app.include_router(refund_router)
+app.include_router(subscription_router)
+app.include_router(billing_account_router)
+app.include_router(usage_meter_router)
 
 
 # =========================
@@ -304,7 +295,8 @@ async def health():
 # =========================
 @app.on_event("startup")
 async def startup():
-    metadata.create_all(engine)
+    # Schema changes are owned exclusively by Alembic migrations.
+    pass
 
 
 
