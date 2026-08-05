@@ -2,12 +2,12 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, desc, exists, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from app.commercial.models import CURRENT_SUBSCRIPTION_STATUSES, Plan, PlanFeature, Subscription, SubscriptionHistory, UsageRecord, BillingAccount
+from app.commercial.models import CURRENT_SUBSCRIPTION_STATUSES, Plan, PlanFeature, Subscription, SubscriptionHistory, UsageRecord, BillingAccount, UsagePrice, InvoiceUsageAllocation
 from app.commercial.models import Invoice, InvoiceLineItem
-from app.commercial.models import PaymentAttempt
+from app.commercial.models import PaymentAttempt, Payment
 from app.commercial.models import CreditNote
 from app.commercial.models import CreditNoteApplication
 from app.commercial.models import Refund
@@ -190,9 +190,62 @@ class SqlAlchemyUsageRecordRepository(UsageRecordRepository):
     def list_within_period(self, organization_id: int, period_start: datetime, period_end: datetime) -> list[UsageRecord]:
         return list(self.session.scalars(select(UsageRecord).where(UsageRecord.organization_id == organization_id, UsageRecord.occurred_at >= period_start, UsageRecord.occurred_at < period_end).order_by(UsageRecord.occurred_at, UsageRecord.created_at, UsageRecord.id)))
 
+    def list_unallocated_for_subscription_period(self, organization_id: int, subscription_id: int, period_start: datetime, period_end: datetime) -> list[UsageRecord]:
+        allocated = select(InvoiceUsageAllocation.id).where(InvoiceUsageAllocation.usage_record_id == UsageRecord.id)
+        return list(self.session.scalars(
+            select(UsageRecord).where(
+                UsageRecord.organization_id == organization_id,
+                UsageRecord.subscription_id == subscription_id,
+                UsageRecord.occurred_at >= period_start,
+                UsageRecord.occurred_at < period_end,
+                ~exists(allocated),
+            ).order_by(UsageRecord.occurred_at, UsageRecord.created_at, UsageRecord.id)
+        ))
+
     def _sum(self, scope, feature_key: str, period_start: datetime, period_end: datetime) -> Decimal:
         total = self.session.scalar(select(func.coalesce(func.sum(UsageRecord.quantity), 0)).where(scope, UsageRecord.feature_key == feature_key, UsageRecord.occurred_at >= period_start, UsageRecord.occurred_at < period_end))
         return Decimal(str(total))
+
+
+class UsagePriceRepository(ABC):
+    @abstractmethod
+    def save(self, price: UsagePrice) -> UsagePrice: ...
+    @abstractmethod
+    def effective_for(self, *, organization_id: int, plan_id: int, feature_key: str, unit: str, occurred_at: datetime) -> list[UsagePrice]: ...
+
+
+class SqlAlchemyUsagePriceRepository(UsagePriceRepository):
+    def __init__(self, session: Session): self.session = session
+    def save(self, price: UsagePrice) -> UsagePrice:
+        self.session.add(price); self.session.flush(); return price
+    def effective_for(self, *, organization_id, plan_id, feature_key, unit, occurred_at):
+        criteria = (
+            UsagePrice.plan_id == plan_id,
+            UsagePrice.feature_key == feature_key,
+            UsagePrice.unit == unit,
+            UsagePrice.is_active.is_(True),
+            UsagePrice.effective_from <= occurred_at,
+            or_(UsagePrice.effective_until.is_(None), UsagePrice.effective_until > occurred_at),
+        )
+        organization_prices = list(self.session.scalars(select(UsagePrice).where(*criteria, UsagePrice.organization_id == organization_id).order_by(UsagePrice.id)))
+        if organization_prices:
+            return organization_prices
+        return list(self.session.scalars(select(UsagePrice).where(*criteria, UsagePrice.organization_id.is_(None)).order_by(UsagePrice.id)))
+
+
+class InvoiceUsageAllocationRepository(ABC):
+    @abstractmethod
+    def save(self, allocation: InvoiceUsageAllocation) -> InvoiceUsageAllocation: ...
+    @abstractmethod
+    def get_by_usage_record_id(self, usage_record_id: int) -> InvoiceUsageAllocation | None: ...
+
+
+class SqlAlchemyInvoiceUsageAllocationRepository(InvoiceUsageAllocationRepository):
+    def __init__(self, session: Session): self.session = session
+    def save(self, allocation: InvoiceUsageAllocation) -> InvoiceUsageAllocation:
+        self.session.add(allocation); self.session.flush(); return allocation
+    def get_by_usage_record_id(self, usage_record_id):
+        return self.session.scalar(select(InvoiceUsageAllocation).where(InvoiceUsageAllocation.usage_record_id == usage_record_id))
 
 class BillingAccountRepository(ABC):
     @abstractmethod
@@ -281,6 +334,20 @@ class SqlAlchemyPaymentAttemptRepository(PaymentAttemptRepository):
  def list_by_provider(self,p):return self._l(PaymentAttempt.provider==p,PaymentAttempt.requested_at,PaymentAttempt.id)
  def list_requested_before(self,c):return self._l(PaymentAttempt.requested_at<c,PaymentAttempt.requested_at,PaymentAttempt.id)
  def _l(self,w,*o):return list(self.session.scalars(select(PaymentAttempt).where(w).order_by(*o)))
+
+class PaymentRepository(ABC):
+ @abstractmethod
+ def save(self,x):...
+ @abstractmethod
+ def get_by_attempt_id(self,i):...
+ @abstractmethod
+ def list_by_invoice_id(self,i):...
+
+class SqlAlchemyPaymentRepository(PaymentRepository):
+ def __init__(self,s):self.session=s
+ def save(self,x):self.session.add(x);self.session.flush();return x
+ def get_by_attempt_id(self,i):return self.session.scalar(select(Payment).where(Payment.payment_attempt_id==i))
+ def list_by_invoice_id(self,i):return list(self.session.scalars(select(Payment).where(Payment.invoice_id==i).order_by(Payment.paid_at,Payment.id)))
 
 
 class CreditNoteRepository(ABC):

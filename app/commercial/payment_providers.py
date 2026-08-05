@@ -36,3 +36,10 @@ class FakePaymentProvider:
   if self.outcome=='unavailable':raise PaymentProviderUnavailableError()
   if self.outcome=='rejected':raise PaymentProviderRejectedError()
   self.execution_count+=1;self.requests.append(r);status=self.outcome;result=PaymentProviderResult(status,'fake-'+str(r.payment_attempt_id) if status in {'succeeded','processing'} else None,'failed' if status=='failed' else None,'failed' if status=='failed' else None);self._results[r.idempotency_key]=(result,r);return result
+ def retrieve_payment_result(self,idempotency_key):
+  if idempotency_key not in self._results:raise PaymentProviderError()
+  return self._results[idempotency_key][0]
+ def create_refund_reference(self,provider_reference):
+  if not provider_reference:return None
+  return 'fake-refund-'+provider_reference
+ def verify_event(self,payload,signature):return signature=='fake-signature' and isinstance(payload,dict)

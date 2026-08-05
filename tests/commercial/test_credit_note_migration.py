@@ -47,7 +47,7 @@ def test_revision_chain_and_upgrade_schema(tmp_path):
         assert "credit_note_line_items" in inspector.get_table_names()
     finally:
         conn.close(); engine.dispose()
-    assert script.get_heads() == ["20260730_0014"]
+    assert script.get_heads() == ["20260731_0016"]
 
 
 def test_upgrade_preserves_existing_commercial_records_and_accepts_valid_credit_note(tmp_path):

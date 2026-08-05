@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.database import Base
 from app.db.user_table import user_table
 from app.db.organization_table import organization_table
-from app.commercial.models import Plan,BillingAccount,Subscription,Invoice,InvoiceLineItem
+from app.commercial.models import Plan,BillingAccount,Subscription,Invoice,InvoiceLineItem,UsagePrice,UsageRecord,InvoiceUsageAllocation
 def app_client():
  app=FastAPI();app.include_router(router);app.dependency_overrides[current]=lambda:{'id':1};return TestClient(app)
 def test_openapi_registers_invoice_routes_and_schemas():
@@ -62,6 +62,14 @@ def test_create_uses_authenticated_org_and_persists_fresh_session(real_api):
  c,F,n=real_api;r=c.post('/commercial/invoices',json=payload(n));assert r.status_code==201 and r.json()['organization_id']==1;fresh=F();x=fresh.get(Invoice,r.json()['id']);assert x and x.organization_id==1 and x.invoice_number=='API-CREATE';fresh.close()
 def test_issue_void_and_tenant_blocking_with_fresh_sessions(real_api):
  c,F,n=real_api;s=F();draft=Invoice(organization_id=1,billing_account_id=1,subscription_id=1,invoice_number='API-DRAFT',status='draft',currency='CAD',period_start=n,period_end=n.replace(month=2),subtotal_amount=1,tax_amount=0,discount_amount=0,total_amount=1,amount_due=1,amount_paid=0);s.add(draft);s.flush();s.add(InvoiceLineItem(invoice_id=draft.id,line_number=1,item_type='adjustment',description='x',quantity=1,unit_amount=1,subtotal_amount=1,tax_amount=0,discount_amount=0,total_amount=1));other=Invoice(organization_id=2,billing_account_id=2,subscription_id=2,invoice_number='API-OTHER',status='draft',currency='CAD',period_start=n,period_end=n.replace(month=2),subtotal_amount=1,tax_amount=0,discount_amount=0,total_amount=1,amount_due=1,amount_paid=0);s.add(other);s.commit();did=draft.id;oid=other.id;s.close();assert c.post(f'/commercial/invoices/{did}/issue').json()['status']=='open';fresh=F();assert fresh.get(Invoice,did).status=='open';fresh.close();assert c.post(f'/commercial/invoices/{did}/void').json()['status']=='void';fresh=F();assert fresh.get(Invoice,did).status=='void';fresh.close();assert c.post(f'/commercial/invoices/{oid}/issue').status_code==404 and c.post(f'/commercial/invoices/{oid}/void').status_code==404
+
+def test_usage_invoice_generation_is_tenant_scoped_persistent_and_registered(real_api):
+ c,F,n=real_api;s=F();s.add(UsagePrice(plan_id=1,feature_key='calls',unit='request',currency='CAD',unit_price=Decimal('0.125000'),effective_from=n));s.add(UsageRecord(organization_id=1,subscription_id=1,feature_key='calls',quantity=Decimal('8'),unit='request',occurred_at=n));s.commit();s.close()
+ response=c.post('/commercial/invoices/generate-usage',json={'subscription_id':1,'period_start':n.isoformat(),'period_end':n.replace(month=2).isoformat()})
+ assert response.status_code==201 and response.json()['status']=='draft' and response.json()['amount_due']=='1.0000'
+ fresh=F();created=fresh.get(Invoice,response.json()['id']);assert created.organization_id==1 and fresh.query(InvoiceUsageAllocation).filter_by(invoice_id=created.id).count()==1;fresh.close()
+ assert c.post('/commercial/invoices/generate-usage',json={'subscription_id':2,'period_start':n.isoformat(),'period_end':n.replace(month=2).isoformat()}).status_code==409
+ schema=c.get('/openapi.json').json();assert '/commercial/invoices/generate-usage' in schema['paths'] and 'UsageInvoiceGenerate' in schema['components']['schemas']
 
 @pytest.mark.parametrize('operation', ['create','update','issue','void'])
 def test_router_write_failure_rolls_back(operation, real_api, monkeypatch):

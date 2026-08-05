@@ -250,6 +250,40 @@ class SubscriptionLifecycleService:
             self.session.rollback()
             raise SubscriptionPersistenceConflictError("Unable to expire the trial.") from exc
 
+    def suspend_subscription(self, subscription_id: int) -> Subscription:
+        return self._transition(subscription_id, {"active"}, "paused", "paused")
+
+    def resume_subscription(self, subscription_id: int) -> Subscription:
+        return self._transition(subscription_id, {"paused"}, "active", "resumed")
+
+    def cancel_subscription(self, subscription_id: int) -> Subscription:
+        return self._transition(subscription_id, {"trialing", "active", "paused"}, "cancelled", "cancelled", set_cancelled=True)
+
+    def expire_subscription(self, subscription_id: int) -> Subscription:
+        subscription = self.subscriptions.get_by_id(subscription_id)
+        if subscription is None:
+            raise SubscriptionNotFoundError(f"Subscription {subscription_id} was not found.")
+        if subscription.status != "active" or subscription.ends_at is None or self.clock() < _as_utc(subscription.ends_at):
+            raise InvalidSubscriptionStateTransitionError("Only ended active subscriptions may expire.")
+        return self._transition(subscription_id, {"active"}, "expired", "expired")
+
+    def _transition(self, subscription_id: int, allowed: set[str], target: str, event_type: str, *, set_cancelled: bool = False) -> Subscription:
+        subscription = self.subscriptions.get_by_id(subscription_id)
+        if subscription is None:
+            raise SubscriptionNotFoundError(f"Subscription {subscription_id} was not found.")
+        if subscription.status not in allowed:
+            raise InvalidSubscriptionStateTransitionError("Invalid subscription state transition.")
+        operation_time = self.clock(); previous = subscription.status
+        subscription.status = target; subscription.version += 1; subscription.updated_at = operation_time
+        if set_cancelled: subscription.cancelled_at = operation_time
+        try:
+            self.subscriptions.save(subscription)
+            self.history.save(SubscriptionHistory(subscription_id=subscription.id, event_type=event_type, previous_status=previous, new_status=target, effective_at=operation_time, created_at=operation_time))
+            return subscription
+        except Exception as exc:
+            self.session.rollback()
+            raise SubscriptionPersistenceConflictError("Unable to transition the subscription.") from exc
+
     def activate_trial(self, subscription_id: int, *, renews_at: datetime | None = None) -> Subscription:
         subscription = self.subscriptions.get_by_id(subscription_id)
         if subscription is None:

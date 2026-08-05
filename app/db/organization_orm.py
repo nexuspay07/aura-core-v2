@@ -9,7 +9,7 @@ from app.db.organization_table import organization_table
 
 if TYPE_CHECKING:
     from app.commercial.models import Subscription
-    from app.commercial.models import UsageRecord, CreditNote, CreditNoteApplication, Refund
+    from app.commercial.models import UsageRecord, CreditNote, CreditNoteApplication, Refund, UsagePrice, InvoiceUsageAllocation, Payment
 
 
 class Organization(Base):
@@ -28,3 +28,6 @@ class Organization(Base):
     credit_notes: Mapped[list["CreditNote"]] = relationship("CreditNote", back_populates="organization", lazy="select", passive_deletes=True)
     credit_note_applications: Mapped[list["CreditNoteApplication"]] = relationship("CreditNoteApplication", back_populates="organization", lazy="select", passive_deletes=True)
     refunds: Mapped[list["Refund"]] = relationship("Refund", back_populates="organization", lazy="select", passive_deletes=True)
+    usage_prices: Mapped[list["UsagePrice"]] = relationship("UsagePrice", lazy="select", passive_deletes=True)
+    usage_allocations: Mapped[list["InvoiceUsageAllocation"]] = relationship("InvoiceUsageAllocation", lazy="select", passive_deletes=True)
+    payments: Mapped[list["Payment"]] = relationship("Payment", lazy="select", passive_deletes=True)

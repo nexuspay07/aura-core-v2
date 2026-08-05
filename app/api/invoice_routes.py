@@ -8,6 +8,7 @@ from app.db.database import SessionLocal
 from app.api.auth_routes import get_current_user_from_token
 from app.commercial.invoice_service import InvoiceService,InvoiceNotFoundError,InvoiceInputError,InvoiceTransitionError
 from app.commercial.repositories import SqlAlchemyInvoiceRepository
+from app.commercial.usage_invoice_generation import UsageInvoiceGenerationService, UsageInvoiceGenerationError
 
 router=APIRouter(prefix='/commercial/invoices',tags=['Commercial Invoices'])
 security=HTTPBearer()
@@ -22,6 +23,8 @@ class InvoiceOut(BaseModel):
  class Config:from_attributes=True
 class InvoiceUpdate(BaseModel):
  currency:str|None=None;due_at:datetime|None=None
+class UsageInvoiceGenerate(BaseModel):
+ subscription_id:int;period_start:datetime;period_end:datetime
 async def current(credentials:HTTPAuthorizationCredentials=Depends(security)):
  return await get_current_user_from_token(credentials)
 def organization_id(user):
@@ -43,6 +46,12 @@ def fail(fn):
 @router.get('',response_model=list[InvoiceOut])
 def list_invoices(s:Session=Depends(get_session),user=Depends(current)):
  return SqlAlchemyInvoiceRepository(s).list_by_organization_id(organization_id(user))
+@router.post('/generate-usage',response_model=InvoiceOut,status_code=201)
+def generate_usage_invoice(body:UsageInvoiceGenerate,s:Session=Depends(get_session),user=Depends(current)):
+ try:
+  return write(s,lambda:UsageInvoiceGenerationService(s).generate(organization_id=organization_id(user),**body.model_dump()))
+ except UsageInvoiceGenerationError as exc:
+  raise HTTPException(409,str(exc))
 @router.get('/{invoice_id}',response_model=InvoiceOut)
 def get_invoice(invoice_id:int,s:Session=Depends(get_session),user=Depends(current)):
  return owned(SqlAlchemyInvoiceRepository(s).get_by_id(invoice_id),user)

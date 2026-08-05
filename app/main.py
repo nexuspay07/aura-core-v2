@@ -8,10 +8,11 @@ from app.db.business_profile_table import (
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.rate_limit import CommercialRateLimitMiddleware
 
 from app.db.strategy import strategies
 
@@ -38,11 +39,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CommercialRateLimitMiddleware)
 
 # =========================
 # IMPORTS
 # =========================
-from app.db.database import engine, metadata
+from app.db.database import SessionLocal, engine, metadata
 
 from app.lab.world_engine import world_engine
 from app.lab.history_engine import history_engine
@@ -53,7 +55,8 @@ from app.lab.explanation_engine import explanation_engine
 from app.lab.agent_engine import agent_engine
 from app.lab.debate_engine import debate_engine
 from app.db.user_table import user_table
-from app.api.auth_routes import router as auth_router
+from app.api.auth_routes import get_current_user_from_token, router as auth_router
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.api.chat_routes import router as chat_router
 from app.core.decision_memory_engine import decision_memory_engine
 from app.core.agents.multi_agent_engine import multi_agent_engine
@@ -91,6 +94,7 @@ from app.api.refund_routes import router as refund_router
 from app.api.subscription_routes import router as subscription_router
 from app.api.billing_account_routes import router as billing_account_router
 from app.api.usage_meter_routes import router as usage_meter_router
+from app.api.payment_routes import router as commercial_payment_router
 
 from app.core.simulation.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
@@ -114,6 +118,7 @@ app.include_router(refund_router)
 app.include_router(subscription_router)
 app.include_router(billing_account_router)
 app.include_router(usage_meter_router)
+app.include_router(commercial_payment_router)
 
 
 # =========================
@@ -455,10 +460,30 @@ async def reject():
 # =========================
 # DASHBOARD
 # =========================
+dashboard_security = HTTPBearer()
+
+
+def _authenticated_organization(identity):
+    organization = identity.get("organization") if identity else None
+    organization_id = organization.get("id") if organization else None
+    if organization_id is None:
+        raise HTTPException(status_code=400, detail="User does not belong to an organization.")
+    return organization_id
+
+
 @app.get("/dashboard")
-async def dashboard():
-    username = "test_user"
-    history = await history_engine.get(username)
+async def dashboard(
+    credentials: HTTPAuthorizationCredentials = Depends(dashboard_security),
+):
+    identity = await get_current_user_from_token(credentials)
+    db = SessionLocal()
+    try:
+        history = history_engine.get(
+            db=db,
+            organization_id=_authenticated_organization(identity),
+        )
+    finally:
+        db.close()
 
     total_runs = len(history)
 
@@ -481,8 +506,18 @@ async def dashboard():
 # HISTORY
 # =========================
 @app.get("/lab/history")
-async def get_history():
-    return await history_engine.get("test_user")
+async def get_history(
+    credentials: HTTPAuthorizationCredentials = Depends(dashboard_security),
+):
+    identity = await get_current_user_from_token(credentials)
+    db = SessionLocal()
+    try:
+        return history_engine.get(
+            db=db,
+            organization_id=_authenticated_organization(identity),
+        )
+    finally:
+        db.close()
 
 
 # =========================

@@ -49,6 +49,33 @@ class PlanFeature(Base):
     plan: Mapped[Plan] = relationship(back_populates="features", lazy="select")
 
 
+class UsagePrice(Base):
+    """Effective-dated, immutable unit price for a metered plan feature."""
+
+    __tablename__ = "usage_prices"
+    __table_args__ = (
+        CheckConstraint("unit_price >= 0", name="ck_usage_prices_unit_price_nonnegative"),
+        CheckConstraint(
+            "effective_until IS NULL OR effective_until > effective_from",
+            name="ck_usage_prices_effective_period",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), index=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id"), nullable=False, index=True)
+    feature_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    unit: Mapped[str] = mapped_column(String(64), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    effective_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    plan: Mapped[Plan] = relationship(lazy="select")
+
+
 class Subscription(Base):
     """Persistent commercial relationship between one organization and one plan.
 
@@ -191,6 +218,29 @@ class UsageRecord(Base):
     organization: Mapped[Organization] = relationship(back_populates="usage_records", lazy="select")
     subscription: Mapped[Subscription] = relationship(back_populates="usage_records", lazy="select")
 
+
+class InvoiceUsageAllocation(Base):
+    """Immutable pricing snapshot allocating one usage record to one invoice."""
+
+    __tablename__ = "invoice_usage_allocations"
+    __table_args__ = (
+        UniqueConstraint("usage_record_id", name="uq_invoice_usage_allocations_usage_record"),
+        CheckConstraint("quantity_allocated > 0", name="ck_invoice_usage_allocations_quantity_positive"),
+        CheckConstraint("unit_price >= 0", name="ck_invoice_usage_allocations_unit_price_nonnegative"),
+        CheckConstraint("amount >= 0", name="ck_invoice_usage_allocations_amount_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
+    usage_record_id: Mapped[int] = mapped_column(ForeignKey("usage_records.id"), nullable=False, index=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), nullable=False, index=True)
+    invoice_line_item_id: Mapped[int] = mapped_column(ForeignKey("invoice_line_items.id"), nullable=False, index=True)
+    quantity_allocated: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 class BillingAccount(Base):
     __tablename__="billing_accounts"
     __table_args__=(UniqueConstraint("organization_id",name="uq_billing_accounts_organization"),CheckConstraint("billing_status IN ('active','suspended','closed')",name="ck_billing_accounts_status"),CheckConstraint("version > 0",name="ck_billing_accounts_version_positive"))
@@ -220,12 +270,19 @@ class Invoice(Base):
  credit_notes:Mapped[list["CreditNote"]]=relationship(back_populates="invoice",lazy="select",passive_deletes=True)
  credit_note_applications:Mapped[list["CreditNoteApplication"]]=relationship(back_populates="invoice",lazy="select",passive_deletes=True)
  refunds:Mapped[list["Refund"]]=relationship(back_populates="invoice",lazy="select",passive_deletes=True)
+ payments:Mapped[list["Payment"]]=relationship(back_populates="invoice",lazy="select",passive_deletes=True)
 class InvoiceLineItem(Base):
  __tablename__="invoice_line_items";__table_args__=(UniqueConstraint("invoice_id","line_number",name="uq_invoice_lines_number"),CheckConstraint("item_type IN ('subscription','usage','adjustment','credit','tax','discount')",name="ck_invoice_lines_type"),CheckConstraint("quantity >= 0",name="ck_invoice_lines_quantity"),CheckConstraint("period_end IS NULL OR period_start IS NULL OR period_end > period_start",name="ck_invoice_lines_period"))
  id:Mapped[int]=mapped_column(Integer,primary_key=True);invoice_id:Mapped[int]=mapped_column(ForeignKey("invoices.id",ondelete="CASCADE"),nullable=False,index=True);line_number:Mapped[int]=mapped_column(Integer,nullable=False);item_type:Mapped[str]=mapped_column(String(16),nullable=False);description:Mapped[str]=mapped_column(String(512),nullable=False);quantity:Mapped[Decimal]=mapped_column(Numeric(18,4),nullable=False);unit_amount:Mapped[Decimal]=mapped_column(Numeric(18,4),nullable=False);subtotal_amount:Mapped[Decimal]=mapped_column(Numeric(18,4),nullable=False);tax_amount:Mapped[Decimal]=mapped_column(Numeric(18,4),nullable=False);discount_amount:Mapped[Decimal]=mapped_column(Numeric(18,4),nullable=False);total_amount:Mapped[Decimal]=mapped_column(Numeric(18,4),nullable=False);period_start:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));period_end:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));source_type:Mapped[str|None]=mapped_column(String(64));source_id:Mapped[str|None]=mapped_column(String(255));metadata_json:Mapped[dict|None]=mapped_column(JSON);created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),nullable=False);updated_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),nullable=False);invoice:Mapped[Invoice]=relationship(back_populates="line_items",lazy="select")
 class PaymentAttempt(Base):
  __tablename__="payment_attempts";__table_args__=(UniqueConstraint("idempotency_key",name="uq_payment_attempts_idempotency"),UniqueConstraint("invoice_id","attempt_number",name="uq_payment_attempts_invoice_number"),CheckConstraint("attempt_number > 0",name="ck_payment_attempt_number"),CheckConstraint("amount > 0",name="ck_payment_attempt_amount"),CheckConstraint("version >= 1",name="ck_payment_attempt_version"),CheckConstraint("status IN ('pending','processing','succeeded','failed','cancelled')",name="ck_payment_attempt_status"))
- id:Mapped[int]=mapped_column(Integer,primary_key=True);invoice_id:Mapped[int]=mapped_column(ForeignKey("invoices.id",ondelete="CASCADE"),nullable=False,index=True);attempt_number:Mapped[int]=mapped_column(Integer,nullable=False);provider:Mapped[str]=mapped_column(String(64),nullable=False,index=True);provider_reference:Mapped[str|None]=mapped_column(String(255),index=True);idempotency_key:Mapped[str]=mapped_column(String(255),nullable=False);status:Mapped[str]=mapped_column(String(16),nullable=False,default="pending",index=True);amount:Mapped[Decimal]=mapped_column(Numeric(18,4),nullable=False);currency:Mapped[str]=mapped_column(String(3),nullable=False);failure_code:Mapped[str|None]=mapped_column(String(128));failure_message:Mapped[str|None]=mapped_column(String(512));provider_metadata_json:Mapped[dict|None]=mapped_column(JSON);requested_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,index=True);processing_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));succeeded_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));failed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));cancelled_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));reconciled_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));version:Mapped[int]=mapped_column(Integer,nullable=False,default=1);created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),nullable=False);updated_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),nullable=False);invoice:Mapped[Invoice]=relationship(back_populates="payment_attempts",lazy="select");refunds:Mapped[list["Refund"]]=relationship(back_populates="payment_attempt",lazy="select",passive_deletes=True)
+ id:Mapped[int]=mapped_column(Integer,primary_key=True);invoice_id:Mapped[int]=mapped_column(ForeignKey("invoices.id",ondelete="CASCADE"),nullable=False,index=True);attempt_number:Mapped[int]=mapped_column(Integer,nullable=False);provider:Mapped[str]=mapped_column(String(64),nullable=False,index=True);provider_reference:Mapped[str|None]=mapped_column(String(255),index=True);idempotency_key:Mapped[str]=mapped_column(String(255),nullable=False);status:Mapped[str]=mapped_column(String(16),nullable=False,default="pending",index=True);amount:Mapped[Decimal]=mapped_column(Numeric(18,4),nullable=False);currency:Mapped[str]=mapped_column(String(3),nullable=False);failure_code:Mapped[str|None]=mapped_column(String(128));failure_message:Mapped[str|None]=mapped_column(String(512));provider_metadata_json:Mapped[dict|None]=mapped_column(JSON);requested_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,index=True);processing_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));succeeded_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));failed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));cancelled_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));reconciled_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));version:Mapped[int]=mapped_column(Integer,nullable=False,default=1);created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),nullable=False);updated_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),nullable=False);invoice:Mapped[Invoice]=relationship(back_populates="payment_attempts",lazy="select");refunds:Mapped[list["Refund"]]=relationship(back_populates="payment_attempt",lazy="select",passive_deletes=True);payment:Mapped["Payment|None"]=relationship(back_populates="payment_attempt",uselist=False,lazy="select",passive_deletes=True)
+
+class Payment(Base):
+ __tablename__="payments"
+ __table_args__=(UniqueConstraint("payment_attempt_id",name="uq_payments_attempt"),UniqueConstraint("provider","provider_reference",name="uq_payments_provider_reference"),CheckConstraint("amount > 0",name="ck_payments_amount_positive"))
+ id:Mapped[int]=mapped_column(Integer,primary_key=True);organization_id:Mapped[int]=mapped_column(ForeignKey("organizations.id"),nullable=False,index=True);invoice_id:Mapped[int]=mapped_column(ForeignKey("invoices.id"),nullable=False,index=True);payment_attempt_id:Mapped[int]=mapped_column(ForeignKey("payment_attempts.id"),nullable=False,index=True);provider:Mapped[str]=mapped_column(String(64),nullable=False,index=True);provider_reference:Mapped[str]=mapped_column(String(255),nullable=False);amount:Mapped[Decimal]=mapped_column(Numeric(18,4),nullable=False);currency:Mapped[str]=mapped_column(String(3),nullable=False);paid_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,index=True);created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),nullable=False)
+ organization:Mapped[Organization]=relationship(back_populates="payments",lazy="select");invoice:Mapped[Invoice]=relationship(back_populates="payments",lazy="select");payment_attempt:Mapped[PaymentAttempt]=relationship(back_populates="payment",lazy="select")
 
 class CreditNote(Base):
  __tablename__="credit_notes"

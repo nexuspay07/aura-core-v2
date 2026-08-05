@@ -163,3 +163,23 @@ def activate_trial(subscription_id: int, body: ActivationRequest, session: Sessi
 def expire_trial(subscription_id: int, session: Session = Depends(get_session), user=Depends(current)):
     owned(SqlAlchemySubscriptionRepository(session).get_by_id(subscription_id), user)
     return write(session, lambda: lifecycle(lambda: SubscriptionLifecycleService(session).expire_trial(subscription_id)))
+
+def transition(subscription_id: int, method: str, session: Session, user):
+    owned(SqlAlchemySubscriptionRepository(session).get_by_id(subscription_id), user)
+    return write(session, lambda: lifecycle(lambda: getattr(SubscriptionLifecycleService(session), method)(subscription_id)))
+
+@router.post("/{subscription_id}/suspend", response_model=SubscriptionOut)
+def suspend(subscription_id: int, session: Session = Depends(get_session), user=Depends(current)):
+    return transition(subscription_id, "suspend_subscription", session, user)
+
+@router.post("/{subscription_id}/resume", response_model=SubscriptionOut)
+def resume(subscription_id: int, session: Session = Depends(get_session), user=Depends(current)):
+    return transition(subscription_id, "resume_subscription", session, user)
+
+@router.post("/{subscription_id}/cancel", response_model=SubscriptionOut)
+def cancel(subscription_id: int, session: Session = Depends(get_session), user=Depends(current)):
+    return transition(subscription_id, "cancel_subscription", session, user)
+
+@router.post("/{subscription_id}/expire", response_model=SubscriptionOut)
+def expire(subscription_id: int, session: Session = Depends(get_session), user=Depends(current)):
+    return transition(subscription_id, "expire_subscription", session, user)

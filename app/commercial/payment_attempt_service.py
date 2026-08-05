@@ -7,7 +7,10 @@ class PaymentAttemptTransitionError(PaymentAttemptError):pass
 class PaymentAttemptService:
  def __init__(self,s,clock=lambda:datetime.now(timezone.utc)):self.session=s;self.repo=SqlAlchemyPaymentAttemptRepository(s);self.clock=clock
  def create_attempt(self,**v):
-  if not self.session.get(Invoice,v['invoice_id']) or not v['provider'].strip() or len(v['currency'])!=3 or not v['currency'].isupper() or Decimal(v['amount'])<=0 or not v['idempotency_key'].strip():raise PaymentAttemptError()
+  invoice=self.session.get(Invoice,v['invoice_id'])
+  if not invoice or invoice.status!='open' or invoice.amount_due<=0 or invoice.currency!=v['currency'] or Decimal(v['amount'])<=0 or Decimal(v['amount'])>invoice.amount_due or not v['provider'].strip() or len(v['currency'])!=3 or not v['currency'].isupper() or not v['idempotency_key'].strip():raise PaymentAttemptError()
+  existing=self.repo.get_by_idempotency_key(v['idempotency_key'])
+  if existing:return existing
   v['status']='pending';v['requested_at']=self.clock();return self.repo.save(PaymentAttempt(**v))
  def _go(self,i,from_,to,field,**v):
   x=self.repo.get_by_id(i)

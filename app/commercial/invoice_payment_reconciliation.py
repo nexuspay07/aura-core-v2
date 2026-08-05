@@ -13,7 +13,7 @@ from app.commercial.invoice_service import (
     InvoiceNotFoundError,
     InvoiceTransitionError,
 )
-from app.commercial.models import Invoice, PaymentAttempt
+from app.commercial.models import Invoice, Payment, PaymentAttempt
 from app.commercial.payment_attempt_service import (
     PaymentAttemptError,
     PaymentAttemptTransitionError,
@@ -22,6 +22,7 @@ from app.commercial.repositories import (
     InvoiceRepository,
     PaymentAttemptRepository,
     SqlAlchemyInvoiceRepository,
+    SqlAlchemyPaymentRepository,
     SqlAlchemyPaymentAttemptRepository,
 )
 
@@ -44,11 +45,13 @@ class InvoicePaymentReconciliationService:
         *,
         invoice_repository: InvoiceRepository | None = None,
         payment_attempt_repository: PaymentAttemptRepository | None = None,
+        payment_repository=None,
         clock=lambda: datetime.now(timezone.utc),
     ):
         self.session = session
         self.invoices = invoice_repository or SqlAlchemyInvoiceRepository(session)
         self.payment_attempts = payment_attempt_repository or SqlAlchemyPaymentAttemptRepository(session)
+        self.payments = payment_repository or SqlAlchemyPaymentRepository(session)
         self.clock = clock
 
     def reconcile_succeeded_attempt(self, payment_attempt_id: int) -> Invoice:
@@ -116,6 +119,11 @@ class InvoicePaymentReconciliationService:
             raise PaymentAttemptTransitionError("Payment attempt reconciliation claim failed.")
 
         try:
+            self.payments.save(Payment(
+                organization_id=invoice.organization_id, invoice_id=invoice.id, payment_attempt_id=attempt.id,
+                provider=attempt.provider, provider_reference=attempt.provider_reference,
+                amount=amount, currency=attempt.currency, paid_at=now, created_at=now,
+            ))
             invoice.amount_paid = new_paid
             invoice.amount_due = new_due
             invoice.updated_at = now

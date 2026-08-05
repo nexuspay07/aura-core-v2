@@ -4,7 +4,8 @@ import pytest
 from sqlalchemy import create_engine, event, insert, select
 from sqlalchemy.orm import sessionmaker
 
-from app.commercial.models import Plan, Subscription, SubscriptionHistory
+from app.commercial.models import Plan, PlanFeature, Subscription, SubscriptionHistory
+from app.commercial.entitlements import EntitlementService
 from app.commercial.subscription_lifecycle import (
     CurrentSubscriptionAlreadyExistsError,
     InactivePlanError,
@@ -133,3 +134,32 @@ def test_caller_rollback_removes_pending_subscription_and_matching_history(sessi
     session.rollback()
     assert session.get(Subscription, pending_id) is None
     assert session.scalars(select(SubscriptionHistory).where(SubscriptionHistory.subscription_id == pending_id)).all() == []
+
+
+def test_expire_trial_enforces_boundary_and_preserves_rejected_state(session):
+    future = Subscription(organization_id=1, plan_id=1, status="trialing", billing_cycle="monthly", starts_at=FIXED_TIME, trial_ends_at=FIXED_TIME + __import__('datetime').timedelta(days=1))
+    session.add(future); session.commit()
+    with pytest.raises(Exception):
+        service(session).expire_trial(future.id)
+    assert session.get(Subscription, future.id).status == "trialing"
+    assert session.scalars(select(SubscriptionHistory).where(SubscriptionHistory.subscription_id == future.id)).all() == []
+    boundary = service(session, clock=lambda: FIXED_TIME + __import__('datetime').timedelta(days=1)).expire_trial(future.id)
+    assert boundary.status == "expired"
+
+
+def test_suspend_resume_cancel_and_expire_are_atomic_and_terminal(session):
+    session.add(PlanFeature(plan_id=1, feature_key="lifecycle_access", value_type="boolean", boolean_value=True))
+    active = Subscription(organization_id=1, plan_id=1, status="active", billing_cycle="monthly", starts_at=FIXED_TIME, ends_at=FIXED_TIME + __import__('datetime').timedelta(days=1))
+    session.add(active); session.commit()
+    lifecycle = service(session)
+    assert lifecycle.suspend_subscription(active.id).status == "paused"
+    assert EntitlementService(session).list_entitlements(1) == []
+    assert lifecycle.resume_subscription(active.id).status == "active"
+    assert EntitlementService(session).list_entitlements(1)
+    assert lifecycle.cancel_subscription(active.id).status == "cancelled"
+    with pytest.raises(InvalidSubscriptionStateTransitionError): lifecycle.resume_subscription(active.id)
+    events = session.scalars(select(SubscriptionHistory).where(SubscriptionHistory.subscription_id == active.id)).all()
+    assert [event.event_type for event in events] == ["paused", "resumed", "cancelled"]
+    expired = Subscription(organization_id=1, plan_id=1, status="active", billing_cycle="monthly", starts_at=FIXED_TIME - __import__('datetime').timedelta(days=2), ends_at=FIXED_TIME - __import__('datetime').timedelta(days=1))
+    session.add(expired); session.commit()
+    assert lifecycle.expire_subscription(expired.id).status == "expired"

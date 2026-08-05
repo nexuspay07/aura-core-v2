@@ -174,7 +174,8 @@ def test_trial_invalid_period_and_cross_organization_lifecycle_are_rejected(subs
     session = factory(); other = Subscription(organization_id=2, plan_id=1, status="trialing", billing_cycle="monthly", starts_at=NOW, trial_ends_at=NOW + timedelta(days=1)); session.add(other); session.commit(); identifier = other.id; session.close()
     assert client.post(f"/commercial/subscriptions/{identifier}/activate-trial", json={}).status_code == 404
     assert client.post(f"/commercial/subscriptions/{identifier}/expire-trial").status_code == 404
-    session = factory(); current_trial = Subscription(organization_id=1, plan_id=1, status="trialing", billing_cycle="monthly", starts_at=NOW, trial_ends_at=NOW + timedelta(days=1)); session.add(current_trial); session.commit(); current_id = current_trial.id; session.close()
+    future_end = datetime.now(timezone.utc) + timedelta(days=1)
+    session = factory(); current_trial = Subscription(organization_id=1, plan_id=1, status="trialing", billing_cycle="monthly", starts_at=NOW, trial_ends_at=future_end); session.add(current_trial); session.commit(); current_id = current_trial.id; session.close()
     assert client.post(f"/commercial/subscriptions/{current_id}/expire-trial").status_code == 409
 
 
@@ -218,3 +219,45 @@ def test_commit_failure_rolls_back_subscription_and_history(subscription_api, mo
     else:
         stored, history = fresh(factory, identifier)
         assert stored.status in {"pending", "trialing"} and len(history) == (1 if kind == "activate" else 0)
+
+
+@pytest.mark.parametrize("initial,route,expected,event", [
+    ("active", "suspend", "paused", "paused"),
+    ("paused", "resume", "active", "resumed"),
+    ("trialing", "cancel", "cancelled", "cancelled"),
+    ("active", "cancel", "cancelled", "cancelled"),
+    ("paused", "cancel", "cancelled", "cancelled"),
+    ("active", "expire", "expired", "expired"),
+])
+def test_new_lifecycle_routes_persist_one_history_record(subscription_api, initial, route, expected, event):
+    client, factory, _ = subscription_api
+    ends_at = NOW - timedelta(days=1) if route == "expire" else None
+    session = factory(); subscription = Subscription(organization_id=1, plan_id=1, status=initial, billing_cycle="monthly", starts_at=NOW - timedelta(days=2), ends_at=ends_at); session.add(subscription); session.commit(); identifier = subscription.id; session.close()
+    response = client.post(f"/commercial/subscriptions/{identifier}/{route}")
+    assert response.status_code == 200 and response.json()["status"] == expected
+    stored, history = fresh(factory, identifier)
+    assert stored.status == expected and [item.event_type for item in history] == [event]
+
+
+@pytest.mark.parametrize("initial,route", [("pending", "suspend"), ("active", "resume"), ("paused", "expire"), ("trialing", "expire"), ("cancelled", "resume"), ("expired", "cancel"), ("active", "expire")])
+def test_new_lifecycle_routes_reject_invalid_transition_without_history(subscription_api, initial, route):
+    client, factory, _ = subscription_api
+    ends_at = datetime.now(timezone.utc) + timedelta(days=1) if initial == "active" and route == "expire" else None
+    session = factory(); subscription = Subscription(organization_id=1, plan_id=1, status=initial, billing_cycle="monthly", starts_at=NOW, ends_at=ends_at); session.add(subscription); session.commit(); identifier = subscription.id; session.close()
+    assert client.post(f"/commercial/subscriptions/{identifier}/{route}").status_code == 409
+    stored, history = fresh(factory, identifier)
+    assert stored.status == initial and history == []
+
+
+@pytest.mark.parametrize("route", ["suspend", "resume", "cancel", "expire"])
+def test_new_lifecycle_routes_hide_cross_organization_resources(subscription_api, route):
+    client, factory, _ = subscription_api
+    session = factory(); subscription = Subscription(organization_id=2, plan_id=1, status="active", billing_cycle="monthly", starts_at=NOW - timedelta(days=2), ends_at=NOW - timedelta(days=1)); session.add(subscription); session.commit(); identifier = subscription.id; session.close()
+    assert client.post(f"/commercial/subscriptions/{identifier}/{route}").status_code == 404
+    stored, history = fresh(factory, identifier)
+    assert stored.status == "active" and history == []
+
+
+def test_openapi_registers_new_lifecycle_routes():
+    app = FastAPI(); app.include_router(router); paths = TestClient(app).get("/openapi.json").json()["paths"]
+    assert all(f"/commercial/subscriptions/{{subscription_id}}/{route}" in paths for route in ("suspend", "resume", "cancel", "expire"))
