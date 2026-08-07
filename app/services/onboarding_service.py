@@ -1,6 +1,8 @@
 import re
 
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
+
+from app.db.user_table import user_table
 
 from app.db.organization_table import (
     organization_table
@@ -38,7 +40,12 @@ class OnboardingService:
 
         user_id: int,
 
-        full_name: str | None
+        full_name: str | None,
+        account_type: str = "business",
+        organization_name: str | None = None,
+        industry: str | None = None,
+        company_size: str | None = None,
+        workspace_name: str | None = None,
 
     ):
 
@@ -46,15 +53,18 @@ class OnboardingService:
         # ORGANIZATION NAME
         # ------------------------------------
 
+        if account_type not in {"personal", "business", "enterprise"}:
+            raise ValueError("Unsupported account type")
+
+        is_personal = account_type == "personal"
         organization_name = (
-
-            f"{full_name}'s Organization"
-
-            if full_name
-
-            else "My Organization"
-
+            "Personal Space"
+            if is_personal
+            else organization_name or (
+                f"{full_name}'s Organization" if full_name else "My Organization"
+            )
         )
+        workspace_name = "My Workspace" if is_personal else workspace_name or "Main Workspace"
 
         base_slug = re.sub(r"[^a-z0-9]+", "-", organization_name.lower()).strip("-") or "organization"
         organization_slug = base_slug
@@ -82,6 +92,9 @@ class OnboardingService:
                 plan="free",
 
                 subscription_status="inactive",
+                account_type=account_type,
+                industry=None if is_personal else industry,
+                company_size=None if is_personal else company_size,
 
                 is_active=True
 
@@ -109,13 +122,13 @@ class OnboardingService:
 
                 organization_id=organization_id,
 
-                name="Main Workspace",
+                name=workspace_name,
 
                 slug=f"{organization_slug}-main",
 
                 description="Default workspace",
 
-                workspace_type="business",
+                workspace_type="personal" if is_personal else "business",
 
                 created_by_user_id=user_id,
 
@@ -181,14 +194,22 @@ class OnboardingService:
 
         )
 
-        db.execute(
-            insert(business_profile_table).values(
-                organization_id=organization_id,
-                workspace_id=workspace_id,
-                business_name=organization_name,
-                business_stage="startup",
-                is_active=True,
+        if not is_personal:
+            db.execute(
+                insert(business_profile_table).values(
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    business_name=organization_name,
+                    industry=industry,
+                    business_stage="startup",
+                    is_active=True,
+                )
             )
+
+        db.execute(
+            update(user_table)
+            .where(user_table.c.id == user_id)
+            .values(active_workspace_id=workspace_id)
         )
 
         return {

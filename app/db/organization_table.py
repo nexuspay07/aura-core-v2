@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     func,
+    CheckConstraint,
 )
 
 from app.db.database import metadata
@@ -42,6 +43,19 @@ organization_table = Table(
         unique=True,
         index=True,
         nullable=False,
+    ),
+
+    Column(
+        "account_type",
+        String(20),
+        nullable=False,
+        server_default="business",
+        index=True,
+    ),
+
+    CheckConstraint(
+        "account_type IN ('personal', 'business', 'enterprise')",
+        name="ck_organizations_account_type",
     ),
 
     # ==========================================================

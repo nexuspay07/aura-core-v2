@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header, Depends
-from pydantic import BaseModel, EmailStr
-from sqlalchemy import select, insert
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import select, insert, update
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.db.database import SessionLocal
@@ -22,6 +22,11 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str | None = None
+    account_type: str = "business"
+    organization_name: str | None = Field(default=None, min_length=2, max_length=255)
+    industry: str | None = Field(default=None, max_length=100)
+    company_size: str | None = Field(default=None, max_length=50)
+    workspace_name: str | None = Field(default=None, min_length=2, max_length=255)
 
 
 class LoginRequest(BaseModel):
@@ -41,6 +46,7 @@ def clean_user(row):
         "role": row["role"],
         "is_active": row["is_active"],
         "is_verified": row["is_verified"],
+        "active_workspace_id": row.get("active_workspace_id"),
         "created_at": (
             row["created_at"].isoformat()
             if row["created_at"]
@@ -99,6 +105,12 @@ async def get_current_user_from_token(
 
         db.close()
 
+
+def _validate_account_type(account_type: str) -> str:
+    if account_type not in {"personal", "business", "enterprise"}:
+        raise HTTPException(status_code=422, detail="Unsupported account type")
+    return account_type
+
 @router.post("/register")
 async def register(data: RegisterRequest):
 
@@ -112,6 +124,7 @@ async def register(data: RegisterRequest):
 
         )
 
+    account_type = _validate_account_type(data.account_type)
     db = SessionLocal()
 
     try:
@@ -168,7 +181,12 @@ async def register(data: RegisterRequest):
 
             user_id=user_id,
 
-            full_name=data.full_name
+            full_name=data.full_name,
+            account_type=account_type,
+            organization_name=data.organization_name,
+            industry=data.industry,
+            company_size=data.company_size,
+            workspace_name=data.workspace_name,
 
         )
 
@@ -221,6 +239,39 @@ async def register(data: RegisterRequest):
         }
 
     }
+
+
+class ActiveWorkspaceRequest(BaseModel):
+    workspace_id: int
+
+
+@router.post("/context/workspace")
+async def select_active_workspace(
+    data: ActiveWorkspaceRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    token = credentials.credentials
+    payload = auth_engine.decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    db = SessionLocal()
+    try:
+        user_id = int(payload["sub"])
+        if identity_service._accessible_context(db, user_id, data.workspace_id) is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        db.execute(
+            update(user_table)
+            .where(user_table.c.id == user_id)
+            .values(active_workspace_id=data.workspace_id)
+        )
+        db.commit()
+        return {"success": True, "identity": identity_service.resolve(db, user_id=user_id)}
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 

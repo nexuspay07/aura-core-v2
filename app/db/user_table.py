@@ -1,4 +1,4 @@
-from sqlalchemy import Table, Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Table, Column, Integer, String, DateTime, Boolean, ForeignKey
 from datetime import datetime, timezone
 
 from app.db.database import metadata
@@ -11,6 +11,16 @@ user_table = Table(
     Column("id", Integer, primary_key=True),
     Column("email", String, unique=True, index=True, nullable=False),
     Column("password_hash", String, nullable=False),
+
+    # Server-controlled canonical authenticated context.  The organization is
+    # always derived from this workspace rather than stored separately.
+    Column(
+        "active_workspace_id",
+        Integer,
+        ForeignKey("workspaces.id"),
+        nullable=True,
+        index=True,
+    ),
 
     Column("full_name", String, nullable=True),
     Column("role", String, default="user"),

@@ -26,6 +26,10 @@ def subscription_api(monkeypatch):
     event.listen(engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"))
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
+    class ClockedService(SubscriptionLifecycleService):
+        def __init__(self, session):
+            super().__init__(session, clock=lambda: NOW)
+    monkeypatch.setattr(routes, "SubscriptionLifecycleService", ClockedService)
     seed = factory()
     seed.execute(insert(user_table), [{"id": 1, "email": "one@subscription.test", "password_hash": "x"}, {"id": 2, "email": "two@subscription.test", "password_hash": "x"}])
     seed.execute(insert(organization_table), [

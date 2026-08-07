@@ -9,13 +9,16 @@ from app.db.database import Base
 from app.db.organization_orm import Organization
 from app.db.organization_table import organization_table
 from app.db.user_table import user_table
+from app.db.workspace_table import workspace_table
 
 
 @pytest.fixture()
 def session():
     engine = create_engine("sqlite:///:memory:")
     event.listen(engine, "connect", lambda dbapi, _: dbapi.execute("PRAGMA foreign_keys=ON"))
-    Base.metadata.create_all(engine, tables=[user_table, organization_table])
+    # users now carries a nullable FK to workspaces; create its target even
+    # though this ORM bridge test does not populate workspaces.
+    Base.metadata.create_all(engine, tables=[user_table, organization_table, workspace_table])
     test_session = sessionmaker(bind=engine)()
     test_session.execute(
         insert(user_table),

@@ -79,6 +79,7 @@ logger = logging.getLogger("aura.organizations")
 
 class CreateOrganizationRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=150)
+    account_type: str = "business"
     industry: str | None = None
     company_size: str | None = None
 
@@ -186,6 +187,7 @@ def clean_organization(row: dict):
         "id": row["id"],
         "name": row["name"],
         "slug": row["slug"],
+        "account_type": row["account_type"],
         "owner_user_id": row["owner_user_id"],
         "plan": row["plan"],
         "industry": row["industry"],
@@ -275,6 +277,8 @@ async def create_organization(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
 
+    if data.account_type not in {"personal", "business", "enterprise"}:
+        raise HTTPException(status_code=422, detail="Unsupported account type")
     identity = await get_current_user_from_token(credentials)
     current_user = identity["user"]
 
@@ -315,6 +319,7 @@ async def create_organization(
                 slug=organization_slug,
                 owner_user_id=current_user["id"],
                 plan="free",
+                account_type=data.account_type,
                 industry=data.industry,
                 company_size=data.company_size,
                 is_active=True,
@@ -350,10 +355,10 @@ async def create_organization(
         workspace_result = db.execute(
             insert(workspace_table).values(
                 organization_id=organization_id,
-                name="Main Workspace",
+                name="My Workspace" if data.account_type == "personal" else "Main Workspace",
                 slug=f"{organization_slug}-main",
                 description="Default workspace",
-                workspace_type="business",
+                workspace_type="personal" if data.account_type == "personal" else "business",
                 created_by_user_id=current_user["id"],
                 is_active=True,
             )
@@ -380,15 +385,16 @@ async def create_organization(
             )
         )
 
-        db.execute(
-            insert(business_profile_table).values(
-                organization_id=organization_id,
-                workspace_id=workspace_id,
-                business_name=data.name,
-                business_stage="startup",
-                is_active=True,
+        if data.account_type != "personal":
+            db.execute(
+                insert(business_profile_table).values(
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    business_name=data.name,
+                    business_stage="startup",
+                    is_active=True,
+                )
             )
-        )
 
         # --------------------------------------------------
         # Read created records
@@ -941,15 +947,16 @@ async def create_workspace(
 
         )
 
-        db.execute(
-            insert(business_profile_table).values(
-                organization_id=organization_id,
-                workspace_id=workspace_id,
-                business_name=organization["name"],
-                business_stage="startup",
-                is_active=True,
+        if organization["account_type"] != "personal":
+            db.execute(
+                insert(business_profile_table).values(
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    business_name=organization["name"],
+                    business_stage="startup",
+                    is_active=True,
+                )
             )
-        )
 
         workspace = get_workspace(
 

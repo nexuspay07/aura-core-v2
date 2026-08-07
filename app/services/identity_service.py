@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.db.user_table import user_table
@@ -54,99 +54,24 @@ class IdentityService:
                 detail="User not found."
             )
 
-        # ==========================================================
-        # ORGANIZATION MEMBERSHIP
-        # ==========================================================
-
-        membership = db.execute(
-            select(organization_member_table)
-            .where(
-                organization_member_table.c.user_id == user_id
+        # An explicit workspace is retained only for trusted internal callers;
+        # normal authentication always resolves the server-controlled setting.
+        selected_workspace_id = workspace_id if workspace_id is not None else user.get("active_workspace_id")
+        context = self._accessible_context(db, user_id, selected_workspace_id)
+        if context is None:
+            context = self._fallback_context(db, user_id)
+            db.execute(
+                update(user_table)
+                .where(user_table.c.id == user_id)
+                .values(active_workspace_id=context["workspace"]["id"] if context else None)
             )
-            .where(
-                organization_member_table.c.is_active == True
-            )
-        ).mappings().first()
+            if context is None:
+                return self._onboarding_identity(dict(user))
 
-        if not membership:
-            logger.info("Onboarding required for user %s", user_id)
-            return self._onboarding_identity(user)
-
-        # ==========================================================
-        # ORGANIZATION
-        # ==========================================================
-
-        organization = db.execute(
-            select(organization_table)
-            .where(
-                organization_table.c.id ==
-                membership["organization_id"]
-            )
-            .where(
-                organization_table.c.is_active == True
-            )
-        ).mappings().first()
-
-        if not organization:
-            logger.warning("Active organization membership %s points to an unavailable organization", membership["id"])
-            return self._onboarding_identity(user)
-
-        # ==========================================================
-        # WORKSPACE
-        # ==========================================================
-
-        workspace_query = (
-            select(workspace_table)
-            .where(
-                workspace_table.c.organization_id ==
-                organization["id"]
-            )
-            .where(
-                workspace_table.c.is_active == True
-            )
-        )
-
-        if workspace_id is not None:
-            workspace_query = workspace_query.where(
-                workspace_table.c.id == workspace_id
-            )
-
-        workspace = db.execute(
-            workspace_query
-        ).mappings().first()
-
-        if not workspace:
-            return self._onboarding_identity(user, organization=organization, organization_role=membership["role"])
-
-        # ==========================================================
-        # WORKSPACE MEMBERSHIP
-        # ==========================================================
-
-        workspace_member = db.execute(
-            select(workspace_member_table)
-            .where(
-                workspace_member_table.c.workspace_id ==
-                workspace["id"]
-            )
-            .where(
-                workspace_member_table.c.user_id ==
-                user_id
-            )
-            .where(
-                workspace_member_table.c.is_active == True
-            )
-        ).mappings().first()
-
-        if not workspace_member:
-
-            logger.warning(
-                "User %s belongs to organization %s but not workspace %s",
-                user_id,
-                organization["id"],
-                workspace["id"],
-            )
-
-            return self._onboarding_identity(user, organization=organization, organization_role=membership["role"])
+        organization = context["organization"]
+        workspace = context["workspace"]
+        membership = context["organization_member"]
+        workspace_member = context["workspace_member"]
 
         # ==========================================================
         # LOGGING
@@ -173,6 +98,8 @@ class IdentityService:
             "organization_role": membership["role"],
 
             "workspace_role": workspace_member["role"],
+
+            "onboarding_required": False,
 
             "permissions": {
                 "organization_admin":
@@ -208,6 +135,64 @@ class IdentityService:
                 "can_manage_organization": False,
             },
         }
+
+    @staticmethod
+    def _accessible_context(db: Session, user_id: int, workspace_id: int | None):
+        if workspace_id is None:
+            return None
+        workspace = db.execute(
+            select(workspace_table).where(
+                workspace_table.c.id == workspace_id,
+                workspace_table.c.is_active == True,
+            )
+        ).mappings().first()
+        if not workspace:
+            return None
+
+        organization = db.execute(
+            select(organization_table).where(
+                organization_table.c.id == workspace["organization_id"],
+                organization_table.c.is_active == True,
+            )
+        ).mappings().first()
+        if not organization:
+            return None
+
+        organization_member = db.execute(
+            select(organization_member_table).where(
+                organization_member_table.c.organization_id == organization["id"],
+                organization_member_table.c.user_id == user_id,
+                organization_member_table.c.is_active == True,
+            )
+        ).mappings().first()
+        workspace_member = db.execute(
+            select(workspace_member_table).where(
+                workspace_member_table.c.workspace_id == workspace["id"],
+                workspace_member_table.c.user_id == user_id,
+                workspace_member_table.c.is_active == True,
+            )
+        ).mappings().first()
+        if not organization_member or not workspace_member:
+            return None
+
+        return {
+            "workspace": dict(workspace),
+            "organization": dict(organization),
+            "organization_member": dict(organization_member),
+            "workspace_member": dict(workspace_member),
+        }
+
+    @classmethod
+    def _fallback_context(cls, db: Session, user_id: int):
+        candidates = db.execute(
+            select(workspace_table.c.id)
+            .join(organization_table, organization_table.c.id == workspace_table.c.organization_id)
+            .join(organization_member_table, (organization_member_table.c.organization_id == organization_table.c.id) & (organization_member_table.c.user_id == user_id) & (organization_member_table.c.is_active == True))
+            .join(workspace_member_table, (workspace_member_table.c.workspace_id == workspace_table.c.id) & (workspace_member_table.c.user_id == user_id) & (workspace_member_table.c.is_active == True))
+            .where(workspace_table.c.is_active == True, organization_table.c.is_active == True)
+            .order_by(workspace_member_table.c.created_at.asc(), workspace_member_table.c.id.asc(), workspace_table.c.id.asc())
+        ).scalars().first()
+        return cls._accessible_context(db, user_id, candidates)
 
 
 identity_service = IdentityService()
