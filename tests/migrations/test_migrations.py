@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, create_mock_engine, inspect, text
 
+from app.db.baseline_schema import target_metadata as baseline_target_metadata
 from app.db.schema import target_metadata
 from tests.migrations.helpers import current, downgrade, upgrade
 
@@ -35,6 +36,77 @@ def test_revision_chain_has_one_head():
     assert script.get_heads() == ["20260811_0021"]
     assert script.get_revision("20260728_0001").down_revision is None
     assert script.get_revision("20260807_0017").down_revision == "20260731_0016"
+
+
+def test_frozen_baseline_excludes_every_0017_owned_object_and_has_valid_foreign_keys():
+    baseline = baseline_target_metadata[0]
+    users = baseline.tables["users"]
+    organizations = baseline.tables["organizations"]
+
+    assert "active_workspace_id" not in users.c
+    assert "ix_users_active_workspace_id" not in {index.name for index in users.indexes}
+    assert not any(
+        element.parent.name == "active_workspace_id"
+        for constraint in users.foreign_key_constraints
+        for element in constraint.elements
+    )
+    assert "account_type" not in organizations.c
+    assert "ix_organizations_account_type" not in {index.name for index in organizations.indexes}
+    assert "ck_organizations_account_type" not in {
+        constraint.name for constraint in organizations.constraints
+    }
+
+    for table in baseline.tables.values():
+        for constraint in table.foreign_key_constraints:
+            for element in constraint.elements:
+                assert element.parent.name in table.c
+                assert element.column.table.name in baseline.tables
+                assert element.column.name in baseline.tables[element.column.table.name].c
+
+
+def test_frozen_baseline_compiles_clean_postgresql_ddl_without_0017_objects():
+    statements = []
+    engine = create_mock_engine(
+        "postgresql+psycopg2://",
+        lambda sql, *multiparams, **params: statements.append(
+            str(sql.compile(dialect=engine.dialect))
+        ),
+    )
+    baseline_target_metadata[0].create_all(engine, checkfirst=False)
+    ddl = "\n".join(statements)
+
+    assert "active_workspace_id" not in ddl
+    assert "account_type" not in ddl
+    assert "CREATE TABLE users" in ddl
+    assert "CREATE TABLE organizations" in ddl
+
+
+def test_0017_remains_owner_of_account_type_and_active_workspace(tmp_path):
+    database = tmp_path / "revision-0017.db"
+    upgrade(database, "20260731_0016")
+    engine = create_engine(f"sqlite:///{database}")
+    before = inspect(engine)
+    assert "active_workspace_id" not in {column["name"] for column in before.get_columns("users")}
+    assert "account_type" not in {column["name"] for column in before.get_columns("organizations")}
+
+    upgrade(database, "20260807_0017")
+    after = inspect(engine)
+    user_columns = {column["name"]: column for column in after.get_columns("users")}
+    organization_columns = {column["name"]: column for column in after.get_columns("organizations")}
+    assert user_columns["active_workspace_id"]["nullable"] is True
+    assert "ix_users_active_workspace_id" in {index["name"] for index in after.get_indexes("users")}
+    assert any(
+        foreign_key["name"] == "fk_users_active_workspace_id"
+        and foreign_key["referred_table"] == "workspaces"
+        and foreign_key["constrained_columns"] == ["active_workspace_id"]
+        for foreign_key in after.get_foreign_keys("users")
+    )
+    assert organization_columns["account_type"]["nullable"] is False
+    assert "business" in str(organization_columns["account_type"]["default"])
+    assert "ix_organizations_account_type" in {index["name"] for index in after.get_indexes("organizations")}
+    assert "ck_organizations_account_type" in {
+        constraint["name"] for constraint in after.get_check_constraints("organizations")
+    }
 
 def test_documents_migration_upgrade_downgrade_and_reupgrade(tmp_path):
     database = tmp_path / "documents.db"
