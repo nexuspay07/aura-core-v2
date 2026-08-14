@@ -30,6 +30,7 @@ class MemoryRepository:
         confidence: float = 0.5,
         embedding: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        commit: bool = True,
     ) -> int:
 
         result = db.execute(
@@ -48,7 +49,8 @@ class MemoryRepository:
             )
         )
 
-        db.commit()
+        if commit:
+            db.commit()
 
         return result.inserted_primary_key[0]
 

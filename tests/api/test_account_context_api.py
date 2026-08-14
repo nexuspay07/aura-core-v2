@@ -39,6 +39,8 @@ def test_registration_defaults_to_business_and_returns_canonical_context(monkeyp
         assert me.status_code == 200
         assert me.json()["organization"]["account_type"] == "business"
         assert me.json()["organization"]["id"] == me.json()["workspace"]["organization_id"]
+        assert me.json()["product_mode"] == "business"
+        assert {"organizations", "workspaces", "billing", "business_settings"} <= set(me.json()["capabilities"])
     finally:
         engine.dispose()
 
@@ -63,6 +65,9 @@ def test_personal_registration_is_profile_less_and_active_workspace_selection_is
         assert selected.status_code == 200
         me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).json()
         assert me["workspace"]["id"] == second["id"] and me["organization"]["id"] == organization["id"]
+        assert me["product_mode"] == "personal"
+        assert {"personal_home", "ask_aura", "decisions", "goals", "actions", "personal_context", "documents"} <= set(me["capabilities"])
+        assert "organizations" not in me["capabilities"]
     finally:
         engine.dispose()
 

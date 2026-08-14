@@ -15,7 +15,7 @@ security = HTTPBearer()
 
 class ConversationRequest(BaseModel):
     message: str
-    session_id: str | None = None
+    session_id: int | None = None
     organization_id: int | None = None
     workspace_id: int | None = None
 
@@ -45,7 +45,7 @@ async def chat(
 
         message=data.message,
 
-        session_id=data.session_id or "default-session",
+        session_id=data.session_id,
 
         organization_id=organization["id"],
         workspace_id=workspace["id"],

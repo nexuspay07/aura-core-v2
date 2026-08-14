@@ -1,3 +1,6 @@
+from typing import Any
+
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import (
     insert,
     select,
@@ -7,6 +10,7 @@ from sqlalchemy import (
 from app.db.database import (
     SessionLocal
 )
+from sqlalchemy.orm import Session
 
 from app.db.intelligence_session_table import (
     intelligence_session_table
@@ -66,11 +70,14 @@ class SessionService:
 
         business_model: str,
 
-        is_active: bool = True
+        is_active: bool = True,
+        db: Session | None = None,
+        commit: bool = True,
 
     ) -> int:
 
-        db = SessionLocal()
+        owns_session = db is None
+        db = db or SessionLocal()
 
         try:
 
@@ -100,7 +107,7 @@ class SessionService:
 
                 risk_level=risk_level,
 
-                report_json=report_json,
+                report_json=jsonable_encoder(report_json),
 
                 business_model=business_model,
 
@@ -110,18 +117,52 @@ class SessionService:
 
             result = db.execute(query)
 
-            db.commit()
+            if commit:
+                db.commit()
+            else:
+                db.flush()
 
             return result.inserted_primary_key[0]
 
         except Exception:
 
-            db.rollback()
+            if commit:
+                db.rollback()
             raise
 
         finally:
 
-            db.close()
+            if owns_session:
+                db.close()
+
+    def update_report(
+        self,
+        *,
+        session_id: int,
+        report_json: dict[str, Any],
+        db: Session | None = None,
+        commit: bool = True,
+    ) -> None:
+        """Persist a structured report without taking ownership of a caller transaction."""
+        owns_session = db is None
+        db = db or SessionLocal()
+        try:
+            db.execute(
+                update(intelligence_session_table)
+                .where(intelligence_session_table.c.id == session_id)
+                .values(report_json=jsonable_encoder(report_json))
+            )
+            if commit:
+                db.commit()
+            else:
+                db.flush()
+        except Exception:
+            if commit:
+                db.rollback()
+            raise
+        finally:
+            if owns_session:
+                db.close()
 
     def get_session(
 

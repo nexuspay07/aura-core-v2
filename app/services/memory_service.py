@@ -19,6 +19,7 @@ class MemoryService:
         content: str,
         memory_type: str = "conversation",
         response: Optional[str] = None,
+        commit: bool = True,
         **kwargs,
     ) -> int:
 
@@ -29,6 +30,7 @@ class MemoryService:
             organization_id=organization_id,
             content=content,
             response=response,
+            commit=commit,
             memory_type=memory_type,
             embedding=str(embedding),
             **kwargs,

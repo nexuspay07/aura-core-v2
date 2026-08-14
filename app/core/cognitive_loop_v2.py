@@ -15,6 +15,8 @@ Responsibilities
 =========================================================
 """
 
+import logging
+
 from app.core.models.aura_request import AuraRequest
 
 from app.core.pipeline.executive_pipeline import (
@@ -30,6 +32,9 @@ from app.core.pipeline.response_pipeline import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 class CognitiveLoop:
 
     """
@@ -42,7 +47,7 @@ class CognitiveLoop:
 
     def __init__(self):
 
-        print("[COGNITIVE LOOP V2] Initialized")
+        logger.info("Cognitive loop initialized")
 
     # ======================================================
     # RUN
@@ -53,45 +58,35 @@ class CognitiveLoop:
         request: AuraRequest,
     ) -> AuraRequest:
 
-        print("\n========== AURA REQUEST ==========")
-        print(request)
-        print("==================================\n")
-
         # ==================================================
         # Executive Pipeline
         # ==================================================
-
-        print("\n========== EXECUTIVE PIPELINE ==========")
 
         request = executive_pipeline.run(
             request
         )
 
-        print("Executive Pipeline Complete.")
+        logger.debug("Executive pipeline completed")
 
         # ==================================================
         # Simulation Pipeline
         # ==================================================
 
-        print("\n========== SIMULATION PIPELINE ==========")
-
         request = simulation_pipeline.run(
             request
         )
 
-        print("Simulation Pipeline Complete.")
+        logger.debug("Simulation pipeline completed")
 
         # ==================================================
         # Response Pipeline
         # ==================================================
 
-        print("\n========== RESPONSE PIPELINE ==========")
-
         request = response_pipeline.run(
             request
         )
 
-        print("Response Pipeline Complete.")
+        logger.debug("Response pipeline completed")
 
         return request
 

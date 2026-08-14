@@ -9,6 +9,7 @@ from app.db.organization_table import organization_table
 from app.db.organization_member_table import organization_member_table
 from app.db.workspace_table import workspace_table
 from app.db.workspace_member_table import workspace_member_table
+from app.services.product_capabilities import resolve_product_capabilities
 
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ class IdentityService:
         workspace = context["workspace"]
         membership = context["organization_member"]
         workspace_member = context["workspace_member"]
+        product = resolve_product_capabilities(organization.get("account_type"))
 
         # ==========================================================
         # LOGGING
@@ -98,6 +100,10 @@ class IdentityService:
             "organization_role": membership["role"],
 
             "workspace_role": workspace_member["role"],
+
+            # Product access is a safe projection of trusted, persisted
+            # account state.  It deliberately does not grant resource access.
+            **product.as_dict(),
 
             "onboarding_required": False,
 
@@ -127,6 +133,9 @@ class IdentityService:
             "workspace": None,
             "organization_role": organization_role,
             "workspace_role": None,
+
+            "product_mode": None,
+            "capabilities": [],
             "onboarding_required": True,
             "permissions": {
                 "organization_admin": False,

@@ -6,6 +6,7 @@ from app.db.business_profile_table import (
 
 
 from dotenv import load_dotenv
+import os
 load_dotenv()
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -22,7 +23,7 @@ from app.core.output_standardization_engine import (
 
 app = FastAPI(title="AURA AI")
 
-origins = [
+default_origins = [
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:5175",
@@ -31,6 +32,7 @@ origins = [
     "http://127.0.0.1:5175",
     "https://aura-business-frontend.onrender.com",
 ]
+origins = [item.strip() for item in os.getenv("AURA_ALLOWED_ORIGINS", "").split(",") if item.strip()] or default_origins
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,7 +66,6 @@ from app.core.agents.multi_agent_engine import multi_agent_engine
 from app.core.cognitive_loop_v2 import cognitive_loop
 
 
-from app.api.strategy_routes import router as strategy_router
 from app.api.marketplace_routes import router as marketplace_router
 from app.core.strategic_evolution_engine import strategic_evolution_engine
 from app.api.pro_routes import router as pro_router
@@ -95,6 +96,9 @@ from app.api.subscription_routes import router as subscription_router
 from app.api.billing_account_routes import router as billing_account_router
 from app.api.usage_meter_routes import router as usage_meter_router
 from app.api.payment_routes import router as commercial_payment_router
+from app.api.document_routes import router as document_router
+from app.api.personal_decision_routes import router as personal_decision_router
+from app.api.personal_ask_routes import router as personal_ask_router
 
 from app.core.simulation.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
@@ -105,7 +109,6 @@ from app.core.reasoning.causal_reasoning_engine import causal_reasoning_engine
 app.include_router(chat_router)
 app.include_router(payment_router)
 app.include_router(pro_router)
-app.include_router(strategy_router)
 app.include_router(marketplace_router)
 app.include_router(organization_router)
 app.include_router(intelligence_session_router)
@@ -119,6 +122,9 @@ app.include_router(subscription_router)
 app.include_router(billing_account_router)
 app.include_router(usage_meter_router)
 app.include_router(commercial_payment_router)
+app.include_router(document_router)
+app.include_router(personal_decision_router)
+app.include_router(personal_ask_router)
 
 
 # =========================
@@ -333,16 +339,23 @@ class ConversationRequest(BaseModel):
 # LAB SIMULATION
 # =========================
 @app.post("/lab/simulate")
-async def simulate(data: SimulationRequest):
+async def simulate(data: SimulationRequest, credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
+    identity = await get_current_user_from_token(credentials)
+    organization = identity.get("organization")
+    workspace = identity.get("workspace")
+    user = identity.get("user")
+    if not organization or not workspace or not user:
+        raise HTTPException(status_code=409, detail="Complete onboarding before running simulations")
     scenario = data.dict()
     goal = scenario.get("goal", "").strip()
 
     if not goal:
         return {"error": "Goal is required"}
 
-    username = "test_user"
-
-    sim_result = simulation_engine.run_simulation(goal, scenario)
+    try:
+        sim_result = simulation_engine.run_simulation(goal, scenario)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Simulation could not be completed") from exc
 
     world = world_engine.build_world("business")
     world.update(scenario)
@@ -363,7 +376,7 @@ async def simulate(data: SimulationRequest):
         world
     )
 
-    patterns = await learning_engine.learn(username, history_engine)
+    patterns = await learning_engine.learn(str(user["id"]), history_engine)
 
     sim_result["results"] = learning_engine.apply_learning(
         sim_result["results"],
@@ -402,17 +415,14 @@ async def simulate(data: SimulationRequest):
         world=world
     )
 
-    await history_engine.save(
-        username,
-        {
-            "goal": goal,
-            "scenario": scenario,
-            "result": {
-                "results": sim_result["results"],
-                "best_strategy": best
-            }
-        }
-    )
+    db = SessionLocal()
+    try:
+        history_engine.save(
+            db=db, organization_id=organization["id"], workspace_id=workspace["id"], user_id=user["id"],
+            goal=goal, scenario=scenario, result={"results": sim_result["results"], "best_strategy": best},
+        )
+    finally:
+        db.close()
 
     return {
         "goal": goal,

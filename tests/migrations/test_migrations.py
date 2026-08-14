@@ -13,7 +13,7 @@ def test_fresh_database_upgrades_to_head(tmp_path):
     upgrade(database)
     inspector = inspect(create_engine(f"sqlite:///{database}"))
     assert _expected_tables() <= set(inspector.get_table_names())
-    assert "20260807_0017" in current(database)
+    assert "20260811_0021" in current(database)
 
 def test_schema_columns_and_indexes_match_metadata(tmp_path):
     database = tmp_path / "schema.db"
@@ -32,9 +32,23 @@ def test_revision_chain_has_one_head():
     from alembic.config import Config
     from alembic.script import ScriptDirectory
     script = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert script.get_heads() == ["20260807_0017"]
+    assert script.get_heads() == ["20260811_0021"]
     assert script.get_revision("20260728_0001").down_revision is None
     assert script.get_revision("20260807_0017").down_revision == "20260731_0016"
+
+def test_documents_migration_upgrade_downgrade_and_reupgrade(tmp_path):
+    database = tmp_path / "documents.db"
+    upgrade(database, "20260808_0018")
+    engine = create_engine(f"sqlite:///{database}")
+    upgrade(database, "20260809_0019")
+    inspector = inspect(engine)
+    assert {"documents", "document_chunks"} <= set(inspector.get_table_names())
+    assert {"organization_id", "workspace_id", "checksum", "status"} <= {column["name"] for column in inspector.get_columns("documents")}
+    assert {"ix_documents_org_workspace", "ix_documents_org_checksum", "ix_documents_status"} <= {index["name"] for index in inspector.get_indexes("documents")}
+    downgrade(database, "20260808_0018")
+    assert "documents" not in inspect(engine).get_table_names()
+    upgrade(database, "20260809_0019")
+    assert {"documents", "document_chunks"} <= set(inspect(engine).get_table_names())
 
 
 def test_subscription_history_migration_constraints_indexes_and_upgrade_downgrade(tmp_path):
