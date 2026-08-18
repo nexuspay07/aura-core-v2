@@ -19,6 +19,7 @@ from app.personal.ask import (
     append_turn,
     clarification_response,
     continuation_data,
+    list_owned_sessions,
     create_session,
     owned_session,
     save_session,
@@ -133,14 +134,19 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
                 "model_usage": _safe_usage(result.get("usage")),
             }
             save_session(db, session_id=session_id, report=report, status="completed", summary=reply, recommendation=None)
-            turns = append_turn(db, session_id=session_id, role="assistant", content=reply, mode=result["mode"])
+            public_payload = {"sources": result.get("sources", [])} if result["mode"] in {"CURRENT_COMPLETE", "CURRENT_INFORMATION_UNAVAILABLE"} else None
+            turns = append_turn(db, session_id=session_id, role="assistant", content=reply, mode=result["mode"], payload=public_payload)
             db.commit()
-            return {"mode": result["mode"], "session_id": session_id, "message": reply, "turns": turns}
+            return {"mode": result["mode"], "session_id": session_id, "message": reply, "turns": turns, **({"sources": result.get("sources", [])} if public_payload else {})}
 
+        stored = owned_session(db, session_id=session_id, user_id=user_id,
+                               organization_id=organization_id, workspace_id=workspace_id)
+        session_turns = (stored.get("report_json") or {}).get("turns") or []
         state = decision_v2_service.analyze_request(
             db=db, user_id=user_id, organization_id=organization_id,
             workspace_id=workspace_id, user_query=message, session_id=session_id,
             decision_scope="personal",
+            conversation_turns=session_turns[:-1],
         )
         for answer in answers:
             state = decision_v2_service.apply_clarification_answer(state=state, **answer)
@@ -221,5 +227,15 @@ async def get_ask_session(session_id: int, identity=Depends(current_identity)):
         }
     except PersonalAskNotFoundError:
         raise HTTPException(status_code=404, detail="Ask session not found")
+    finally:
+        db.close()
+
+
+@router.get("/conversations")
+async def get_conversations(identity=Depends(current_identity)):
+    user_id, organization_id, workspace_id = scope(identity)
+    db = SessionLocal()
+    try:
+        return list_owned_sessions(db, user_id=user_id, organization_id=organization_id, workspace_id=workspace_id)
     finally:
         db.close()

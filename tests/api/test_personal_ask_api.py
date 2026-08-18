@@ -249,6 +249,27 @@ def test_owned_conversation_recovery_restores_turns_and_hides_cross_tenant(monke
         engine.dispose()
 
 
+def test_conversation_history_lists_titles_and_remains_owner_scoped(monkeypatch):
+    client, _, active, engine = _client(monkeypatch)
+    monkeypatch.setattr(routes.unified_aura_orchestrator.models, "provider", _GeneralProvider())
+    try:
+        headers = {"Authorization": "Bearer test"}
+        first = client.post("/personal/ask", headers=headers, json={"message": "I'm thinking about going back to school."}).json()
+        second = client.post("/personal/ask", headers=headers, json={"message": "Plan my evening."}).json()
+        resumed = client.post("/personal/ask", headers=headers, json={"session_id": first["session_id"], "message": "I care about long-term growth."})
+        assert resumed.status_code == 200
+        history = client.get("/personal/conversations", headers=headers)
+        assert history.status_code == 200
+        assert [item["session_id"] for item in history.json()] == [first["session_id"], second["session_id"]]
+        assert history.json()[0]["title"] == "Going back to school"
+        assert history.json()[0]["message_count"] == 4
+        active["identity"] = _identity(user_id=2, organization_id=2, workspace_id=2)
+        assert client.get("/personal/conversations", headers=headers).json() == []
+        assert client.get(f"/personal/ask/{first['session_id']}", headers=headers).status_code == 404
+    finally:
+        engine.dispose()
+
+
 def test_clarification_and_completed_decision_survive_recovery(monkeypatch):
     client, _, _, engine = _client(monkeypatch)
     try:
@@ -284,5 +305,37 @@ def test_general_answer_and_followup_share_bounded_session_without_memory_or_dec
         report = db.execute(select(intelligence_session_table.c.report_json)).scalar_one()
         assert report["model_usage"] == {"provider":"offline","model":"general-test","input_tokens":5,"output_tokens":6,"total_tokens":11}
         db.close()
+    finally:
+        engine.dispose()
+
+
+def test_decision_followup_uses_only_prior_user_statements_as_session_evidence(monkeypatch):
+    client, _, _, engine = _client(monkeypatch)
+    captured = {}
+    original = routes.decision_v2_service.analyze_request
+
+    def capture(**kwargs):
+        captured.update(kwargs)
+        state = original(**kwargs)
+        captured["state"] = state
+        return state
+
+    monkeypatch.setattr(routes.decision_v2_service, "analyze_request", capture)
+    monkeypatch.setattr(routes.unified_aura_orchestrator.models, "provider", _GeneralProvider())
+    try:
+        headers = {"Authorization": "Bearer test"}
+        first = client.post("/personal/ask", headers=headers, json={"message": "Explain career changes simply."})
+        session_id = first.json()["session_id"]
+        result = client.post("/personal/ask", headers=headers, json={
+            "session_id": session_id,
+            "message": "Should I leave my job for a product leadership role?",
+        })
+        assert result.status_code == 200
+        assert captured["session_id"] == session_id
+        assert captured["conversation_turns"][0]["role"] == "user"
+        state = captured["state"]
+        conversation = [item for item in state.evidence if item.source_name == "authenticated_conversation"]
+        assert [item.content for item in conversation] == ["Explain career changes simply."]
+        assert all(item.permission_scope == "session" for item in conversation)
     finally:
         engine.dispose()

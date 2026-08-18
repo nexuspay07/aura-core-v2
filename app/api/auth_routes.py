@@ -1,10 +1,14 @@
 from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select, insert, update
+from sqlalchemy import func, select, insert, update
+from datetime import datetime, timedelta, timezone
+import hashlib
+import secrets
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.db.database import SessionLocal
 from app.db.user_table import user_table
+from app.db.password_reset_token_table import password_reset_token_table
 from app.core.auth_engine import auth_engine
 from app.services.identity_service import (
     identity_service
@@ -32,6 +36,23 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    password: str = Field(min_length=8, max_length=256)
+
+
+PASSWORD_RESET_MESSAGE = "If an account exists for that email, the password reset request has been accepted."
+
+
+def deliver_password_reset(_email: str, _token: str) -> bool:
+    """Delivery seam for an approved provider. Alpha has no email transport."""
+    return False
 
 
 def clean_user(row):
@@ -356,6 +377,70 @@ async def login(data: LoginRequest):
 
     finally:
 
+        db.close()
+
+
+@router.post("/password-reset/request")
+async def request_password_reset(data: PasswordResetRequest):
+    db = SessionLocal()
+    delivery_configured = False
+    try:
+        user = db.execute(select(user_table).where(user_table.c.email == data.email.lower())).mappings().first()
+        if user and user["is_active"]:
+            now = datetime.now(timezone.utc)
+            recent = db.execute(
+                select(func.count()).select_from(password_reset_token_table).where(
+                    password_reset_token_table.c.user_id == user["id"],
+                    password_reset_token_table.c.created_at >= now - timedelta(minutes=15),
+                )
+            ).scalar_one()
+            if recent < 3:
+                token = secrets.token_urlsafe(48)
+                db.execute(insert(password_reset_token_table).values(
+                    user_id=user["id"], token_hash=hashlib.sha256(token.encode()).hexdigest(),
+                    expires_at=now + timedelta(minutes=30), created_at=now,
+                ))
+                db.commit()
+                delivery_configured = deliver_password_reset(user["email"], token)
+        return {"message": PASSWORD_RESET_MESSAGE, "delivery_configured": delivery_configured}
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@router.post("/password-reset/confirm")
+async def confirm_password_reset(data: PasswordResetConfirm):
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        token_hash = hashlib.sha256(data.token.encode()).hexdigest()
+        record = db.execute(
+            select(password_reset_token_table).where(
+                password_reset_token_table.c.token_hash == token_hash,
+                password_reset_token_table.c.used_at.is_(None),
+                password_reset_token_table.c.expires_at > now,
+            )
+        ).mappings().first()
+        if not record:
+            raise HTTPException(status_code=400, detail="Reset link is invalid or expired")
+        db.execute(update(user_table).where(user_table.c.id == record["user_id"]).values(
+            password_hash=auth_engine.hash_password(data.password), updated_at=now,
+        ))
+        db.execute(update(password_reset_token_table).where(
+            password_reset_token_table.c.id == record["id"],
+            password_reset_token_table.c.used_at.is_(None),
+        ).values(used_at=now))
+        db.commit()
+        return {"message": "Password reset complete. You can now sign in."}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    finally:
         db.close()
 
 @router.get("/me")

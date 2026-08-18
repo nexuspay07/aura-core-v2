@@ -6,7 +6,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import desc, insert, select, update
 
 from app.db.intelligence_session_table import intelligence_session_table
 from app.intelligence_v2.contracts import DecisionState
@@ -14,6 +14,44 @@ from app.intelligence_v2.contracts import DecisionState
 
 class PersonalAskNotFoundError(ValueError):
     pass
+
+
+def conversation_title(message: str, maximum: int = 72) -> str:
+    """Create a bounded Alpha title from the user's first statement only."""
+    clean = " ".join(message.strip().split()).strip(" \"'.,!?;:")
+    for prefix in ("I'm thinking about ", "I am thinking about ", "I'm considering ", "I am considering "):
+        if clean.lower().startswith(prefix.lower()):
+            clean = clean[len(prefix):]
+            break
+    if not clean:
+        return "Conversation"
+    clean = clean[0].upper() + clean[1:]
+    return clean if len(clean) <= maximum else f"{clean[:maximum - 1].rstrip()}…"
+
+
+def list_owned_sessions(db, *, user_id: int, organization_id: int, workspace_id: int) -> list[dict[str, Any]]:
+    rows = db.execute(
+        select(intelligence_session_table).where(
+            intelligence_session_table.c.created_by_user_id == user_id,
+            intelligence_session_table.c.organization_id == organization_id,
+            intelligence_session_table.c.workspace_id == workspace_id,
+            intelligence_session_table.c.session_type == "personal_ask_v2",
+            intelligence_session_table.c.is_active.is_(True),
+        ).order_by(desc(intelligence_session_table.c.updated_at), desc(intelligence_session_table.c.id))
+    ).mappings().all()
+    conversations = []
+    for row in rows:
+        report = row.get("report_json") or {}
+        turns = report.get("turns") if isinstance(report, dict) else []
+        turns = turns if isinstance(turns, list) else []
+        first_user = next((turn.get("content") for turn in turns if isinstance(turn, dict) and turn.get("role") == "user" and turn.get("content")), row.get("title") or "")
+        preview = next((turn.get("content") for turn in reversed(turns) if isinstance(turn, dict) and turn.get("content")), None)
+        conversations.append({
+            "session_id": row["id"], "title": conversation_title(str(first_user)),
+            "preview": str(preview)[:180] if preview else None, "message_count": len(turns),
+            "updated_at": row.get("updated_at") or row.get("created_at"),
+        })
+    return conversations
 
 
 def owned_session(
@@ -53,7 +91,7 @@ def create_session(db, *, user_id: int, organization_id: int, workspace_id: int,
         organization_id=organization_id,
         workspace_id=workspace_id,
         created_by_user_id=user_id,
-        title=message.strip()[:255],
+        title=conversation_title(message),
         goal=message,
         domain="personal",
         session_type="personal_ask_v2",

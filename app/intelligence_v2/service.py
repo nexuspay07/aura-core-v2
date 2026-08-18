@@ -28,17 +28,33 @@ class DecisionV2Service:
         self.knowledge_adapter = knowledge_adapter
         self.document_retriever = document_retriever
 
-    def analyze_request(self, *, db, user_id: int, organization_id: int, workspace_id: int, user_query: str, session_id: int | None = None, decision_scope: str = "business") -> DecisionState:
+    def analyze_request(self, *, db, user_id: int, organization_id: int, workspace_id: int, user_query: str, session_id: int | None = None, decision_scope: str = "business", conversation_turns: list[dict] | None = None) -> DecisionState:
         context, persisted_evidence = self.assembler.assemble(db=db, user_id=user_id, organization_id=organization_id, workspace_id=workspace_id)
         classification = classify_personal(user_query) if decision_scope == "personal" else self.classifier.classify(user_query)
         request = DecisionRequest(user_id=user_id, organization_id=organization_id, workspace_id=workspace_id, session_id=session_id, user_query=user_query, decision_type=classification.decision_type, objective=classification.decision_type.value, target=self._target(user_query), timeframe=self._timeframe(user_query), constraints=self._constraints(user_query), business_context=context)
         user_evidence = EvidenceItem(id="user-query", source_type=EvidenceSourceType.USER_STATEMENT, source_name="authenticated_user", content=user_query, organization_id=organization_id, workspace_id=workspace_id, permission_scope="session", citation_label="User statement", provenance={"session_id": session_id})
+        # Only authenticated user statements from this owned session become
+        # conversation evidence. Assistant output is never promoted to fact.
+        bounded_turns = [
+            turn for turn in (conversation_turns or [])
+            if turn.get("role") == "user" and str(turn.get("content") or "").strip()
+        ][-12:]
+        conversation_evidence = [
+            EvidenceItem(
+                id=f"conversation-turn:{index}", source_type=EvidenceSourceType.USER_STATEMENT,
+                source_name="authenticated_conversation", content=str(turn["content"])[:2000],
+                organization_id=organization_id, workspace_id=workspace_id,
+                permission_scope="session", citation_label="Conversation statement",
+                provenance={"session_id": session_id, "turn": index},
+            )
+            for index, turn in enumerate(bounded_turns, start=1)
+        ]
         memory_evidence = self.memory_retriever.retrieve(db=db, organization_id=organization_id, workspace_id=workspace_id, user_id=user_id, query=user_query, session_id=session_id)
         knowledge_evidence = self.knowledge_adapter.retrieve(db=db, organization_id=organization_id, workspace_id=workspace_id, user_id=user_id, query=user_query)
         document_evidence = self.document_retriever.retrieve(db=db, organization_id=organization_id, workspace_id=workspace_id, query=user_query)
         request.memory_context = memory_evidence
         request.knowledge_context = knowledge_evidence
-        base_evidence = deduplicate_evidence([user_evidence, *persisted_evidence, *memory_evidence, *knowledge_evidence, *document_evidence])
+        base_evidence = deduplicate_evidence([user_evidence, *conversation_evidence, *persisted_evidence, *memory_evidence, *knowledge_evidence, *document_evidence])
         # Derived calculations are consequences, not independent source claims;
         # they must not be fed back into conflict detection.
         conflicts = detect_conflicts(base_evidence)

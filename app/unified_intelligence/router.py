@@ -6,7 +6,8 @@ import re
 from app.unified_intelligence.contracts import Capability, CapabilityRoute
 
 
-_CURRENT = re.compile(r"\b(today|tonight|currently|current(?!\s+(?:job|role|employer|situation|plan))|latest|right now|this (?:week|month|morning)|just happened|breaking)\b", re.I)
+_CURRENT = re.compile(r"\b(today|currently|current(?!\s+(?:job|role|employer|situation|plan))|latest|right now|this (?:week|month|morning)|just happened|breaking)\b", re.I)
+_CURRENT_FOLLOWUP = re.compile(r"\b(?:explain|expand on|tell me more about) (?:the )?(?:first|second|third|fourth|last) (?:one|story|item|source)\b", re.I)
 _DOCUMENT = re.compile(r"\b(this|the|my|uploaded|attached) (?:document|file|report|contract|offer|policy|resume|cv)\b", re.I)
 _DECISION = re.compile(r"\b(should i|which (?:one|option) should i|help me decide|is it (?:worth|a good idea)|would it be better (?:for me )?to|do i (?:buy|take|choose|leave|move|enroll|accept)|i (?:have|received) two job offers|i(?:'m| am) deciding whether|i(?:'m| am) thinking about (?:buying|leaving|moving|enrolling|accepting)|i may leave my (?:current )?(?:job|career))\b", re.I)
 _PERSONAL = re.compile(r"\b(for me|my (?:savings|budget|career|job|family|goals?|priorities|situation|plans?|constraints?|preferences?))\b", re.I)
@@ -19,7 +20,7 @@ class UnifiedCapabilityRouter:
         if _SOCIAL.match(text):
             return CapabilityRoute("conversation", (Capability.GENERAL,), requires_language_model=False, routing_reason="clear social turn")
 
-        current = bool(_CURRENT.search(text))
+        current = bool(_CURRENT.search(text) or _CURRENT_FOLLOWUP.search(text))
         document = bool(_DOCUMENT.search(text))
         decision = bool(_DECISION.search(text))
         personal = decision or bool(_PERSONAL.search(text))
