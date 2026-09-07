@@ -34,6 +34,10 @@ class DecisionClassifier:
     def classify(self, query: str) -> DecisionClassification:
         normalized = query.lower()
         tokens = set(re.findall(r"[a-z]+", normalized))
+        explicit_resource_choice = bool(
+            re.search(r"\boptions?\s+(?:are|include|:)\b", normalized)
+            or (re.search(r"\bshould we\b", normalized) and re.search(r"\bor\b", normalized))
+        )
         scores: dict[DecisionType, float] = {}
         reasons: dict[DecisionType, list[str]] = {}
         for decision_type, (groups, _) in _RULES.items():
@@ -58,6 +62,22 @@ class DecisionClassifier:
                 required_data_domains=["objective", "constraints", "available_business_context"],
             )
 
+        # A stated multi-option company resource choice is strategic even when
+        # individual options mention expenses or hiring. Those mentions are
+        # evidence about the alternatives, not necessarily the primary intent.
+        if explicit_resource_choice:
+            secondary = sorted(
+                (item for item in scores if item is not DecisionType.STRATEGIC_PLANNING),
+                key=lambda item: (-scores[item], item.value),
+            )[:3]
+            return DecisionClassification(
+                decision_type=DecisionType.STRATEGIC_PLANNING,
+                secondary_types=secondary,
+                confidence=0.82,
+                rationale=["strategic_planning indicators: explicit multi-option business resource choice"],
+                required_data_domains=["objectives", "constraints", "alternatives"],
+            )
+
         ranked = sorted(scores, key=lambda item: (-scores[item], item.value))
         primary = ranked[0]
         secondary = [item for item in ranked[1:] if scores[item] >= max(1.5, scores[primary] * 0.4)]
@@ -79,13 +99,47 @@ class DecisionClassifier:
 decision_classifier = DecisionClassifier()
 
 
+_DECISION_INTENT_PATTERNS = (
+    re.compile(r"\b(?:should i|do you think i should|which (?:one|option|choice)|which of (?:these|the) options|what would you do|what do you recommend)\b", re.I),
+    re.compile(r"\b(?:help me (?:decide|choose)|i (?:can(?:not|'t)|do not|don't) decide|i (?:do not|don't) know (?:what|which|whether) to choose)\b", re.I),
+    re.compile(r"\b(?:i(?:'m| am) torn between|i have (?:two|multiple) (?:choices|options)|choose between|decide between)\b", re.I),
+    re.compile(r"\b(?:is|would) .{0,80}\b(?:sensible|a good idea|worth it)\b(?:.{0,30}\bfor me\b)?", re.I),
+    re.compile(r"\b(?:would it be better to|i (?:can(?:not|'t)|do not|don't) decide whether|i do not know whether|i don't know whether)\b", re.I),
+)
+_PERSONAL_GOAL_WITH_CONSTRAINT = re.compile(
+    r"\bi (?:want|need|plan|intend) to (?:start|launch|move|relocate|leave|buy|enroll|study|build|create)\b"
+    r"(?=.{0,160}(?:\$|\bbudget\b|\bwithin\b|\bin \d+\s+(?:days?|weeks?|months?|years?)\b))",
+    re.I,
+)
+_DECISION_CONTINUATION = re.compile(
+    r"\b(?:actually|instead|changed my mind|no longer|anymore|only have|maximum budget|new budget|new deadline|need (?:it|this) (?:done )?(?:within|in))\b",
+    re.I,
+)
+
+
+def has_personal_decision_intent(text: str) -> bool:
+    """Recognize a request for a personal choice/recommendation, not information."""
+    value = text.strip()
+    return bool(any(pattern.search(value) for pattern in _DECISION_INTENT_PATTERNS) or _PERSONAL_GOAL_WITH_CONSTRAINT.search(value) or re.search(r"\b(?:should|could) we\b|\bhelp (?:us|our company) (?:decide|choose)\b", value, re.I))
+
+
+def is_personal_decision_continuation(text: str, prior_user_turns: list[str] | None) -> bool:
+    """Treat an explicit correction as decision work only in an active decision context."""
+    if not _DECISION_CONTINUATION.search(text):
+        return False
+    return any(has_personal_decision_intent(turn) for turn in (prior_user_turns or [])[-12:])
+
+
 _PERSONAL_RULES: dict[DecisionType, tuple[set[str], set[str]]] = {
     DecisionType.CAREER_DECISION: ({"job", "career", "promotion", "work", "role"}, {"job offer", "leave my job", "current job", "hate my job", "career change"}),
-    DecisionType.EDUCATION_DECISION: ({"school", "college", "university", "degree", "education", "study", "tuition"}, {"go back to school", "return to school"}),
+    DecisionType.EDUCATION_DECISION: ({"school", "college", "university", "degree", "education", "study", "tuition", "course", "certificate", "diploma"}, {"go back to school", "return to school", "choose a course"}),
     DecisionType.MAJOR_PURCHASE: ({"car", "home", "house", "purchase", "buy", "buying"}, {"major purchase", "buying a car", "buy a car"}),
     DecisionType.PERSONAL_FINANCE: ({"savings", "budget", "debt", "afford", "income", "expenses", "retirement"}, {"personal finance", "emergency fund", "financial security"}),
     DecisionType.RELOCATION: ({"move", "moving", "relocate", "relocation", "city", "country"}, {"move to", "moving to"}),
-    DecisionType.PERSONAL_PROJECT: ({"project", "side", "build", "create", "start"}, {"personal project", "side project", "side business"}),
+    DecisionType.PERSONAL_PROJECT: (
+        {"project", "side", "build", "create", "start", "launch", "business", "service", "product", "cleaning", "tutoring"},
+        {"personal project", "side project", "side business", "cleaning business", "cleaning company", "tutoring service"},
+    ),
 }
 
 

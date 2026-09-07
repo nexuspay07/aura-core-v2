@@ -131,7 +131,8 @@ def test_fabricated_citation_and_numeric_claim_are_never_accepted(session):
 def test_provider_failure_modes_are_safe(session):
     state=ready_personal_state(session)
     assert DecisionAnalysisOrchestrator(UnconfiguredModelProvider()).analyze(state).status=="ANALYSIS_PROVIDER_UNAVAILABLE"
-    assert DecisionAnalysisOrchestrator(MockModelProvider(ProviderTimeoutError("timeout"))).analyze(state).status=="RETRYABLE_FAILURE"
+    retry=DecisionAnalysisOrchestrator(MockModelProvider(ProviderTimeoutError("timeout"))).analyze(state)
+    assert retry.status=="PARTIAL" and retry.usage["retry_count"]==1
 
 def test_request_error_diagnostics_survive_the_orchestrator_boundary(session):
     state=ready_personal_state(session)
@@ -191,8 +192,11 @@ def test_derived_commute_and_salary_numbers_are_grounded_not_hallucinations(sess
 
 def test_unsupported_numeric_hallucination_remains_flagged(session):
     state=ready_personal_state(session); raw=response(); raw["rationale"]="Offer B will create 999 new opportunities."
-    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(state)
-    assert "unsupported numeric claim: 999" in execution.critique_findings
+    orchestrator=DecisionAnalysisOrchestrator(MockModelProvider(raw));package=orchestrator.package(state)
+    parsed=orchestrator._augment(orchestrator._parse_model(raw,state),state,package)
+    assert "unsupported numeric claim: 999" in orchestrator._validate(parsed,package)
+    execution=orchestrator.analyze(state)
+    assert execution.status=="READY" and execution.usage["claim_repair"]=="deterministic"
 
 @pytest.mark.parametrize("assumption",["The commute is five days per week.","Treat the role as a 1–3 year commitment."])
 def test_unsupported_commute_frequency_and_horizon_assumptions_are_rejected(session,assumption):
@@ -249,9 +253,11 @@ def test_major_purchase_derived_numbers_are_supported_but_invented_numbers_fail(
     valid=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(state)
     assert valid.status=="READY" and not any("unsupported numeric" in item for item in valid.critique_findings)
     raw["rationale"]="Ownership costs are $1,150 and savings will be $12,000."
-    invalid=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(state)
-    assert invalid.status=="ANALYSIS_FAILED"
-    assert {"unsupported numeric claim: 1,150","unsupported numeric claim: 12,000"} <= set(invalid.critique_findings)
+    orchestrator=DecisionAnalysisOrchestrator(MockModelProvider(raw));package=orchestrator.package(state)
+    parsed=orchestrator._augment(orchestrator._parse_model(raw,state),state,package)
+    assert {"unsupported numeric claim: 1,150","unsupported numeric claim: 12,000"} <= set(orchestrator._validate(parsed,package))
+    repaired=orchestrator.analyze(state)
+    assert repaired.status=="READY" and repaired.usage["repaired_numeric_values"]==["1150","12000"]
 
 
 FOUNDER_CAR_INPUT = "I have $32,000 in savings and I'm thinking about buying a car for $18,000 in cash. I earn $4,200 per month and my regular expenses are about $2,600. I want to keep at least $20,000 in emergency savings. Should I buy the car now, choose something cheaper, or wait?"
@@ -290,18 +296,18 @@ def test_exact_founder_car_grounded_response_passes_and_new_provider_math_fails(
     for label,claim in adversarial.items():
         bad=dict(raw);bad["rationale"]=claim
         execution=DecisionAnalysisOrchestrator(MockModelProvider(bad)).analyze(state)
-        assert execution.status=="ANALYSIS_FAILED",label
-        assert execution.usage["rejected_numeric_values"],label
+        assert execution.status=="READY",label
+        assert execution.usage["claim_repair"]=="deterministic",label
 
 
 def test_rejected_numeric_diagnostic_is_normalized_and_contains_no_prompt(session):
     state=founder_car_state(session);raw=response();raw["rationale"]="You can rebuild the $6,000 gap in 4 months at 44%.";raw["alternatives"]=[{"option":"Wait","benefits":["Preserve savings"],"downsides":["Delay purchase"],"evidence_ids":["user-query"],"assumptions":[],"conditions_for_success":[]}];raw["recommended_option"]="Wait"
     execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(state)
-    assert execution.usage["rejected_numeric_values"]==["4","44%"]
+    assert execution.usage["repaired_numeric_values"]==["4","44%"]
     assert FOUNDER_CAR_INPUT not in str(execution.usage)
 
-def grounding_findings(text, *, derived=False):
-    evidence=[{"id":"user-query","content":"Authorized scenario.","provenance":{}}]
+def grounding_findings(text, *, derived=False, source_text="Authorized scenario."):
+    evidence=[{"id":"user-query","content":source_text,"provenance":{}}]
     if derived: evidence.append({"id":"derived:commute","content":"The commute is 120 minutes (2 hours) per commuting day.","provenance":{"derived":True,"numeric_values":["120","2"]}})
     result=AnalysisResult("p",[],[],[AnalysisAlternative("option",[],[],["user-query"],[],[])],text,[],AnalysisRecommendation("option",text,"",[],[]),[],[],["user-query"],["user-query"],[],[])
     return DecisionAnalysisOrchestrator()._validate(result,AnalysisPackage({}, {}, evidence, [], [], {}, []))
@@ -313,6 +319,16 @@ def test_structural_numbers_are_not_grounded_as_factual_claims(label):
 @pytest.mark.parametrize("claim",["It costs $1,150 monthly.","The balance is $12,000.","Wait 2 months.","Insurance is $200.","Your salary will increase 10%."])
 def test_factual_numbers_still_require_grounding(claim):
     assert any("unsupported numeric" in item for item in grounding_findings(claim))
+
+def test_digit_claim_is_grounded_by_equivalent_number_word_evidence():
+    findings=grounding_findings("5 customers requested analytics.",source_text="Five customers requested analytics.")
+    assert "supported_literal numeric: 5" in findings
+    assert "unsupported numeric claim: 5" not in findings
+
+def test_number_word_normalization_does_not_accept_a_different_number():
+    assert "unsupported numeric claim: 5" in grounding_findings(
+        "5 customers requested analytics.", source_text="Four customers requested analytics."
+    )
 
 def test_derived_two_hours_requires_provenance_and_generic_benefits_are_safe():
     assert "supported_derived numeric: 2" in grounding_findings("Drive 2 hours per commuting day.",derived=True)

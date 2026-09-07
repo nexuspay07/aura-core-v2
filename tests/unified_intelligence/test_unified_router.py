@@ -99,3 +99,36 @@ def test_representative_general_requests_remain_general(question):
     route = UnifiedCapabilityRouter().route(question)
     assert route.primary_intent == "general"
     assert Capability.DECISION not in route.capabilities_required
+
+
+@pytest.mark.parametrize("question", [
+    "Help me choose between college and working full-time.",
+    "What would you do between these two options?",
+    "I'm torn between renting and buying.",
+    "Is starting this company right now sensible for me?",
+    "I don't know whether I should move or stay.",
+])
+def test_natural_personal_choice_language_routes_to_decision(question):
+    route = UnifiedCapabilityRouter().route(question)
+    assert route.primary_intent == "decision"
+    assert {Capability.PERSONAL, Capability.DECISION} <= set(route.capabilities_required)
+
+
+@pytest.mark.parametrize("question", [
+    "Explain the difference between renting and buying.",
+    "What is a mortgage?",
+    "Write an email to my landlord.",
+    "Give me five business ideas.",
+    "Summarize this paragraph.",
+])
+def test_information_and_creation_controls_remain_general(question):
+    route = UnifiedCapabilityRouter().route(question)
+    assert route.primary_intent == "general"
+    assert Capability.DECISION not in route.capabilities_required
+
+
+def test_explicit_constraint_correction_continues_only_an_existing_decision():
+    router = UnifiedCapabilityRouter()
+    prior = ["I want to start a cleaning company and I have $3,000."]
+    assert router.route("Actually I only have $500.", prior_user_turns=prior).requires_decision_analysis
+    assert not router.route("Actually, explain that more simply.").requires_decision_analysis

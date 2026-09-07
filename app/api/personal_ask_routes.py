@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.api.auth_routes import get_current_user_from_token
 from app.db.database import SessionLocal
+from app.core.rate_limit import FixedWindowRateLimiter, RateLimitPolicy
 from app.intelligence_v2.orchestrator import decision_analysis_orchestrator
 from app.intelligence_v2.service import decision_v2_service
 from app.intelligence_v2.documents import document_evidence_retriever
@@ -24,6 +25,7 @@ from app.personal.ask import (
     owned_session,
     save_session,
 )
+from app.personal.safety import personal_safety_boundary
 from app.unified_intelligence.orchestrator import unified_aura_orchestrator
 from app.intelligence_v2.model_provider import ProviderTimeoutError, ProviderUnavailableError
 
@@ -31,6 +33,8 @@ from app.intelligence_v2.model_provider import ProviderTimeoutError, ProviderUna
 router = APIRouter(prefix="/personal", tags=["Personal Ask"])
 security = HTTPBearer()
 logger = logging.getLogger(__name__)
+personal_ask_rate_limiter = FixedWindowRateLimiter()
+personal_ask_rate_policy = RateLimitPolicy(limit=20, window_seconds=60)
 
 
 class PersonalAskRequest(BaseModel):
@@ -77,22 +81,28 @@ def _log_provider_failure(status_name: str, diagnostics: dict | None) -> None:
 def _failure(status_name: str, diagnostics: dict | None = None):
     _log_provider_failure(status_name, diagnostics)
     if status_name == "ANALYSIS_PROVIDER_UNAVAILABLE":
-        raise HTTPException(status_code=503, detail="Aura is temporarily unavailable. Please try again later.")
+        raise HTTPException(status_code=503, detail="Aevric AI is temporarily unavailable. Please try again later.")
     if status_name == "RETRYABLE_FAILURE":
-        raise HTTPException(status_code=504, detail="Aura timed out. Please try again later.")
+        raise HTTPException(status_code=504, detail="Aevric AI timed out. Please try again later.")
     if status_name == "ANALYSIS_FAILED":
-        raise HTTPException(status_code=422, detail="Aura could not safely validate this analysis.")
-    raise HTTPException(status_code=500, detail="Aura analysis failed")
+        raise HTTPException(status_code=422, detail="Aevric AI could not safely validate this analysis.")
+    raise HTTPException(status_code=500, detail="Aevric AI analysis failed")
 
 
 def _safe_usage(usage: dict | None) -> dict:
-    allowed = ("provider", "model", "latency_ms", "input_tokens", "output_tokens", "reasoning_tokens", "total_tokens")
+    allowed = ("provider", "model", "latency_ms", "input_tokens", "output_tokens", "reasoning_tokens", "visible_output_tokens", "total_tokens", "payload_chars", "retry_payload_chars", "retry_count", "parsing_ms", "grounding_validation_ms")
     return {key: usage[key] for key in allowed if usage and usage.get(key) is not None}
 
 
 @router.post("/ask")
 async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
     user_id, organization_id, workspace_id = scope(identity)
+    if not personal_ask_rate_limiter.allow(("personal_ask", user_id), personal_ask_rate_policy):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please wait a moment and try again.",
+            headers={"Retry-After": str(personal_ask_rate_policy.window_seconds)},
+        )
     db = SessionLocal()
     try:
         is_new_session = body.session_id is None
@@ -116,11 +126,32 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
                 save_session(db, session_id=session_id, report={"personal_ask": {"message": message, "clarification_answers": []}}, status="draft", summary=None, recommendation=None)
                 append_turn(db, session_id=session_id, role="user", content=message, mode="USER")
 
-        route = unified_aura_orchestrator.prepare(message)
+        stored = owned_session(db, session_id=session_id, user_id=user_id,
+                               organization_id=organization_id, workspace_id=workspace_id)
+        prior_turns = (stored.get("report_json") or {}).get("turns") or []
+        prior_user_turns = [
+            str(turn.get("content")) for turn in prior_turns[:-1]
+            if isinstance(turn, dict) and turn.get("role") == "user" and turn.get("content")
+        ]
+        safety_message = body.clarification_response.strip() if body.clarification_response else message
+        safety = personal_safety_boundary.evaluate(safety_message)
+        if safety:
+            if body.clarification_response:
+                append_turn(db, session_id=session_id, role="user", content=safety_message, mode="USER")
+            report = {
+                "personal_ask": {"message": safety_message, "clarification_answers": answers},
+                "conversation": {"response": safety.message},
+                "safety": {"category": safety.category, "severity": safety.severity},
+            }
+            save_session(db, session_id=session_id, report=report, status="completed", summary=safety.message, recommendation=None)
+            turns = append_turn(
+                db, session_id=session_id, role="assistant", content=safety.message,
+                mode=safety.mode, payload={"category": safety.category},
+            )
+            db.commit()
+            return {"mode": safety.mode, "session_id": session_id, "message": safety.message, "turns": turns}
+        route = unified_aura_orchestrator.prepare(message, prior_user_turns=prior_user_turns)
         if not route.requires_decision_analysis:
-            stored = owned_session(db, session_id=session_id, user_id=user_id,
-                                   organization_id=organization_id, workspace_id=workspace_id)
-            prior_turns = (stored.get("report_json") or {}).get("turns") or []
             documents = document_evidence_retriever.retrieve(
                 db=db, organization_id=organization_id, workspace_id=workspace_id, query=message,
             ) if route.requires_document_evidence else []
@@ -145,7 +176,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
         state = decision_v2_service.analyze_request(
             db=db, user_id=user_id, organization_id=organization_id,
             workspace_id=workspace_id, user_query=message, session_id=session_id,
-            decision_scope="personal",
+            decision_scope="auto",
             conversation_turns=session_turns[:-1],
         )
         for answer in answers:
@@ -171,6 +202,11 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
             return response
 
         execution = decision_analysis_orchestrator.analyze(state)
+        if execution.status == "PARTIAL":
+            _log_provider_failure("ANALYSIS_PARTIAL", execution.usage)
+            response={"mode":"ANALYSIS_PARTIAL","session_id":session_id,"classification":state.classification.decision_type.value,"problem_understanding":state.request.user_query,"key_facts":[item.content for item in state.evidence if item.content][:12],"goals":state.request.source_metadata.get("fact_ledger",{}).get("goals",[]),"constraints":state.request.constraints,"assumptions":[],"message":"Aevric AI understood the available situation, but could not complete a reliable final recommendation. You can retry without re-entering these facts.","retryable":True,"recommendation":None,"telemetry":_safe_usage(execution.usage)}
+            save_session(db,session_id=session_id,report={"partial_analysis":response,"personal_ask":{"message":message,"clarification_answers":answers}},status="partial",summary=response["message"],recommendation=None)
+            turns=append_turn(db,session_id=session_id,role="assistant",content=response["message"],mode="ANALYSIS_PARTIAL",payload=dict(response));db.commit();response["turns"]=turns;return response
         if execution.status != "READY":
             db.rollback()
             _failure(execution.status, execution.usage)
@@ -217,9 +253,13 @@ async def get_ask_session(session_id: int, identity=Depends(current_identity)):
         report = session.get("report_json") or {}
         executive = report.get("executive_report")
         turns = report.get("turns") or []
+        last_mode = turns[-1].get("mode") if turns and isinstance(turns[-1], dict) else None
+        safety_mode = last_mode if isinstance(last_mode, str) and last_mode.startswith("SAFETY_") else None
         return {
             "session_id": session_id, "status": session.get("status"), "turns": turns,
-            "mode": "ANALYSIS_COMPLETE" if executive else "CLARIFICATION_REQUIRED" if session.get("status") == "clarification_required" else "CONVERSATION",
+            "mode": "ANALYSIS_COMPLETE" if executive else (
+                safety_mode or ("CLARIFICATION_REQUIRED" if session.get("status") == "clarification_required" else "CONVERSATION")
+            ),
             "classification": executive.get("classification") if isinstance(executive, dict) else None,
             "decision": executive,
             "pending_clarification": session.get("status") == "clarification_required",

@@ -16,7 +16,7 @@ from app.db.knowledge_table import knowledge_table
 from app.intelligence_v2.classifier import decision_classifier
 from app.intelligence_v2.context import ContextAccessError, EnterpriseContextAssembler
 from app.intelligence_v2.contracts import AssumptionItem, AssumptionStatus, DecisionType, EvidenceItem, EvidenceSourceType, GapImportance
-from app.intelligence_v2.service import decision_v2_service
+from app.intelligence_v2.service import authoritative_user_context, decision_v2_service
 
 
 DELIVERY_PROMPT = "Our delivery costs have been increasing and customers are complaining about late deliveries. I want to reduce delivery costs by 20% over the next 6 months without reducing service quality. What should we do?"
@@ -46,6 +46,38 @@ def test_delivery_case_is_cost_and_operations_not_market_expansion():
     assert DecisionType.OPERATIONAL_OPTIMIZATION in result.secondary_types
     assert DecisionType.MARKET_EXPANSION not in [result.decision_type, *result.secondary_types]
     assert "cost_baseline" in result.required_data_domains
+
+
+@pytest.mark.parametrize(("prior", "latest", "slot", "expected", "superseded"), [
+    ("I want to start a cleaning company and I have $3,000.", "Actually I only have $500.", "budget", "$500", "$3,000"),
+    ("I want to launch in six months.", "I need to do it within 30 days instead.", "deadline", "within 30 days", "in six months"),
+    ("I prefer option A.", "I've changed my mind. I don't want option A anymore.", "preference", "don't want option A anymore", "prefer option A"),
+])
+def test_newest_explicit_user_constraint_is_authoritative(prior, latest, slot, expected, superseded):
+    context, turns, facts = authoritative_user_context(latest, [{"role": "user", "content": prior}])
+    assert expected.lower() in facts[slot].lower()
+    assert superseded.lower() not in context.lower()
+    assert slot in turns[0].get("superseded_slots", []) if turns else True
+
+
+def test_combined_context_preserves_prior_fact_and_excludes_assistant_content():
+    context, _, facts = authoritative_user_context("B is much closer to work.", [
+        {"role": "user", "content": "My budget is $2,000 and I'm choosing between A and B."},
+        {"role": "assistant", "content": "You may want to budget $9,000."},
+    ])
+    assert "$2,000" in context and facts["budget"] == "My budget is $2,000"
+    assert "$9,000" not in context
+
+
+def test_personal_gap_detection_uses_bounded_prior_user_context(session):
+    state = decision_v2_service.analyze_request(
+        db=session, user_id=1, organization_id=1, workspace_id=1,
+        user_query="The certificate program is closer to home.", decision_scope="personal",
+        conversation_turns=[{"role": "user", "content": "Help me choose between college and an online certificate. My budget is $2,000 and I want a degree."}],
+    )
+    assert state.classification.decision_type is DecisionType.EDUCATION_DECISION
+    assert "education_cost" not in {gap.field for gap in state.information_gaps}
+    assert all(item.source_name != "authenticated_conversation" or item.permission_scope == "session" for item in state.evidence)
 
 
 @pytest.mark.parametrize(("query", "expected"), [
@@ -90,7 +122,7 @@ def test_delivery_v2_detects_critical_operational_gaps_and_clarifies(session):
     assert state.request.timeframe == "6 months"
     assert state.request.constraints == ["Do not reduce service quality"]
     assert state.clarification.should_clarify is True
-    assert 2 <= len(state.clarification.questions) <= 5
+    assert len(state.clarification.questions) == 1
     assert {gap.field for gap in state.information_gaps} >= {"current_cost_baseline", "cost_breakdown", "service_level_baseline"}
     assert all(gap.importance in {GapImportance.CRITICAL, GapImportance.HIGH} for gap in state.information_gaps)
     assert state.recommendations == []

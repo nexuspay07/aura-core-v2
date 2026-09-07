@@ -40,10 +40,11 @@ def test_education_total_tuition_is_authorized_but_foregone_income_is_not(sessio
     supported=response(summary="Going back to school",option="Compare study formats",rationale="Stated tuition totals $16,000; lost income remains uncertain.",evidence_ids=["user-query","derived:total_stated_tuition"])
     assert DecisionAnalysisOrchestrator(MockModelProvider(supported)).analyze(decision).status=="READY"
     unsupported=response(summary="Going back to school",option="Enroll",rationale="You will lose $90,000 of income.",evidence_ids=["user-query"])
-    rejected=DecisionAnalysisOrchestrator(MockModelProvider(unsupported)).analyze(decision)
-    assert rejected.status=="ANALYSIS_FAILED"
-    assert rejected.usage["failure_stage"]=="grounding_validation"
-    assert rejected.usage["validation_categories"]==["unsupported_numeric_claim"]
+    orchestrator=DecisionAnalysisOrchestrator(MockModelProvider(unsupported));package=orchestrator.package(decision)
+    parsed=orchestrator._augment(orchestrator._parse_model(unsupported,decision),decision,package)
+    assert "unsupported numeric claim: 90,000" in orchestrator._validate(parsed,package)
+    repaired=orchestrator.analyze(decision)
+    assert repaired.status=="READY" and repaired.usage["repaired_numeric_values"]==["90000"]
 
 
 def test_sanitized_failure_categories_distinguish_citation_and_grounding(session):

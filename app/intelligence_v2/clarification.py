@@ -19,7 +19,7 @@ class StructuredAnswerExtractor:
         return EvidenceItem(id=f"clarification:{turn}:{len(request.known_facts)}",source_type=EvidenceSourceType.USER_STATEMENT,source_name="clarification_answer",content=answer,structured_value={"topic":field,"value":value,"unit":unit,"confirmed":confirmed},organization_id=request.organization_id,workspace_id=request.workspace_id,timestamp=datetime.now(timezone.utc),permission_scope="session",citation_label="User clarification",provenance={"session_id":request.session_id,"turn":turn,"raw_statement":answer,"confirmation_status":"confirmed" if confirmed else "unconfirmed","memory_promotion":"candidate" if confirmed and field in {"current_cost_baseline","service_level_baseline"} else "session_only"})
 
 class InformationSufficiencyService:
-    max_questions=5
+    max_questions=1
     def assess(self, *, request: DecisionRequest, gaps: list[InformationGap], conflicts: list[EvidenceConflict]) -> InformationSufficiencyAssessment:
         coverage={gap.field:False for gap in gaps}
         # Gaps are absent only after authorized evidence has answered them.
@@ -72,7 +72,17 @@ def personal_gaps(query: str, decision_type=None) -> list[InformationGap]:
     gap = InformationGap
     if decision_type is DecisionType.CAREER_DECISION:
         if "two job offers" in text and ("offer a" in text or "offer b" in text): return []
-        return [gap("career_objective", "The intended outcome changes the choice.", GapImportance.CRITICAL, "Advice could optimize for the wrong career outcome.", False, "What career outcome would you most like to gain from a change?"), gap("career_constraints", "Practical constraints shape viable options.", GapImportance.CRITICAL, "A suggested path may not fit the user's circumstances.", False, "What constraints should Aura keep in mind, such as income, location, time, or family commitments?")]
+        gaps=[]
+        objective_is_explicit = bool(
+            any(term in text for term in ("goal", "so that", "choose between", "decide between", "priority"))
+            or re.search(r"\b(?:keep|maintain)\s+(?:the\s+)?same\s+income\b", text)
+            or re.search(r"\bwork\s+(?:half|fewer|less)\b", text)
+        )
+        if not objective_is_explicit:
+            gaps.append(gap("career_objective", "The intended outcome changes the choice.", GapImportance.CRITICAL, "Advice could optimize for the wrong career outcome.", False, "What career outcome or work result would you most like to gain from a change?"))
+        if not any(term in text for term in ("income", "salary", "location", "commute", "time", "hours", "family", "risk", "savings", "remote")):
+            gaps.append(gap("career_constraints", "Practical constraints shape viable options.", GapImportance.HIGH, "A suggested path may not fit the user's circumstances.", True, "What practical constraint would most affect this choice, such as income, time, location, or family commitments?"))
+        return gaps
     if decision_type is DecisionType.EDUCATION_DECISION:
         gaps=[]
         if not any(term in text for term in ("because", "so that", "goal", "career", "want to")): gaps.append(gap("education_outcome", "The intended outcome determines whether education is a good route.", GapImportance.CRITICAL, "The program may not serve the user's goal.", False, "What do you hope this education will make possible for you?"))
@@ -95,10 +105,15 @@ def personal_gaps(query: str, decision_type=None) -> list[InformationGap]:
         if not any(term in text for term in ("rent", "cost", "salary", "budget", "afford", "$")): gaps.append(gap("relocation_finances", "Financial differences affect feasibility.", GapImportance.HIGH, "The move may carry unexamined financial strain.", True, "What income, housing cost, and moving budget would apply in each location?"))
         return gaps
     if decision_type is DecisionType.PERSONAL_PROJECT:
-        if any(term in text for term in ("goal", "want to", "so that", "hours", "budget")): return []
+        if any(term in text for term in ("goal", "want to", "so that", "hours", "budget", "launch", "choice", "option")): return []
         return [gap("project_objective", "A clear objective is needed to compare paths.", GapImportance.CRITICAL, "The next step may not serve the intended result.", False, "What are you hoping this project will achieve?"), gap("project_constraints", "Time and budget determine a realistic path.", GapImportance.HIGH, "The plan may exceed available resources.", True, "How much time and money can you realistically give this project?")]
     if decision_type is DecisionType.LIFE_PLANNING:
-        return [gap("decision_focus", "Aura needs to understand the choice before analyzing it.", GapImportance.CRITICAL, "A recommendation would be premature.", False, "What choice or situation would you like to think through together?")]
+        # A broad taxonomy label is not itself evidence that the user's focus is
+        # missing. Explicit alternatives, deadlines, and priorities can support
+        # bounded analysis without inventing facts.
+        if re.search(r"\b(?:option\s+[a-z]|which\s+(?:one|option)|choices?|alternatives?|deadline|priority|priorities)\b", text) or re.search(r"\bactually\s+\d+\s+(?:days?|weeks?|months?|years?)\b", text):
+            return []
+        return [gap("decision_focus", "Aevric AI needs to understand the choice before analyzing it.", GapImportance.CRITICAL, "A recommendation would be premature.", False, "What choice or situation would you like to think through together?")]
     return []
 
 structured_answer_extractor=StructuredAnswerExtractor(); information_sufficiency_service=InformationSufficiencyService(); clarification_planner=ClarificationPlanner(); clarification_state_manager=ClarificationStateManager()

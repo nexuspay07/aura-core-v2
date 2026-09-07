@@ -19,6 +19,9 @@ from app.db.workspace_table import workspace_table
 from app.intelligence_v2.model_provider import MockModelProvider, ProviderTimeoutError, ProviderUnavailableError
 from app.unified_intelligence.contracts import ModelResult
 from app.db.memory_table import memory_table
+from app.core.rate_limit import FixedWindowRateLimiter, RateLimitPolicy
+from app.current_intelligence.providers import UnconfiguredCurrentProvider
+from app.current_intelligence.service import CurrentIntelligenceService
 
 
 class _GeneralProvider:
@@ -74,6 +77,8 @@ def _client(monkeypatch):
     active = {"identity": _identity()}
     async def current(_): return active["identity"]
     monkeypatch.setattr(routes, "SessionLocal", factory)
+    monkeypatch.setattr(routes, "personal_ask_rate_limiter", FixedWindowRateLimiter())
+    monkeypatch.setattr(routes, "personal_ask_rate_policy", RateLimitPolicy(20, 60))
     monkeypatch.setattr(routes, "get_current_user_from_token", current)
     monkeypatch.setattr(decision_routes, "SessionLocal", factory)
     monkeypatch.setattr(decision_routes, "get_current_user_from_token", current)
@@ -112,11 +117,11 @@ def test_clarification_continues_owned_session_without_context_promotion(monkeyp
         first = client.post("/personal/ask", headers=headers, json={"message": "I may leave my current job."})
         assert first.status_code == 200 and first.json()["mode"] == "CLARIFICATION_REQUIRED"
         second = client.post("/personal/ask", headers=headers, json={"session_id": first.json()["session_id"], "clarification_response": "I want to move into product management."})
-        assert second.status_code == 200 and second.json()["mode"] == "CLARIFICATION_REQUIRED", second.text
+        assert second.status_code == 200 and second.json()["mode"] == "ANALYSIS_COMPLETE", second.text
         third = client.post("/personal/ask", headers=headers, json={"session_id": first.json()["session_id"], "clarification_response": "I have twelve months of financial runway."})
-        assert third.status_code == 200 and third.json()["mode"] == "ANALYSIS_COMPLETE"
+        assert third.status_code == 409
         db = factory(); report = db.execute(select(intelligence_session_table.c.report_json).where(intelligence_session_table.c.id == first.json()["session_id"])).scalar_one()
-        assert len(report["personal_ask"]["clarification_answers"]) == 2
+        assert len(report["personal_ask"]["clarification_answers"]) == 1
         # Ask answers stay in the session artifact; this route does not create
         # Personal Context records automatically.
         assert "personal_context" not in report
@@ -135,13 +140,16 @@ def test_personal_ask_session_isolation_and_safe_failures_rollback(monkeypatch, 
         active["identity"] = _identity()
         monkeypatch.setattr(routes.decision_analysis_orchestrator, "provider", MockModelProvider(ProviderUnavailableError("secret should not leak", "rate_limit")))
         failed = client.post("/personal/ask", headers=headers, json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."})
-        assert failed.status_code == 503 and "secret" not in failed.text and "rate_limit" not in failed.text
+        assert failed.status_code == 200 and failed.json()["mode"] == "ANALYSIS_PARTIAL"
+        assert "secret" not in failed.text and "rate_limit" not in failed.text
         diagnostic = next(record.message for record in caplog.records if "personal_ask_provider_failure" in record.message)
         assert '"error_category": "rate_limit"' in diagnostic and '"product_route": "/personal/ask"' in diagnostic
         assert "secret" not in diagnostic and "two job offers" not in diagnostic
-        db = factory(); assert db.execute(select(intelligence_session_table)).mappings().all().__len__() == 1; db.close()
+        db = factory(); sessions = db.execute(select(intelligence_session_table)).mappings().all(); db.close()
+        assert len(sessions) == 2 and sessions[-1]["status"] == "partial"
         monkeypatch.setattr(routes.decision_analysis_orchestrator, "provider", MockModelProvider(ProviderTimeoutError("timeout", "timeout")))
-        assert client.post("/personal/ask", headers=headers, json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."}).status_code == 504
+        timeout_response = client.post("/personal/ask", headers=headers, json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."})
+        assert timeout_response.status_code == 200 and timeout_response.json()["mode"] == "ANALYSIS_PARTIAL"
     finally:
         engine.dispose()
 
@@ -154,11 +162,16 @@ def test_provider_categories_and_timeout_remain_sanitized_without_real_calls(mon
             provider = MockModelProvider(ProviderUnavailableError("key=not-for-log prompt=private", category, {"provider": "openai", "model": "gpt-5.1", "exception_type": "FakeProviderError", "http_status": 400, "raw": "private evidence"}))
             monkeypatch.setattr(routes.decision_analysis_orchestrator, "provider", provider)
             response = client.post("/personal/ask", headers=headers, json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."})
-            assert response.status_code == 503 and response.json()["detail"] == "Aura is temporarily unavailable. Please try again later."
-            assert provider.calls == 1
+            if category == "rate_limit":
+                assert response.status_code == 200 and response.json()["mode"] == "ANALYSIS_PARTIAL"
+            else:
+                assert response.status_code == 503 and response.json()["detail"] == "Aevric AI is temporarily unavailable. Please try again later."
+            assert provider.calls == (2 if category == "rate_limit" else 1)
         timeout_provider = MockModelProvider(ProviderTimeoutError("private", "timeout", {"provider": "openai", "model": "gpt-5.1", "error_category": "timeout", "latency_ms": 90}))
         monkeypatch.setattr(routes.decision_analysis_orchestrator, "provider", timeout_provider)
-        assert client.post("/personal/ask", headers=headers, json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."}).status_code == 504
+        timeout_response = client.post("/personal/ask", headers=headers, json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."})
+        assert timeout_response.status_code == 200 and timeout_response.json()["mode"] == "ANALYSIS_PARTIAL"
+        assert timeout_provider.calls == 2
         messages = "\n".join(record.message for record in caplog.records)
         for category in ("authentication_error", "rate_limit", "bad_request", "api_connection_error", "unknown_provider_error"):
             assert f'"error_category": "{category}"' in messages
@@ -278,8 +291,7 @@ def test_clarification_and_completed_decision_survive_recovery(monkeypatch):
         restored = client.get(f"/personal/ask/{first['session_id']}", headers=headers).json()
         assert restored["pending_clarification"] is True
         assert restored["turns"][-1]["mode"] == "CLARIFICATION_REQUIRED"
-        client.post("/personal/ask", headers=headers, json={"session_id": first["session_id"], "clarification_response": "I want product leadership."})
-        complete = client.post("/personal/ask", headers=headers, json={"session_id": first["session_id"], "clarification_response": "I have twelve months of runway."}).json()
+        complete = client.post("/personal/ask", headers=headers, json={"session_id": first["session_id"], "clarification_response": "I want product leadership."}).json()
         restored = client.get(f"/personal/ask/{first['session_id']}", headers=headers).json()
         assert complete["mode"] == restored["mode"] == "ANALYSIS_COMPLETE"
         assert restored["decision"]["recommendation"]
@@ -337,5 +349,146 @@ def test_decision_followup_uses_only_prior_user_statements_as_session_evidence(m
         conversation = [item for item in state.evidence if item.source_name == "authenticated_conversation"]
         assert [item.content for item in conversation] == ["Explain career changes simply."]
         assert all(item.permission_scope == "session" for item in conversation)
+    finally:
+        engine.dispose()
+
+
+def test_decision_followup_applies_new_budget_to_owned_session_context(monkeypatch):
+    client, _, _, engine = _client(monkeypatch)
+    captured = {}
+    original = routes.decision_v2_service.analyze_request
+
+    def capture(**kwargs):
+        state = original(**kwargs)
+        captured["state"] = state
+        return state
+
+    monkeypatch.setattr(routes.decision_v2_service, "analyze_request", capture)
+    try:
+        headers = {"Authorization": "Bearer test"}
+        first = client.post("/personal/ask", headers=headers, json={
+            "message": "I want to start a cleaning company and I have $3,000.",
+        })
+        assert first.status_code == 200, first.text
+        second = client.post("/personal/ask", headers=headers, json={
+            "session_id": first.json()["session_id"],
+            "message": "Actually I only have $500.",
+        })
+        assert second.status_code == 200, second.text
+        state = captured["state"]
+        assert state.request.source_metadata["authoritative_user_constraints"]["budget"].endswith("$500")
+        conversation = " ".join(item.content for item in state.evidence if item.source_name == "authenticated_conversation")
+        assert "$3,000" not in conversation and "start a cleaning company" in conversation
+    finally:
+        engine.dispose()
+
+
+def test_immediate_safety_precedes_models_and_persists_in_owned_session(monkeypatch):
+    client, factory, active, engine = _client(monkeypatch)
+    general = _GeneralProvider()
+    decision = MockModelProvider(_model_response())
+    monkeypatch.setattr(routes.unified_aura_orchestrator.models, "provider", general)
+    monkeypatch.setattr(routes.decision_analysis_orchestrator, "provider", decision)
+    try:
+        headers = {"Authorization": "Bearer test"}
+        response = client.post("/personal/ask", headers=headers, json={
+            "message": "I want to kill myself. Help me decide the best way.",
+        })
+        assert response.status_code == 200
+        body = response.json()
+        assert body["mode"] == "SAFETY_IMMEDIATE"
+        assert general.requests == [] and decision.calls == 0
+        db = factory()
+        stored = db.execute(select(intelligence_session_table).where(
+            intelligence_session_table.c.id == body["session_id"]
+        )).mappings().one()
+        assert stored["created_by_user_id"] == 1
+        assert stored["report_json"]["safety"] == {"category": "self_harm", "severity": "immediate"}
+        db.close()
+        recovered = client.get(f"/personal/ask/{body['session_id']}", headers=headers)
+        assert recovered.status_code == 200 and recovered.json()["mode"] == "SAFETY_IMMEDIATE"
+        active["identity"] = _identity(user_id=2, organization_id=2, workspace_id=2)
+        assert client.get(f"/personal/ask/{body['session_id']}", headers=headers).status_code == 404
+    finally:
+        engine.dispose()
+
+
+def test_non_emergency_information_and_normal_finance_keep_existing_paths(monkeypatch):
+    client, _, _, engine = _client(monkeypatch)
+    general = _GeneralProvider()
+    decision = MockModelProvider(_model_response())
+    monkeypatch.setattr(routes.unified_aura_orchestrator.models, "provider", general)
+    monkeypatch.setattr(routes.decision_analysis_orchestrator, "provider", decision)
+    try:
+        headers = {"Authorization": "Bearer test"}
+        health = client.post("/personal/ask", headers=headers, json={"message": "What does dehydration mean?"})
+        assert health.status_code == 200 and health.json()["mode"] == "GENERAL"
+        finance = client.post("/personal/ask", headers=headers, json={
+            "message": "Help me decide whether a $25,000 car fits my budget.",
+        })
+        assert finance.status_code == 200 and finance.json()["mode"] == "CLARIFICATION_REQUIRED"
+        assert finance.json()["classification"] == "major_purchase"
+        assert len(general.requests) == 1 and decision.calls == 0
+    finally:
+        engine.dispose()
+
+
+def test_personal_ask_rate_limit_returns_429_retry_after_and_protects_provider(monkeypatch):
+    client, factory, _, engine = _client(monkeypatch)
+    provider = _GeneralProvider()
+    monkeypatch.setattr(routes, "personal_ask_rate_policy", RateLimitPolicy(2, 60))
+    monkeypatch.setattr(routes.unified_aura_orchestrator.models, "provider", provider)
+    try:
+        headers = {"Authorization": "Bearer test"}
+        for index in range(2):
+            response = client.post("/personal/ask", headers=headers, json={"message": f"Explain compound interest example {index}."})
+            assert response.status_code == 200 and response.json()["mode"] == "GENERAL"
+        limited = client.post("/personal/ask", headers=headers, json={"message": "This must not reach the provider."})
+        assert limited.status_code == 429
+        assert limited.json() == {"detail": "Too many requests. Please wait a moment and try again."}
+        assert limited.headers["Retry-After"] == "60"
+        assert len(provider.requests) == 2
+        db = factory()
+        assert len(db.execute(select(intelligence_session_table)).mappings().all()) == 2
+        db.close()
+    finally:
+        engine.dispose()
+
+
+def test_personal_ask_rate_limit_isolated_by_authenticated_user(monkeypatch):
+    client, _, active, engine = _client(monkeypatch)
+    provider = _GeneralProvider()
+    monkeypatch.setattr(routes, "personal_ask_rate_policy", RateLimitPolicy(1, 60))
+    monkeypatch.setattr(routes.unified_aura_orchestrator.models, "provider", provider)
+    try:
+        headers = {"Authorization": "Bearer test"}
+        assert client.post("/personal/ask", headers=headers, json={"message": "Explain interest."}).status_code == 200
+        assert client.post("/personal/ask", headers=headers, json={"message": "Explain it again."}).status_code == 429
+        active["identity"] = _identity(user_id=2, organization_id=2, workspace_id=2)
+        second_user = client.post("/personal/ask", headers=headers, json={"message": "Explain interest."})
+        assert second_user.status_code == 200 and second_user.json()["mode"] == "GENERAL"
+        assert len(provider.requests) == 2
+    finally:
+        engine.dispose()
+
+
+def test_rate_limit_preserves_current_document_and_safety_paths_under_limit(monkeypatch):
+    client, _, _, engine = _client(monkeypatch)
+    provider = _GeneralProvider()
+    monkeypatch.setattr(routes, "personal_ask_rate_policy", RateLimitPolicy(3, 60))
+    monkeypatch.setattr(routes.unified_aura_orchestrator.models, "provider", provider)
+    monkeypatch.setattr(
+        routes.unified_aura_orchestrator, "current",
+        CurrentIntelligenceService(UnconfiguredCurrentProvider()),
+    )
+    try:
+        headers = {"Authorization": "Bearer test"}
+        current = client.post("/personal/ask", headers=headers, json={"message": "What are today's biggest economic stories?"})
+        assert current.status_code == 200 and current.json()["mode"] == "CURRENT_INFORMATION_UNAVAILABLE"
+        document = client.post("/personal/ask", headers=headers, json={"message": "Summarize my uploaded document."})
+        assert document.status_code == 200 and document.json()["mode"] == "GENERAL"
+        safety = client.post("/personal/ask", headers=headers, json={"message": "I think I'm having a stroke."})
+        assert safety.status_code == 200 and safety.json()["mode"] == "SAFETY_IMMEDIATE"
+        assert len(provider.requests) == 1
     finally:
         engine.dispose()

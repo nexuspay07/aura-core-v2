@@ -16,6 +16,8 @@ from app.services.identity_service import (
 from app.services.onboarding_service import (
     onboarding_service
 )
+from app.core.rate_limit import FixedWindowRateLimiter, RateLimitPolicy
+from app.services.password_reset_mailer import configured_password_reset_mailer, password_reset_url
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -50,9 +52,12 @@ class PasswordResetConfirm(BaseModel):
 PASSWORD_RESET_MESSAGE = "If an account exists for that email, the password reset request has been accepted."
 
 
-def deliver_password_reset(_email: str, _token: str) -> bool:
-    """Delivery seam for an approved provider. Alpha has no email transport."""
-    return False
+password_reset_limiter = FixedWindowRateLimiter()
+password_reset_policy = RateLimitPolicy(limit=3, window_seconds=900)
+
+def deliver_password_reset(email: str, token: str) -> bool:
+    try: return configured_password_reset_mailer().send(email, password_reset_url(token))
+    except Exception: return False
 
 
 def clean_user(row):
@@ -383,10 +388,11 @@ async def login(data: LoginRequest):
 @router.post("/password-reset/request")
 async def request_password_reset(data: PasswordResetRequest):
     db = SessionLocal()
-    delivery_configured = False
     try:
-        user = db.execute(select(user_table).where(user_table.c.email == data.email.lower())).mappings().first()
-        if user and user["is_active"]:
+        email=data.email.lower()
+        allowed=password_reset_limiter.allow(("password_reset",hashlib.sha256(email.encode()).hexdigest()),password_reset_policy)
+        user = db.execute(select(user_table).where(user_table.c.email == email)).mappings().first()
+        if allowed and user and user["is_active"]:
             now = datetime.now(timezone.utc)
             recent = db.execute(
                 select(func.count()).select_from(password_reset_token_table).where(
@@ -396,13 +402,14 @@ async def request_password_reset(data: PasswordResetRequest):
             ).scalar_one()
             if recent < 3:
                 token = secrets.token_urlsafe(48)
+                db.execute(update(password_reset_token_table).where(password_reset_token_table.c.user_id==user["id"],password_reset_token_table.c.used_at.is_(None)).values(used_at=now))
                 db.execute(insert(password_reset_token_table).values(
                     user_id=user["id"], token_hash=hashlib.sha256(token.encode()).hexdigest(),
                     expires_at=now + timedelta(minutes=30), created_at=now,
                 ))
                 db.commit()
-                delivery_configured = deliver_password_reset(user["email"], token)
-        return {"message": PASSWORD_RESET_MESSAGE, "delivery_configured": delivery_configured}
+                deliver_password_reset(user["email"], token)
+        return {"message": PASSWORD_RESET_MESSAGE}
     except Exception:
         db.rollback()
         raise
@@ -425,13 +432,13 @@ async def confirm_password_reset(data: PasswordResetConfirm):
         ).mappings().first()
         if not record:
             raise HTTPException(status_code=400, detail="Reset link is invalid or expired")
-        db.execute(update(user_table).where(user_table.c.id == record["user_id"]).values(
-            password_hash=auth_engine.hash_password(data.password), updated_at=now,
-        ))
-        db.execute(update(password_reset_token_table).where(
+        claimed=db.execute(update(password_reset_token_table).where(
             password_reset_token_table.c.id == record["id"],
             password_reset_token_table.c.used_at.is_(None),
+            password_reset_token_table.c.expires_at > now,
         ).values(used_at=now))
+        if claimed.rowcount != 1: raise HTTPException(status_code=400, detail="Reset link is invalid or expired")
+        db.execute(update(user_table).where(user_table.c.id == record["user_id"]).values(password_hash=auth_engine.hash_password(data.password),updated_at=now))
         db.commit()
         return {"message": "Password reset complete. You can now sign in."}
     except HTTPException:

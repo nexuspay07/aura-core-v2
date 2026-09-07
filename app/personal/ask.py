@@ -162,6 +162,7 @@ def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], di
     result = execution.result
     recommendation = asdict(result.recommendation)
     alternatives = [asdict(item) for item in result.alternatives]
+    intelligence = state.analysis_outputs.get("phase2", {})
     response = {
         "mode": "ANALYSIS_COMPLETE",
         "classification": state.classification.decision_type.value,
@@ -181,5 +182,26 @@ def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], di
         "what_would_change_recommendation": recommendation["what_would_change_the_recommendation"],
         "evidence_used": result.evidence_used,
         "citations": result.citations,
+        "goals": intelligence.get("goals", []),
+        "competing_goals": intelligence.get("competing_goals", []),
+        "goal_tensions": intelligence.get("goal_tensions", []),
+        "resources": intelligence.get("resources", []),
+        "uncertainties": intelligence.get("uncertainties", []),
+        "causal_effects": intelligence.get("causal_effects", []),
+        "decision_plan": intelligence.get("plan", {}),
+        "engine_participation": intelligence.get("participation", {}),
+        "claim_repair": execution.usage.get("claim_repair"),
+        "what_changed": intelligence.get("revision_reason", []),
+        "telemetry": {
+            "provider_calls": 1 + int(execution.usage.get("retry_count", 0)),
+            "input_tokens": execution.usage.get("input_tokens"),
+            "reasoning_tokens": execution.usage.get("reasoning_tokens"),
+            "visible_output_tokens": execution.usage.get("visible_output_tokens", execution.usage.get("output_tokens")),
+            "total_tokens": execution.usage.get("total_tokens"),
+            "provider_latency_ms": execution.usage.get("latency_ms"),
+            "retry_count": execution.usage.get("retry_count", 0),
+            "claim_repair_count": execution.usage.get("repaired_claim_count", 0),
+            "engine_timings_ms": state.request.source_metadata.get("timings_ms", {}),
+        },
     }
     return response, {"executive_report": response}
