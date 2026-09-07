@@ -59,3 +59,21 @@ def test_provider_failure_keeps_generic_response(monkeypatch):
     client,_,_=setup(monkeypatch);monkeypatch.setattr(routes,"deliver_password_reset",lambda *_:False)
     response=client.post("/auth/password-reset/request",json={"email":"person@example.com"})
     assert response.status_code==200 and response.json()=={"message":routes.PASSWORD_RESET_MESSAGE}
+
+
+def test_safe_route_stage_labels_preserve_generic_response(monkeypatch, caplog):
+    client,factory,_=setup(monkeypatch);caplog.set_level("INFO")
+    expected={"message":routes.PASSWORD_RESET_MESSAGE}
+    assert client.post("/auth/password-reset/request",json={"email":"missing@example.com"}).json()==expected
+    assert "account_ineligible" in caplog.text
+    caplog.clear();monkeypatch.setattr(routes.password_reset_limiter,"allow",lambda *_:False)
+    assert client.post("/auth/password-reset/request",json={"email":"person@example.com"}).json()==expected
+    assert "rate_limited" in caplog.text
+    caplog.clear();monkeypatch.setattr(routes.password_reset_limiter,"allow",lambda *_:True)
+    db=factory();now=datetime.now(timezone.utc)
+    for index in range(3):
+        db.execute(insert(password_reset_token_table).values(user_id=1,token_hash=hashlib.sha256(f"token-{index}".encode()).hexdigest(),created_at=now,expires_at=now+timedelta(minutes=30)))
+    db.commit();db.close()
+    assert client.post("/auth/password-reset/request",json={"email":"person@example.com"}).json()==expected
+    assert "recent_token_limited" in caplog.text
+    assert all(value not in caplog.text for value in ("person@example.com","missing@example.com","token-"))

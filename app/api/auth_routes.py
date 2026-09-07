@@ -17,7 +17,7 @@ from app.services.onboarding_service import (
     onboarding_service
 )
 from app.core.rate_limit import FixedWindowRateLimiter, RateLimitPolicy
-from app.services.password_reset_mailer import configured_password_reset_mailer, password_reset_url
+from app.services.password_reset_mailer import configured_password_reset_mailer, log_password_reset_stage, password_reset_url
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -56,8 +56,11 @@ password_reset_limiter = FixedWindowRateLimiter()
 password_reset_policy = RateLimitPolicy(limit=3, window_seconds=900)
 
 def deliver_password_reset(email: str, token: str) -> bool:
-    try: return configured_password_reset_mailer().send(email, password_reset_url(token))
-    except Exception: return False
+    try:
+        return configured_password_reset_mailer().send(email, password_reset_url(token))
+    except Exception:
+        log_password_reset_stage("transport_error")
+        return False
 
 
 def clean_user(row):
@@ -392,7 +395,11 @@ async def request_password_reset(data: PasswordResetRequest):
         email=data.email.lower()
         allowed=password_reset_limiter.allow(("password_reset",hashlib.sha256(email.encode()).hexdigest()),password_reset_policy)
         user = db.execute(select(user_table).where(user_table.c.email == email)).mappings().first()
-        if allowed and user and user["is_active"]:
+        if not allowed:
+            log_password_reset_stage("rate_limited")
+        elif not user or not user["is_active"]:
+            log_password_reset_stage("account_ineligible")
+        else:
             now = datetime.now(timezone.utc)
             recent = db.execute(
                 select(func.count()).select_from(password_reset_token_table).where(
@@ -400,7 +407,9 @@ async def request_password_reset(data: PasswordResetRequest):
                     password_reset_token_table.c.created_at >= now - timedelta(minutes=15),
                 )
             ).scalar_one()
-            if recent < 3:
+            if recent >= 3:
+                log_password_reset_stage("recent_token_limited")
+            else:
                 token = secrets.token_urlsafe(48)
                 db.execute(update(password_reset_token_table).where(password_reset_token_table.c.user_id==user["id"],password_reset_token_table.c.used_at.is_(None)).values(used_at=now))
                 db.execute(insert(password_reset_token_table).values(
