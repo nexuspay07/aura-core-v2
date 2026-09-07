@@ -6,11 +6,11 @@ from typing import Protocol
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 
 
 def log_password_reset_stage(stage: str) -> None:
-    logger.info("password_reset_delivery_stage=%s", {"stage": stage})
+    logger.info("password_reset_stage=%s", stage)
 
 class PasswordResetMailer(Protocol):
     configured: bool
