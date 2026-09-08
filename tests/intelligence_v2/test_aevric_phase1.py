@@ -1,13 +1,53 @@
+import pytest
+
 from app.intelligence_v2.contracts import DecisionType
+from app.intelligence_v2.classifier import decision_classifier
 from app.intelligence_v2.fact_extraction import extract_fact_ledger, is_business_scenario
 from app.intelligence_v2.model_provider import InvalidModelResponseError, MockModelProvider
 from app.intelligence_v2.orchestrator import DecisionAnalysisOrchestrator, SYSTEM_PROMPT
 from app.intelligence_v2.service import decision_v2_service
+from app.unified_intelligence.router import unified_capability_router
 from tests.intelligence_v2.test_analysis_orchestrator import ready_personal_state, response
 from tests.intelligence_v2.test_decision_v2 import session
 
 SCENARIO_A="""I am a 24-year-old developer earning a $78k salary with $18k savings and $9k student debt at 6.5%. Living expenses are $2.4k monthly. My B2B startup has 14 paying customers, $2.1k MRR, 12% monthly growth, and the top 2 customers are 45% of revenue. I spend 20 hours per week on it and face burnout. My long-term goal is to grow the startup while preserving financial security. Options are quit, stay 6 months, or seek 3-day employment. Rent may rise, a customer may expand, and I may earn $1.5k monthly freelancing. What should I do?"""
 SCENARIO_B="""Our 8-person software company has $65k cash, $24k monthly revenue, and $21k monthly expenses. Our largest customer is 35% of revenue and renews in 60 days while evaluating a competitor. We have technical debt, 2 recent outages, and a 6-week infrastructure repair. Five customers requested analytics; 2 may pay $500-$1k monthly. It takes 8 weeks to build. Hiring 2 engineers costs $9k monthly. Should we repair infrastructure, build analytics, or hire?"""
+STARTUP_CROSS_CONTEXT="""I'm 24 and currently working as a software developer earning $78,000 per year.
+I have $18,000 in savings, $9,000 in student debt, and my monthly living
+expenses are about $2,400.
+
+I've been building a B2B software startup on the side for 11 months. It
+currently has 14 paying customers generating $2,100 in monthly recurring
+revenue. Revenue has grown about 12% per month for the last four months, but
+two customers account for roughly 45% of the revenue.
+
+I'm working about 20 hours a week on the startup in addition to my full-time
+job, and I'm starting to burn out.
+
+I have three realistic options:
+
+1. Quit my job next month and work on the startup full-time.
+2. Keep my job for another 6 months while growing the startup on the side.
+3. Ask my employer to reduce me to 3 days per week, although I don't know
+whether they'll agree.
+
+There are complications. My apartment lease renews in three months and rent
+may increase by around 10%. My student loan interest rate is 6.5%. One of my
+largest startup customers has said they may expand their contract, but nothing
+is signed. I also have an opportunity to hire a freelance developer for
+$1,500/month, which could accelerate product development but would reduce my
+financial runway.
+
+My long-term goal is to build the startup into my primary career, but I don't
+want to put myself in a financial situation that forces me to shut it down
+prematurely.
+
+What should I do?
+
+Don't just give me generic pros and cons. Give me a recommendation, explain
+the trade-offs and uncertainty behind it, tell me what assumptions your
+recommendation depends on, and give me a concrete 90-day action plan. Also
+tell me what developments would cause you to change your recommendation."""
 
 def test_founder_scenario_a_extracts_known_financial_goal_and_constraints(session):
     ledger=extract_fact_ledger(SCENARIO_A); kinds={f["type"] for f in ledger["facts"]}
@@ -24,6 +64,37 @@ def test_founder_scenario_b_is_business_and_extracts_operating_facts(session):
     assert state.request.source_metadata["decision_scope"]=="business"
     assert state.classification.decision_type is not DecisionType.PERSONAL_FINANCE
     assert all("what income is available" not in q.lower() for q in state.clarification.questions)
+
+
+def test_startup_option_list_stays_strategic_without_cross_context_clarification(session):
+    route=unified_capability_router.route(STARTUP_CROSS_CONTEXT)
+    state=decision_v2_service.analyze_request(db=session,user_id=1,organization_id=1,workspace_id=1,user_query=STARTUP_CROSS_CONTEXT,session_id=7001,decision_scope="auto",conversation_turns=[])
+    questions=" ".join(state.clarification.questions).lower()
+    assert route.primary_intent=="decision" and route.requires_decision_analysis
+    assert state.classification.decision_type is DecisionType.STRATEGIC_PLANNING
+    assert not any(term in questions for term in ("delivery","logistics","delivery cost","labor","fuel","carrier fees","maintenance","rework"))
+    assert not any(item.provenance.get("session_id") not in {None,7001} for item in state.evidence)
+    assert all(item.organization_id in {None,1} and item.workspace_id in {None,1} for item in state.evidence)
+
+
+@pytest.mark.parametrize("query",[
+    "I have two options: stay or leave. What should I do?",
+    "I have three options: stay, reduce scope, or pause. What should I do?",
+    "I have 3 options: repair, replace, or defer. What should we do?",
+    "My options are stay, reduce scope, or pause. What should I do?",
+    "The options include repair, replace, or defer. What should we do?",
+])
+def test_natural_explicit_option_lists_are_strategic(query):
+    assert decision_classifier.classify(query).decision_type is DecisionType.STRATEGIC_PLANNING
+
+
+@pytest.mark.parametrize("query",[
+    "The settings page explains available options.",
+    "We provide customization options: premium support is available.",
+    "I reviewed three options: pricing remains unclear.",
+])
+def test_non_decision_option_mentions_do_not_force_strategic_planning(query):
+    assert decision_classifier.classify(query).decision_type is not DecisionType.STRATEGIC_PLANNING
 
 class SequenceProvider:
     provider_name="mock";model_name="test";capabilities={"structured_output"}

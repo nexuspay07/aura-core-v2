@@ -30,12 +30,31 @@ _RULES: dict[DecisionType, tuple[list[tuple[set[str], float]], list[str]]] = {
 }
 
 
+_OPTION_LIST_INTRO = re.compile(
+    r"\b(?:"
+    r"(?:i\s+have\s+)?(?:two|three|four|2|3|4)\s+(?:realistic\s+)?options?"
+    r"|my\s+options?|the\s+options?|options?"
+    r")\s*(?:are|include|:)\s*",
+    re.I,
+)
+
+
+def has_explicit_option_list(text: str) -> bool:
+    """Recognize a presented choice list, not a bare mention of options."""
+    match = _OPTION_LIST_INTRO.search(text)
+    if not match:
+        return False
+    alternatives = text[match.end():match.end() + 1200]
+    numbered = re.findall(r"(?:^|\n)\s*\d+[.)]\s+", alternatives)
+    return len(numbered) >= 2 or bool(re.search(r"\s(?:,\s*)?or\s+", alternatives, re.I)) or alternatives.count(",") >= 2
+
+
 class DecisionClassifier:
     def classify(self, query: str) -> DecisionClassification:
         normalized = query.lower()
         tokens = set(re.findall(r"[a-z]+", normalized))
         explicit_resource_choice = bool(
-            re.search(r"\boptions?\s+(?:are|include|:)\b", normalized)
+            has_explicit_option_list(query)
             or (re.search(r"\bshould we\b", normalized) and re.search(r"\bor\b", normalized))
         )
         scores: dict[DecisionType, float] = {}
@@ -54,14 +73,6 @@ class DecisionClassifier:
                 scores[decision_type] = score
                 reasons[decision_type] = hits
 
-        if not scores:
-            return DecisionClassification(
-                decision_type=DecisionType.GENERAL_BUSINESS_ANALYSIS,
-                secondary_types=[], confidence=0.25,
-                rationale=["No decision-specific evidence was found in the request."],
-                required_data_domains=["objective", "constraints", "available_business_context"],
-            )
-
         # A stated multi-option company resource choice is strategic even when
         # individual options mention expenses or hiring. Those mentions are
         # evidence about the alternatives, not necessarily the primary intent.
@@ -76,6 +87,14 @@ class DecisionClassifier:
                 confidence=0.82,
                 rationale=["strategic_planning indicators: explicit multi-option business resource choice"],
                 required_data_domains=["objectives", "constraints", "alternatives"],
+            )
+
+        if not scores:
+            return DecisionClassification(
+                decision_type=DecisionType.GENERAL_BUSINESS_ANALYSIS,
+                secondary_types=[], confidence=0.25,
+                rationale=["No decision-specific evidence was found in the request."],
+                required_data_domains=["objective", "constraints", "available_business_context"],
             )
 
         ranked = sorted(scores, key=lambda item: (-scores[item], item.value))
