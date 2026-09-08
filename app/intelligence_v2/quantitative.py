@@ -91,12 +91,28 @@ def education_derived_evidence(evidence: list[EvidenceItem]) -> list[DerivedEvid
 
 
 def derive_decision_evidence(evidence: list[EvidenceItem], decision_type: DecisionType) -> list[DerivedEvidence]:
+    general = living_expense_coverage(evidence)
     if decision_type is DecisionType.CAREER_DECISION:
-        return personal_job_offer_derived_evidence(evidence)
+        return [*general, *personal_job_offer_derived_evidence(evidence)]
     if decision_type in {DecisionType.MAJOR_PURCHASE,DecisionType.PERSONAL_FINANCE}:
-        return major_purchase_derived_evidence(evidence)
+        return [*general, *major_purchase_derived_evidence(evidence)]
     if decision_type is DecisionType.EDUCATION_DECISION:
-        return education_derived_evidence(evidence)
+        return [*general, *education_derived_evidence(evidence)]
+    return general
+
+
+def living_expense_coverage(evidence: list[EvidenceItem]) -> list[DerivedEvidence]:
+    """Calculate an upper-bound coverage ratio from explicit savings and living expenses."""
+    for item in evidence:
+        if item.source_type is not EvidenceSourceType.USER_STATEMENT or not item.content:
+            continue
+        savings = re.search(r"\$\s*([\d,]+)\s+(?:in\s+)?savings", item.content, re.I)
+        expenses = re.search(r"(?:monthly\s+living\s+expenses|living\s+expenses\s+(?:are|of)).*?\$\s*([\d,]+)", item.content, re.I | re.S)
+        if savings and expenses:
+            saved = Decimal(savings.group(1).replace(",", "")); monthly = Decimal(expenses.group(1).replace(",", ""))
+            if monthly <= 0: return []
+            months = (saved / monthly).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+            return [DerivedEvidence("derived:living_expense_coverage",f"At stated living expenses alone, savings cover about {months} months; this upper-bound estimate excludes taxes, startup costs, debt payments, emergencies, and expense changes.",f"{saved} / {monthly} = {months}",[item.id],[f"{saved:.0f}",f"{monthly:.0f}",f"{months}"],"division",{"savings":f"{saved:.0f}","monthly_living_expenses":f"{monthly:.0f}","coverage_months":f"{months}"},"months","living_expense_coverage","personal runway upper bound")]
     return []
 
 

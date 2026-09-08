@@ -1,24 +1,27 @@
 """Conservative deterministic fact ledger used before clarification."""
 import re
 
-MONEY=r"\$\s*[\d,.]+\s*(?:k|m)?"
+MONEY=r"\$\s*[\d,]+(?:\.\d+)?\s*(?:k|m)?"
 PATTERNS={
 "salary":rf"\b(?:salary|employment income|earn(?:ing|s)?)\b[^\n.;]{{0,30}}?({MONEY})",
 "revenue":rf"\b(?:monthly\s+revenue|revenue)\b[^\n.;]{{0,24}}?({MONEY})",
-"mrr":rf"\bMRR\b[^\n.;]{{0,12}}?({MONEY})|({MONEY})\s*MRR\b",
+"mrr":rf"\b(?:MRR|monthly recurring revenue)\b[^\n.;]{{0,24}}?({MONEY})|({MONEY})\s*(?:in\s+)?(?:MRR|monthly recurring revenue)\b",
 "expenses":rf"\b(?:monthly\s+)?expenses?\b[^\n.;]{{0,24}}?({MONEY})|({MONEY})\s*(?:monthly\s+)?expenses?\b",
-"savings":rf"({MONEY})\s*(?:in\s+)?savings\b|\bsavings\b[^\n.;]{{0,20}}?({MONEY})","debt":rf"({MONEY})\s*(?:student\s+)?debt\b",
+"savings":rf"({MONEY})\s*(?:in\s+)?savings\b|\bsavings\b[^\n.;]{{0,20}}?({MONEY})","debt":rf"({MONEY})\s*(?:in\s+)?(?:student\s+)?debt\b",
+"interest_rate":r"\b(?:interest(?:\s+rate)?|loan(?:\s+interest)?(?:\s+rate)?)\b[^\n.;]{0,20}?(\d+(?:\.\d+)?\s*%)|\b(\d+(?:\.\d+)?\s*%)\s*(?:student\s+)?loan\b",
 "cash":rf"({MONEY})\s*(?:in\s+)?cash\b|\b(?:available\s+)?cash\b[^\n.;]{{0,20}}?({MONEY})",
 "runway":r"\b(\d+(?:\.\d+)?\s*(?:days?|weeks?|months?|years?))\s+(?:of\s+)?runway\b",
 "housing_cost":rf"\b(?:rent|housing cost)\b[^\n.;]{{0,20}}?({MONEY})",
-"growth_rate":r"(\d+(?:\.\d+)?\s*%)\s*(?:monthly\s+)?growth","customer_count":r"\b(\d+)\s+(?:paying\s+)?customers?\b",
-"customer_concentration":r"(\d+(?:\.\d+)?\s*%)\s*(?:top[- ]?\d+|largest[- ]customer|customer concentration)|\b(?:top[- ]?\d+|largest[- ]customer|customer concentration)\b[^\n.;]{0,24}?(\d+(?:\.\d+)?\s*%)",
+"growth_rate":r"(\d+(?:\.\d+)?\s*%)\s*(?:(?:monthly\s+)?growth|per\s+month)","customer_count":r"\b(\d+)\s+(?:paying\s+)?customers?\b",
+"customer_concentration":r"(\d+(?:\.\d+)?\s*%)\s*(?:top[- ]?\d+|largest[- ]customer|customer concentration)|\b(?:top[- ]?\d+|largest[- ]customer|customer concentration|(?:two|three|four|\d+)\s+customers?\s+(?:account|represent))\b[^\n.;]{0,40}?(\d+(?:\.\d+)?\s*%)",
 "renewal_deadline":r"\b(?:contract\s+)?renew(?:al|s?)\b[^\n.;]{0,20}?(\d+\s*(?:days?|weeks?|months?))|\b(\d+\s*(?:days?|weeks?|months?))\s+(?:until|to)\s+(?:contract\s+)?renewal\b",
-"workload":r"\b(\d+(?:\.\d+)?\s*(?:h|hours?)\s*(?:/|per\s*)?week)\b","team_size":r"\b(\d+)[- ]person\b[^\n.;]{0,30}\b(?:team|company)\b",
+"workload":r"\b(\d+(?:\.\d+)?\s*(?:h|hours?)\s*(?:/|per\s*|a\s+)?week)\b","team_size":r"\b(\d+)[- ]person\b[^\n.;]{0,30}\b(?:team|company)\b",
 "hiring_cost":rf"\b(?:hire|engineers?|staff)\b[^\n.;]{{0,40}}?({MONEY})","deadline":r"\b(\d+\s*(?:days?|weeks?|months?|years?))\s+(?:to|until)|\b(?:within|deadline(?: is)?|in)\s+(\d+\s*(?:days?|weeks?|months?|years?))",
-"budget":rf"\bbudget\b[^\n.;]{{0,20}}?({MONEY})|({MONEY})\s+budget\b"}
+"budget":rf"\bbudget\b[^\n.;]{{0,20}}?({MONEY})|({MONEY})\s+budget\b",
+"expense_change":r"\b(?:rent|expense|cost)\b[^\n.;]{0,40}?\b(?:increase|rise|grow)\b[^\n.;]{0,20}?(\d+(?:\.\d+)?\s*%)|\b(\d+(?:\.\d+)?\s*%)\b[^\n.;]{0,20}?\b(?:rent|expense|cost)\b[^\n.;]{0,20}?\b(?:increase|rise)\b"}
 
 def extract_fact_ledger(text):
+    text=re.sub(r"\s+"," ",text)
     facts=[]
     for kind,pattern in PATTERNS.items():
         for match in re.finditer(pattern,text,re.I):

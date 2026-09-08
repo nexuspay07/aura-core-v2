@@ -10,6 +10,7 @@ from sqlalchemy import desc, insert, select, update
 
 from app.db.intelligence_session_table import intelligence_session_table
 from app.intelligence_v2.contracts import DecisionState
+from app.intelligence_v2.quality import evidence_quality
 
 
 class PersonalAskNotFoundError(ValueError):
@@ -163,6 +164,26 @@ def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], di
     recommendation = asdict(result.recommendation)
     alternatives = [asdict(item) for item in result.alternatives]
     intelligence = state.analysis_outputs.get("phase2", {})
+    deliverables = intelligence.get("requested_deliverables", {})
+    assumptions = list(result.assumptions_used)
+    if deliverables.get("assumptions") and not assumptions:
+        assumptions = ["No additional assumptions were introduced; unresolved factors remain explicitly unknown."]
+    change_conditions = list(recommendation["what_would_change_the_recommendation"])
+    if deliverables.get("change_triggers") and not change_conditions:
+        change_conditions = list(result.unresolved_questions[:3])
+    recommendation["what_would_change_the_recommendation"] = change_conditions
+    quality = evidence_quality(result.key_facts, result.derived_facts, assumptions, result.unresolved_questions)
+    plan = intelligence.get("plan", {})
+    completeness = {
+        "recommendation": bool(recommendation.get("recommended_option")),
+        "tradeoffs": bool(alternatives) if deliverables.get("tradeoffs") else True,
+        "assumptions": bool(assumptions) if deliverables.get("assumptions") else True,
+        "uncertainty": bool(intelligence.get("uncertainties") or result.unresolved_questions) if deliverables.get("uncertainty") else True,
+        "plan": bool(plan.get("phases")) if deliverables.get("plan_days") else True,
+        "change_triggers": bool(change_conditions) if deliverables.get("change_triggers") else True,
+        "normalized_goals": len({goal.lower() for goal in intelligence.get("goals", [])}) == len(intelligence.get("goals", [])),
+        "grounding": not any(item.startswith("unsupported") for item in execution.critique_findings),
+    }
     response = {
         "mode": "ANALYSIS_COMPLETE",
         "classification": state.classification.decision_type.value,
@@ -179,16 +200,25 @@ def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], di
         "unresolved_questions": result.unresolved_questions,
         "limitations": result.limitations,
         "prioritized_actions": result.prioritized_actions,
-        "what_would_change_recommendation": recommendation["what_would_change_the_recommendation"],
+        "what_would_change_recommendation": change_conditions,
         "evidence_used": result.evidence_used,
         "citations": result.citations,
         "goals": intelligence.get("goals", []),
         "competing_goals": intelligence.get("competing_goals", []),
         "goal_tensions": intelligence.get("goal_tensions", []),
         "resources": intelligence.get("resources", []),
+        "constraints": intelligence.get("constraints", []),
+        "resource_risks": intelligence.get("resource_risks", []),
+        "trends": intelligence.get("trends", []),
+        "decision_drivers": intelligence.get("decision_drivers", []),
         "uncertainties": intelligence.get("uncertainties", []),
         "causal_effects": intelligence.get("causal_effects", []),
-        "decision_plan": intelligence.get("plan", {}),
+        "decision_plan": plan,
+        "requested_deliverables": deliverables,
+        "evidence_quality": quality,
+        "assumptions": assumptions,
+        "completeness": completeness,
+        "next_move": result.prioritized_actions[0] if result.prioritized_actions else (plan.get("phases", [{}])[0].get("actions", [None])[0] if plan else None),
         "engine_participation": intelligence.get("participation", {}),
         "claim_repair": execution.usage.get("claim_repair"),
         "what_changed": intelligence.get("revision_reason", []),
