@@ -1,4 +1,5 @@
 import logging
+from io import BytesIO
 from urllib.error import HTTPError, URLError
 
 from app.services.password_reset_mailer import (
@@ -55,9 +56,11 @@ def test_provider_request_stage_labels(monkeypatch, caplog):
     assert "password_reset_stage=provider_request_started" in caplog.text
     assert "password_reset_stage=provider_request_succeeded" in caplog.text
     caplog.clear()
-    monkeypatch.setattr("app.services.password_reset_mailer.urlopen",lambda *_args,**_kwargs:(_ for _ in ()).throw(HTTPError("https://api.resend.com/emails",400,"bad",{},None)))
+    rejection=b'{"name":"validation_error","statusCode":403,"message":"recipient private@example.test token=private-token key=test-api-key"}'
+    monkeypatch.setattr("app.services.password_reset_mailer.urlopen",lambda *_args,**_kwargs:(_ for _ in ()).throw(HTTPError("https://api.resend.com/emails",403,"bad",{},BytesIO(rejection))))
     assert not ResendPasswordResetMailer("test-api-key","Aevric AI <no-reply@example.test>").send("private@example.test","https://aevric.ca/reset-password?token=private-token")
-    assert "password_reset_stage=provider_request_rejected" in caplog.text
+    assert "password_reset_stage=provider_request_rejected provider=resend http_status=403 error_category=validation_error" in caplog.text
+    assert all(value not in caplog.text for value in ("private@example.test","private-token","test-api-key","recipient"))
     caplog.clear()
     monkeypatch.setattr("app.services.password_reset_mailer.urlopen",lambda *_args,**_kwargs:(_ for _ in ()).throw(URLError("offline")))
     assert not ResendPasswordResetMailer("test-api-key","Aevric AI <no-reply@example.test>").send("private@example.test","https://aevric.ca/reset-password?token=private-token")

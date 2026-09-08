@@ -8,9 +8,52 @@ from urllib.request import Request, urlopen
 
 logger = logging.getLogger("uvicorn.error")
 
+RESEND_ERROR_CATEGORIES = frozenset({
+    "application_error",
+    "concurrent_idempotent_requests",
+    "daily_quota_exceeded",
+    "internal_server_error",
+    "invalid_access",
+    "invalid_api_key",
+    "invalid_attachment",
+    "invalid_from_address",
+    "invalid_idempotency_key",
+    "invalid_idempotent_request",
+    "invalid_parameter",
+    "invalid_region",
+    "method_not_allowed",
+    "missing_api_key",
+    "missing_required_field",
+    "monthly_quota_exceeded",
+    "not_found",
+    "rate_limit_exceeded",
+    "restricted_api_key",
+    "security_error",
+    "validation_error",
+})
+
 
 def log_password_reset_stage(stage: str) -> None:
     logger.info("password_reset_stage=%s", stage)
+
+
+def _resend_error_category(error) -> str:
+    try:
+        payload = json.loads(error.read(4096).decode("utf-8"))
+        category = payload.get("name") if isinstance(payload, dict) else None
+        return category if category in RESEND_ERROR_CATEGORIES else "unknown"
+    except Exception:
+        return "unknown"
+
+
+def log_resend_rejection(error) -> None:
+    status = getattr(error, "code", None) or getattr(error, "status", None)
+    status = status if isinstance(status, int) and 100 <= status <= 599 else "unknown"
+    logger.info(
+        "password_reset_stage=provider_request_rejected provider=resend http_status=%s error_category=%s",
+        status,
+        _resend_error_category(error),
+    )
 
 class PasswordResetMailer(Protocol):
     configured: bool
@@ -36,11 +79,13 @@ class ResendPasswordResetMailer:
                 if 200 <= response.status < 300:
                     log_password_reset_stage("provider_request_succeeded")
                     return True
-                log_password_reset_stage("provider_request_rejected")
+                log_resend_rejection(response)
                 return False
         except Exception as exc:
-            stage = "provider_request_rejected" if getattr(exc, "code", None) is not None else "transport_error"
-            log_password_reset_stage(stage)
+            if getattr(exc, "code", None) is not None:
+                log_resend_rejection(exc)
+            else:
+                log_password_reset_stage("transport_error")
             return False
 
 def configured_password_reset_mailer():
