@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.api.auth_routes import get_current_user_from_token
 from app.db.database import SessionLocal
 from app.core.rate_limit import FixedWindowRateLimiter, RateLimitPolicy
-from app.intelligence_v2.orchestrator import decision_analysis_orchestrator
+from app.intelligence_v2.orchestrator import decision_analysis_orchestrator, log_provider_stage
 from app.intelligence_v2.service import decision_v2_service
 from app.intelligence_v2.documents import document_evidence_retriever
 from app.personal.ask import (
@@ -72,7 +72,7 @@ def scope(identity: dict) -> tuple[int, int, int]:
 def _log_provider_failure(status_name: str, diagnostics: dict | None) -> None:
     """Development diagnostics: retain only an explicit non-sensitive allowlist."""
     diagnostics = diagnostics or {}
-    fields = ("provider", "model", "error_category", "exception_type", "error_code", "error_type", "http_status", "provider_status", "response_status", "response_state", "latency_ms", "failure_stage", "validation_categories", "validation_finding_count", "structured_parse_status", "rejected_numeric_values")
+    fields = ("provider", "model", "error_category", "initial_error_category", "retry_error_category", "exception_type", "error_code", "error_type", "http_status", "provider_status", "response_status", "response_state", "latency_ms", "failure_stage", "validation_categories", "validation_finding_count", "structured_parse_status", "rejected_numeric_values")
     record = {field: diagnostics.get(field) for field in fields if diagnostics.get(field) is not None}
     record.update({"product_route": "/personal/ask", "analysis_status": status_name})
     logger.warning("personal_ask_provider_failure %s", json.dumps(record, sort_keys=True))
@@ -211,6 +211,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
             db.rollback()
             _failure(execution.status, execution.usage)
         response, report = analysis_report(state, execution)
+        log_provider_stage(execution.usage.get("provider_attempt","initial"),"brief_constructed")
         report["personal_ask"] = {"message": message, "clarification_answers": answers}
         save_session(
             db, session_id=session_id, report=report, status="completed",
@@ -219,6 +220,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
         )
         turns = append_turn(db, session_id=session_id, role="assistant", content=response["recommendation"]["recommended_option"], mode="ANALYSIS_COMPLETE", payload=dict(response))
         db.commit()
+        log_provider_stage(execution.usage.get("provider_attempt","initial"),"persistence_succeeded")
         response["session_id"] = session_id
         response["turns"] = turns
         return response

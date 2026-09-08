@@ -87,7 +87,8 @@ def _client(monkeypatch):
     return TestClient(app, raise_server_exceptions=False), factory, active, engine
 
 
-def test_personal_ask_auth_capability_complete_and_save_decision(monkeypatch):
+def test_personal_ask_auth_capability_complete_and_save_decision(monkeypatch, caplog):
+    caplog.set_level("WARNING",logger="uvicorn.error")
     client, factory, active, engine = _client(monkeypatch)
     try:
         assert client.post("/personal/ask", json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."}).status_code == 403
@@ -102,6 +103,9 @@ def test_personal_ask_auth_capability_complete_and_save_decision(monkeypatch):
         db = factory(); session = db.execute(select(intelligence_session_table).where(intelligence_session_table.c.id == result["session_id"])).mappings().one()
         assert (session["created_by_user_id"], session["organization_id"], session["workspace_id"]) == (1, 1, 1)
         assert session["session_type"] == "personal_ask_v2" and session["report_json"]["executive_report"]["recommendation"]
+        stage_logs="\n".join(record.message for record in caplog.records if "provider_stage=" in record.message)
+        assert "provider_attempt=initial provider_stage=brief_constructed" in stage_logs
+        assert "provider_attempt=initial provider_stage=persistence_succeeded" in stage_logs
         saved = client.post("/personal/decisions", headers={"Authorization": "Bearer test"}, json={"source_session_id": result["session_id"], "decision_type": "career_decision"})
         assert saved.status_code == 201, saved.text
         assert db.execute(select(personal_decision_table)).mappings().one()["source_session_id"] == result["session_id"]
@@ -141,9 +145,10 @@ def test_personal_ask_session_isolation_and_safe_failures_rollback(monkeypatch, 
         monkeypatch.setattr(routes.decision_analysis_orchestrator, "provider", MockModelProvider(ProviderUnavailableError("secret should not leak", "rate_limit")))
         failed = client.post("/personal/ask", headers=headers, json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."})
         assert failed.status_code == 200 and failed.json()["mode"] == "ANALYSIS_PARTIAL"
+        assert failed.json()["message"] == "Aevric AI understood the available situation, but could not complete a reliable final recommendation. You can retry without re-entering these facts."
         assert "secret" not in failed.text and "rate_limit" not in failed.text
         diagnostic = next(record.message for record in caplog.records if "personal_ask_provider_failure" in record.message)
-        assert '"error_category": "rate_limit"' in diagnostic and '"product_route": "/personal/ask"' in diagnostic
+        assert '"initial_error_category": "rate_limit"' in diagnostic and '"retry_error_category": "rate_limit"' in diagnostic and '"product_route": "/personal/ask"' in diagnostic
         assert "secret" not in diagnostic and "two job offers" not in diagnostic
         db = factory(); sessions = db.execute(select(intelligence_session_table)).mappings().all(); db.close()
         assert len(sessions) == 2 and sessions[-1]["status"] == "partial"
