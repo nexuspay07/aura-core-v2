@@ -69,14 +69,21 @@ def test_business_financial_time_and_team_resources_are_retained(session):
     assert phase["resources"] and phase["constraints"] and phase["participation"]["resource"]
 
 
-@pytest.mark.parametrize(("text","days"),[("Give me a 30-day plan.",30),("Give me a concrete 90-day action plan.",90)])
-def test_requested_plan_horizon_is_detected(text,days):
-    assert requested_deliverables(text)["plan_days"]==days
+@pytest.mark.parametrize(("text","value","unit"),[("Give me a 30-day plan.",30,"days"),("Give me a concrete 90-day action plan.",90,"days"),("Give me a practical 6-month plan.",6,"months"),("Give me a practical 12-month plan.",12,"months")])
+def test_requested_plan_horizon_is_detected(text,value,unit):
+    assert requested_deliverables(text)["plan_horizon"]=={"value":value,"unit":unit}
 
 
 def test_unrequested_plan_does_not_create_phases(session):
     state=decision_v2_service.analyze_request(db=session,user_id=1,organization_id=1,workspace_id=1,user_query="Our options are repair, replace, or defer. What should we do?",decision_scope="auto")
     assert "phases" not in state.analysis_outputs["phase2"]["plan"]
+
+
+def test_explicit_twelve_month_plan_preserves_requested_unit(session):
+    state=decision_v2_service.analyze_request(db=session,user_id=1,organization_id=1,workspace_id=1,user_query="I am deciding whether to start a diploma or study independently. Give me a practical 12-month plan.",decision_scope="personal")
+    plan=state.analysis_outputs["phase2"]["plan"]
+    assert plan["horizon_value"]==12 and plan["horizon_unit"]=="months" and plan["horizon_label"]=="12-Month"
+    assert "horizon_days" not in plan
 
 
 def test_grounded_quantitative_derivation_has_basis_and_limitation(session):

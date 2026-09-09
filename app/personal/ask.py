@@ -179,7 +179,7 @@ def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], di
         "tradeoffs": bool(alternatives) if deliverables.get("tradeoffs") else True,
         "assumptions": bool(assumptions) if deliverables.get("assumptions") else True,
         "uncertainty": bool(intelligence.get("uncertainties") or result.unresolved_questions) if deliverables.get("uncertainty") else True,
-        "plan": bool(plan.get("phases")) if deliverables.get("plan_days") else True,
+        "plan": bool(plan.get("phases")) if deliverables.get("plan_horizon") else True,
         "change_triggers": bool(change_conditions) if deliverables.get("change_triggers") else True,
         "normalized_goals": len({goal.lower() for goal in intelligence.get("goals", [])}) == len(intelligence.get("goals", [])),
         "grounding": not any(item.startswith("unsupported") for item in execution.critique_findings),

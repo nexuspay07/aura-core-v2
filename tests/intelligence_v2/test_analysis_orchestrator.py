@@ -20,9 +20,9 @@ def test_offline_evaluation_set_covers_required_stage_five_cases():
 
 def test_analysis_governance_defaults_and_bounds(monkeypatch):
     monkeypatch.delenv("AURA_AI_TIMEOUT_SECONDS", raising=False); monkeypatch.delenv("AURA_AI_MAX_OUTPUT_TOKENS", raising=False)
-    assert analysis_timeout_seconds()==90 and analysis_max_output_tokens()==2400
+    assert analysis_timeout_seconds()==90 and analysis_max_output_tokens()==1800
     monkeypatch.setenv("AURA_AI_TIMEOUT_SECONDS","1"); monkeypatch.setenv("AURA_AI_MAX_OUTPUT_TOKENS","9000")
-    assert analysis_timeout_seconds()==10 and analysis_max_output_tokens()==3000
+    assert analysis_timeout_seconds()==10 and analysis_max_output_tokens()==1800
 
 def test_reasoning_effort_is_configurable_and_safe(monkeypatch):
     monkeypatch.delenv("AURA_AI_REASONING_EFFORT",raising=False); assert analysis_reasoning_effort()=="medium"
@@ -37,8 +37,9 @@ def test_orchestrator_passes_configured_timeout_without_retrying_provider(monkey
 
 def test_native_schema_is_strict_and_matches_canonical_required_fields():
     schema=analysis_result_schema(); assert schema["additionalProperties"] is False
-    assert set(schema["required"])=={"problem_summary","alternatives","recommended_option","rationale","key_tradeoffs","risks","assumptions_used","evidence_ids","unresolved_questions","recommendation_change_conditions"}
-    assert "citations" not in schema["properties"] and schema["properties"]["alternatives"]["maxItems"]==3
+    assert set(schema["required"])=={"problem_summary","alternatives","recommended_option","rationale","risks","assumptions_used","unresolved_questions","recommendation_change_conditions"}
+    assert not {"citations","key_tradeoffs","evidence_ids"}&schema["properties"].keys() and schema["properties"]["alternatives"]["maxItems"]==3
+    assert schema["properties"]["rationale"]["maxLength"]==600
 
 def test_verbosity_configuration_is_safe_and_personal_default(monkeypatch):
     monkeypatch.delenv("AURA_AI_VERBOSITY",raising=False); assert analysis_verbosity()=="low"

@@ -23,7 +23,7 @@ def analysis_timeout_seconds() -> int:
     return _bounded_int("AURA_AI_TIMEOUT_SECONDS", 90, 10, 300)
 
 def analysis_max_output_tokens() -> int:
-    return _bounded_int("AURA_AI_MAX_OUTPUT_TOKENS", 2400, 256, 3000)
+    return _bounded_int("AURA_AI_MAX_OUTPUT_TOKENS", 1800, 256, 1800)
 
 def analysis_reasoning_effort() -> str:
     value=os.getenv("AURA_AI_REASONING_EFFORT", "medium").lower()
@@ -38,9 +38,11 @@ def analysis_verbosity() -> str:
     return value if value in {"low", "medium", "high"} else "low"
 
 def model_analysis_schema() -> dict[str, Any]:
-    string={"type":"string"}; strings=lambda maximum: {"type":"array","items":string,"maxItems":maximum}
-    alternative={"type":"object","additionalProperties":False,"properties":{"option":string,"benefits":strings(3),"downsides":strings(3),"evidence_ids":strings(5),"assumptions":strings(3),"conditions_for_success":strings(3)},"required":["option","benefits","downsides","evidence_ids","assumptions","conditions_for_success"]}
-    return {"type":"object","additionalProperties":False,"properties":{"problem_summary":string,"alternatives":{"type":"array","items":alternative,"minItems":1,"maxItems":3},"recommended_option":string,"rationale":string,"key_tradeoffs":strings(4),"risks":strings(5),"assumptions_used":strings(4),"evidence_ids":strings(8),"unresolved_questions":strings(4),"recommendation_change_conditions":strings(4)},"required":["problem_summary","alternatives","recommended_option","rationale","key_tradeoffs","risks","assumptions_used","evidence_ids","unresolved_questions","recommendation_change_conditions"]}
+    string=lambda maximum: {"type":"string","maxLength":maximum}
+    strings=lambda count,length=180: {"type":"array","items":string(length),"maxItems":count}
+    alternative={"type":"object","additionalProperties":False,"properties":{"option":string(160),"benefits":strings(2),"downsides":strings(2),"evidence_ids":strings(4,80),"conditions_for_success":strings(2)},"required":["option","benefits","downsides","evidence_ids","conditions_for_success"]}
+    properties={"problem_summary":string(280),"alternatives":{"type":"array","items":alternative,"minItems":1,"maxItems":3},"recommended_option":string(200),"rationale":string(600),"risks":strings(4),"assumptions_used":strings(3),"unresolved_questions":strings(4),"recommendation_change_conditions":strings(4)}
+    return {"type":"object","additionalProperties":False,"properties":properties,"required":list(properties)}
 
 # Compatibility alias for callers that previously imported this helper.
 def analysis_result_schema() -> dict[str, Any]:

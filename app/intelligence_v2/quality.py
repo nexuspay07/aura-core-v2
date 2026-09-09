@@ -7,7 +7,8 @@ from typing import Any
 
 def requested_deliverables(text: str) -> dict[str, Any]:
     lower = text.lower()
-    plan = re.search(r"\b(30|60|90)[- ]day\s+(?:action\s+)?plan\b", lower)
+    plan = re.search(r"\b(\d+)[- ](day|month)s?\s+(?:action\s+|practical\s+)?plan\b", lower)
+    horizon={"value":int(plan.group(1)),"unit":f"{plan.group(2)}s"} if plan else None
     return {
         "recommendation": bool(re.search(r"\brecommend(?:ation|ed)?\b|what should (?:i|we) do", lower)),
         "tradeoffs": bool(re.search(r"\btrade[- ]?offs?\b|pros? and cons?|compar(?:e|ison)", lower)),
@@ -17,7 +18,8 @@ def requested_deliverables(text: str) -> dict[str, Any]:
         "ranking": bool(re.search(r"\brank(?:ing)?\b", lower)),
         "next_steps": bool(re.search(r"\bnext steps?\b", lower)),
         "change_triggers": bool(re.search(r"\b(?:what|developments?).{0,50}\bchange (?:your|the) recommendation\b", lower)),
-        "plan_days": int(plan.group(1)) if plan else None,
+        "plan_days": horizon["value"] if horizon and horizon["unit"]=="days" else None,
+        "plan_horizon": horizon,
     }
 
 
@@ -78,15 +80,16 @@ def decision_drivers(ledger: dict[str, list[dict]]) -> list[str]:
     return [f"{item['type'].replace('_',' ')}: {item['value']}" for item in priority[:7]]
 
 
-def deterministic_plan(days: int | None, ledger: dict[str, list[dict]], uncertainties: list[str]) -> dict[str, Any]:
-    if days is None: return {}
+def deterministic_plan(horizon: dict[str, Any] | None, ledger: dict[str, list[dict]], uncertainties: list[str]) -> dict[str, Any]:
+    if horizon is None: return {}
     verify = [f"Verify {item['type'].replace('_',' ')} before making an irreversible commitment" for item in ledger["risks"][:2]]
     phases = [
         {"phase":"Early phase","objective":"Confirm decision-critical unknowns","actions":verify or ["Confirm the terms and constraints that differ across the options"],"checkpoint":"Record confirmed terms separately from uncertain possibilities","dependencies":[],"reassessment_trigger":uncertainties[0] if uncertainties else "Material new evidence changes option feasibility"},
         {"phase":"Middle phase","objective":"Test the most reversible viable path","actions":["Run the smallest reversible test supported by the available resources"],"checkpoint":"Compare observed effects with the stated goals and constraints","dependencies":["Early-phase facts are confirmed"],"reassessment_trigger":"The test materially worsens runway, capacity, or risk"},
         {"phase":"Final phase","objective":"Reassess and commit deliberately","actions":["Update the decision using confirmed evidence and the observed test result"],"checkpoint":"Document the selected option and evidence that would reverse it","dependencies":["The reversible test has usable results"],"reassessment_trigger":"A recommendation-change condition is met"},
     ]
-    return {"style":"phased","horizon_days":days,"basis":"explicitly requested horizon","phases":phases}
+    value,unit=horizon["value"],horizon["unit"]
+    return {"style":"phased","horizon_value":value,"horizon_unit":unit,"horizon_label":f"{value}-{unit[:-1].title()}",**({"horizon_days":value} if unit=="days" else {}),"basis":"explicitly requested horizon","phases":phases}
 
 
 def evidence_quality(known: list[str], derived: list[str], assumed: list[str], unknown: list[str]) -> dict[str, list[str]]:
