@@ -25,7 +25,7 @@ class InformationSufficiencyService:
         # Gaps are absent only after authorized evidence has answered them.
         for gap in request.missing_information:
             coverage[gap.field]=False
-        critical=[gap for gap in gaps if gap.importance==GapImportance.CRITICAL]; important=[gap for gap in gaps if gap.importance==GapImportance.HIGH]; optional=[gap for gap in gaps if gap.importance in {GapImportance.MEDIUM,GapImportance.LOW}]
+        critical=[gap for gap in gaps if not gap.can_proceed_without]; important=[gap for gap in gaps if gap.can_proceed_without and gap.importance in {GapImportance.CRITICAL,GapImportance.HIGH}]; optional=[gap for gap in gaps if gap.can_proceed_without and gap.importance in {GapImportance.MEDIUM,GapImportance.LOW}]
         if conflicts: status=SufficiencyStatus.CONTRADICTORY; can=False; action="Clarify conflicting evidence before analysis."
         elif critical: status=SufficiencyStatus.INSUFFICIENT; can=False; action="Ask the highest-value clarification questions."
         elif important: status=SufficiencyStatus.PARTIALLY_SUFFICIENT; can=True; action="Proceed cautiously or clarify important uncertainty."
@@ -47,13 +47,15 @@ class ClarificationPlanner:
             if question not in state.questions_asked: questions.append(question)
         priorities=InformationSufficiencyService().prioritize([*assessment.critical_gaps,*assessment.important_gaps])
         for priority in priorities:
+            if priority.gap.can_proceed_without:
+                continue
             q=priority.gap.suggested_question
             # On a persisted continuation, questions_asked records previous
             # presentation, not a completed answer.  Keep unanswered critical
             # questions blocking until the authenticated user answers them.
             if (q in state.unresolved_questions or q not in state.questions_asked) and len(questions)<InformationSufficiencyService.max_questions:
                 questions.append(q)
-                if priority.gap.importance==GapImportance.CRITICAL: blocking.append(priority.gap)
+                blocking.append(priority.gap)
         return ClarificationPlan(bool(blocking or assessment.contradictions),questions,blocking,assessment.important_gaps,assessment.can_proceed)
 
 class ClarificationStateManager:
@@ -91,7 +93,8 @@ def personal_gaps(query: str, decision_type=None) -> list[InformationGap]:
     if decision_type is DecisionType.MAJOR_PURCHASE:
         gaps=[]
         if not re.search(r"\$\s*[\d,]+|\b\d[\d,]*\s*(?:dollars|cad|usd)\b", text): gaps.append(gap("purchase_cost", "Price is needed to assess the trade-off.", GapImportance.CRITICAL, "Affordability cannot be assessed without the cost.", False, "What would the purchase cost, including any near-term fees or financing?"))
-        if not any(term in text for term in ("savings", "income", "earn", "budget", "cash")): gaps.append(gap("available_resources", "Available resources determine affordability.", GapImportance.CRITICAL, "The purchase could compromise financial safety.", False, "What savings, income, or budget would you use for this purchase?"))
+        resources_known=bool(re.search(r"\b(?:i\s+have|i(?:'ve| have)\s+saved|savings|income|budget|cash)\s*(?:is|are|of|:)?\s*\$\s*[\d,]+|\bearn(?:ing|s)?\b[^.;]{0,20}?\$\s*[\d,]+|\$\s*[\d,]+\s+(?:in\s+)?(?:savings|income|cash)\b",text))
+        if not resources_known: gaps.append(gap("available_resources", "Available resources determine affordability.", GapImportance.CRITICAL, "The purchase could compromise financial safety.", False, "What savings, income, or budget would you use for this purchase?"))
         if not any(term in text for term in ("emergency", "buffer", "keep at least", "reserve")): gaps.append(gap("financial_buffer", "A minimum buffer protects financial resilience.", GapImportance.HIGH, "The purchase may leave too little flexibility.", True, "What minimum savings or emergency buffer do you want to keep after buying it?"))
         return gaps
     if decision_type is DecisionType.PERSONAL_FINANCE:

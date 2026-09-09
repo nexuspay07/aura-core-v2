@@ -169,10 +169,11 @@ def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], di
     if deliverables.get("assumptions") and not assumptions:
         assumptions = ["No additional assumptions were introduced; unresolved factors remain explicitly unknown."]
     change_conditions = list(recommendation["what_would_change_the_recommendation"])
+    modelable_unknowns=[f"{gap.field}: {gap.why_needed}" for gap in state.information_gaps if gap.can_proceed_without]
     if deliverables.get("change_triggers") and not change_conditions:
-        change_conditions = list(result.unresolved_questions[:3])
+        change_conditions = list(dict.fromkeys([*result.unresolved_questions,*[gap.impact_on_decision for gap in state.information_gaps if gap.can_proceed_without]]))[:3]
     recommendation["what_would_change_the_recommendation"] = change_conditions
-    quality = evidence_quality(result.key_facts, result.derived_facts, assumptions, result.unresolved_questions)
+    quality = evidence_quality(result.key_facts, result.derived_facts, assumptions, [*result.unresolved_questions,*modelable_unknowns])
     plan = intelligence.get("plan", {})
     completeness = {
         "recommendation": bool(recommendation.get("recommended_option")),

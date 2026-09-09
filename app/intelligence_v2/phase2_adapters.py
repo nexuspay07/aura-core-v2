@@ -8,7 +8,7 @@ class Phase2DecisionAdapters:
         started=time.monotonic(); ledger=state.request.source_metadata.get("fact_ledger",{}); text=state.request.user_query
         goals=normalize_goals(text,self._split_goals(ledger.get("goals",[]))+self._goals(text))
         normalized_resources=resource_ledger(ledger.get("facts",[]),text);resources=normalized_resources["resources"]
-        uncertainties=self._sentences(text,r"\b(?:may|might|uncertain|evaluating|risk|burnout|competitor)\b")
+        uncertainties=list(dict.fromkeys(self._sentences(text,r"\b(?:may|might|uncertain|evaluating|risk|burnout|competitor)\b")+[f"{gap.field}: {gap.why_needed}" for gap in state.information_gaps if gap.can_proceed_without]))
         risks=list(dict.fromkeys(ledger.get("risks",[])+self._sentences(text,r"\b(?:outage|technical debt|concentration|burnout|competitor)\b")))
         tensions=[]
         effects=[]

@@ -133,7 +133,7 @@ class DecisionV2Service:
         clarification = clarification_planner.plan(request=request, assessment=sufficiency, state=clarification_state)
         clarification_state = clarification_state_manager.start(clarification_state, clarification)
         context["quantitative_context"] = request.quantitative_context
-        state=DecisionState(request=request, classification=classification, assembled_context=context, evidence=request.known_facts, derived_evidence=derived_evidence, information_gaps=gaps, clarification=clarification, confidence=classification.confidence, citations=[item for item in request.known_facts if item.source_type is not EvidenceSourceType.USER_STATEMENT], evidence_conflicts=conflicts, sufficiency=sufficiency, clarification_state=clarification_state, analysis_status="CLARIFICATION_REQUIRED" if clarification.questions else "READY_FOR_ANALYSIS")
+        state=DecisionState(request=request, classification=classification, assembled_context=context, evidence=request.known_facts, derived_evidence=derived_evidence, information_gaps=gaps, clarification=clarification, confidence=classification.confidence, citations=[item for item in request.known_facts if item.source_type is not EvidenceSourceType.USER_STATEMENT], evidence_conflicts=conflicts, sufficiency=sufficiency, clarification_state=clarification_state, analysis_status="CLARIFICATION_REQUIRED" if clarification.should_clarify else "READY_FOR_ANALYSIS")
         return phase2_decision_adapters.enrich(state)
 
     def apply_clarification_answer(self, *, state: DecisionState, question: str, answer: str) -> DecisionState:
