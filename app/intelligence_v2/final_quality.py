@@ -21,6 +21,8 @@ _DANGLING=re.compile(r"(?:[,;:]|\b(?:and|or|but|because|then|doing|with|to))\s*$
 _REQUEST_INSTRUCTION=re.compile(r"^\s*(?:please\s+)?(?:give|provide|show|tell|explain|include|write|create|describe|outline|list)\b",re.I)
 _DANGLING_ENGLISH=re.compile(r"(?:\b(?:a|an|the)|\bthe\s+(?:later|former))\s*$")
 _GENERIC_PLAN=re.compile(r"\b(?:terms and constraints that differ across the options|smallest reversible test supported by the available resources|update the decision using confirmed evidence)\b",re.I)
+_TRAILING_MODIFIER=re.compile(r"\b[a-z]+-[a-z]*(?:ing|ed|ive|al|ic|ous|able|ible|ary|ory|ful|less)$",re.I)
+_TERMINAL_DEGREE_MODIFIER=re.compile(r"\b(?:right|more|less|very|too|quite|rather|almost|nearly)$",re.I)
 _SCRIPT=re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]")
 _MOJIBAKE=re.compile(r"(?:Ã.|Â.|â[\x80-\xbf]|å.{0,5}ä)")
 
@@ -37,7 +39,9 @@ def _clean(value,source,*,optional=True,reject_instructions=True):
         if optional:return ""
         text=_SCRIPT.sub("",text);text=_MOJIBAKE.sub("",text);text=re.sub(r"\s{2,}"," ",text).strip()
     english=not _SCRIPT.search(source) and len(re.findall(r"[A-Za-z]",source))>=20
-    if not text or _DANGLING.search(text) or (english and _DANGLING_ENGLISH.search(text)): return ""
+    unfinished_modifier=bool(_TRAILING_MODIFIER.search(text) and not re.search(r"\b(?:is|are|was|were|be|seems?|remains?|becomes?)\s+[a-z]+-[a-z]*(?:ing|ed|ive|al|ic|ous|able|ible|ary|ory|ful|less)$",text,re.I))
+    unfinished_degree=bool(re.search(r"\b(?:without|while|before|after|through|by)\b",text,re.I) and _TERMINAL_DEGREE_MODIFIER.search(text))
+    if not text or _DANGLING.search(text) or (english and (_DANGLING_ENGLISH.search(text) or unfinished_modifier or unfinished_degree)): return ""
     return text
 
 def _list(values,source):
@@ -54,7 +58,7 @@ def _known(state,source):
         item=f"{label}: {value}" if label and value else value
         if item and item.lower() not in {prior.lower() for prior in result}:result.append(item)
     phase=state.analysis_outputs.get("phase2",{})
-    for kind,values in (("Goal",phase.get("goals",[])),("Option",phase.get("options",[]))):
+    for kind,values in (("Option",phase.get("options",[])),):
         for value in values[:4]:
             clean=_clean(value,source)
             item=f"{kind}: {clean}" if clean else ""
@@ -78,11 +82,13 @@ def finalize_decision_brief(response,state):
     response["key_facts"]=_known(state,source)
     for key in ("derived_facts","risks","goals","decision_drivers","uncertainties","prioritized_actions","what_would_change_recommendation","limitations"):
         response[key]=_list(response.get(key),source)
+    internal_fields={gap.field.lower() for gap in state.information_gaps}
+    response["limitations"]=[item for item in response["limitations"] if not any(re.search(rf"\b{re.escape(field)}\b",item,re.I) for field in internal_fields)]
     alternatives=[]
     for item in response.get("alternatives",[]):
         option=_clean(item.get("option"),source,optional=False)
         if not option:continue
-        normalized={**item,"option":option,"benefits":_list(item.get("benefits"),source),"downsides":_list(item.get("downsides"),source),"assumptions":_list(item.get("assumptions"),source),"conditions_for_success":_list(item.get("conditions_for_success"),source)}
+        normalized={**item,"option":option,"benefits":_list(item.get("benefits"),source),"downsides":_list(item.get("downsides"),source),"assumptions":_list(item.get("assumptions"),source),"conditions_for_success":_list(item.get("conditions_for_success"),source),"evidence_ids":[]}
         alternatives.append(normalized)
     response["alternatives"]=alternatives
     recommendation=response.get("recommendation",{});recommendation["recommended_option"]=_clean(recommendation.get("recommended_option"),source,optional=False,reject_instructions=False);recommendation["rationale"]=_clean(recommendation.get("rationale"),source,optional=False,reject_instructions=False)
@@ -97,10 +103,17 @@ def finalize_decision_brief(response,state):
         tension=_clean(item.get("tension"),source)
         if tension and not re.search(r"^Balance\s+['\"]",tension): tensions.append({**item,"tension":tension})
     response["goal_tensions"]=tensions
+    deliverables=response.get("requested_deliverables",{})
+    horizon=deliverables.get("plan_horizon")
+    if horizon:
+        from app.intelligence_v2.quality import final_decision_plan
+        response["decision_plan"]=final_decision_plan(horizon,recommendation=recommendation["recommended_option"],alternatives=alternatives,goals=response.get("goals",[]),gaps=state.information_gaps,change_conditions=recommendation["what_would_change_the_recommendation"])
     response["decision_plan"]=_plan(response.get("decision_plan",{}),source)
-    response["next_move"]=_clean(response.get("next_move"),source,reject_instructions=False)
-    if not response["next_move"] and response["decision_plan"].get("phases"):response["next_move"]=response["decision_plan"]["phases"][0]["actions"][0]
-    deliverables=response.get("requested_deliverables",{});plan=response.get("decision_plan",{})
+    gap_prose={gap.why_needed.lower() for gap in state.information_gaps if gap.can_proceed_without}
+    response["uncertainties"]=[item for item in response["uncertainties"] if item.lower() not in gap_prose]
+    response["next_move"]=response["decision_plan"].get("phases",[{}])[0].get("actions",[None])[0] if horizon else _clean(response.get("next_move"),source,reject_instructions=False)
+    response["evidence_used"]=[];response["citations"]=[]
+    plan=response.get("decision_plan",{})
     if not recommendation.get("recommended_option") or not recommendation.get("rationale"):failures.append("malformed_required_section")
     if deliverables.get("tradeoffs") and not any(item.get("benefits") or item.get("downsides") for item in alternatives):failures.append("missing_tradeoffs")
     if deliverables.get("assumptions") and not response["assumptions"]:failures.append("missing_assumptions")
@@ -109,7 +122,6 @@ def finalize_decision_brief(response,state):
     if deliverables.get("ranking") and len(alternatives)<2:failures.append("missing_ranking")
     if deliverables.get("next_steps") and not response["prioritized_actions"]:failures.append("missing_next_steps")
     if deliverables.get("change_triggers") and not recommendation.get("what_would_change_the_recommendation"):failures.append("missing_change_conditions")
-    horizon=deliverables.get("plan_horizon")
     if horizon and (not plan.get("phases") or plan.get("horizon_value")!=horizon.get("value") or plan.get("horizon_unit")!=horizon.get("unit") or any(not phase.get("actions") for phase in plan.get("phases",[]))):failures.append("missing_requested_plan")
     elapsed=round((time.perf_counter()-started)*1000,3);response.setdefault("telemetry",{})["final_quality_ms"]=elapsed
     response["completeness"].update({"recommendation":bool(recommendation.get("recommended_option") and recommendation.get("rationale")),"tradeoffs":not deliverables.get("tradeoffs") or bool(alternatives),"assumptions":not deliverables.get("assumptions") or bool(response["assumptions"]),"uncertainty":not deliverables.get("uncertainty") or bool(unknown),"risks":not deliverables.get("risks") or bool(response["risks"]),"ranking":not deliverables.get("ranking") or len(alternatives)>=2,"next_steps":not deliverables.get("next_steps") or bool(response["prioritized_actions"]),"change_triggers":not deliverables.get("change_triggers") or bool(recommendation.get("what_would_change_the_recommendation")),"plan":not horizon or bool(plan.get("phases"))})

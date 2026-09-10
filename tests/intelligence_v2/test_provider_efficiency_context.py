@@ -121,7 +121,7 @@ def test_multilingual_content_is_preserved_when_present_in_user_source(session):
     assert "学习进度可能不确定" in brief["risks"]
 
 
-@pytest.mark.parametrize("recommendation",["Study independently, then doing a second,","Study independently while keeping open the later"])
+@pytest.mark.parametrize("recommendation",["Study independently, then doing a second,","Study independently while keeping open the later","Choose the reversible path without committing to another long, expensive degree right","Focus more tightly on income-generating"])
 def test_dangling_required_recommendation_fails_closed(session, caplog, recommendation):
     current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
     raw=grounded_response();raw["recommended_option"]=recommendation
@@ -129,6 +129,27 @@ def test_dangling_required_recommendation_fails_closed(session, caplog, recommen
     with pytest.raises(FinalBriefQualityError):
         analysis_report(current,execution)
     assert "final_quality_stage=failed failure_category=malformed_required_section" in caplog.text
+
+
+def test_production_shaped_education_brief_has_integrity_without_provider_network(session):
+    prompt=("I'm 20 years old and currently studying Information Technology. Education genuinely matters to me. "
+            "I have limited financial resources and my time is a material constraint. My goal is to build companies eventually. "
+            "Three paths: enter the workforce, build practical projects, or pursue another degree. "
+            "Explain the trade-offs, assumptions, uncertainty, and what would change the recommendation, and give me a practical plan for the next 12 months.")
+    current=state(session,prompt);raw=grounded_response();raw.update({"problem_summary":"Choose a grounded next path.","recommended_option":"Enter the workforce while testing practical projects","rationale":"This preserves flexibility while building relevant experience.","unresolved_questions":["Exact resources available for each path"],"recommendation_change_conditions":["Verified constraints make another path materially stronger"]})
+    raw["alternatives"]=[{"option":"Enter the workforce","benefits":["Build practical experience"],"downsides":["Less formal study"],"evidence_ids":["user-query"],"conditions_for_success":["Confirm suitable roles"]},{"option":"Build practical projects","benefits":["Test company-building skills"],"downsides":["Income may remain uncertain"],"evidence_ids":["user-query"],"conditions_for_success":["Define a reversible project"]},{"option":"Pursue another degree","benefits":["Continue formal education"],"downsides":["Uses limited time and resources"],"evidence_ids":["user-query"],"conditions_for_success":["Confirm feasibility"]}]
+    provider=MockModelProvider(raw);execution=DecisionAnalysisOrchestrator(provider).analyze(current);brief,_=analysis_report(current,execution);rendered=json.dumps(brief,ensure_ascii=False)
+    known=brief["evidence_quality"]["known"];plan=brief["decision_plan"];actions=" ".join(action for phase in plan["phases"] for action in phase["actions"])
+    assert provider.calls==1 and execution.status=="READY" and brief["recommendation"]["recommended_option"] in actions
+    assert [phase["phase"] for phase in plan["phases"]]==["Months 1–3","Months 4–6","Months 7–9","Months 10–12"]
+    assert all(phase["checkpoint"] and phase["reassessment_trigger"] for phase in plan["phases"])
+    assert len(current.analysis_outputs["phase2"]["options"])==3
+    assert any(item.startswith("Age:") for item in known) and any(item.startswith("Current status:") for item in known)
+    assert any(item.startswith("Option:") for item in known) and not all(item.startswith("Goal:") for item in known)
+    leaks=[token for token in ("education_cost","user-query","Check whether clarify","Check whether run","Check whether update") if token in rendered]
+    assert prompt not in known and not leaks,leaks
+    assert rendered.count("Cost and financial runway affect feasibility")==0
+    assert brief["next_move"] and not brief["next_move"].startswith("Check whether")
 
 
 def test_evidence_ids_are_derived_from_option_grounding(session):

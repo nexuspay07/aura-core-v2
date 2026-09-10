@@ -119,3 +119,34 @@ def deterministic_plan(horizon: dict[str, Any] | None, ledger: dict[str, list[di
 def evidence_quality(known: list[str], derived: list[str], assumed: list[str], unknown: list[str]) -> dict[str, list[str]]:
     unique=lambda items:list(dict.fromkeys(item for item in items if item))
     return {"known":unique(known),"derived":unique(derived),"assumed":unique(assumed),"unknown":unique(unknown)}
+
+
+def _time_windows(horizon: dict[str, Any]) -> list[str]:
+    value,unit=horizon["value"],horizon["unit"]
+    count=4 if unit=="months" and value>=8 else 3
+    windows=[]
+    for index in range(count):
+        start=(index*value)//count+1;end=((index+1)*value)//count
+        label="Months" if unit=="months" else "Days"
+        windows.append(f"{label} {start}–{end}" if start!=end else f"{label[:-1]} {start}")
+    return windows
+
+
+def final_decision_plan(horizon: dict[str, Any] | None, *, recommendation: str, alternatives: list[dict], goals: list[str], gaps: list[Any], change_conditions: list[str]) -> dict[str, Any]:
+    """Build a display-ready plan after grounded provider analysis."""
+    if not horizon:return {}
+    windows=_time_windows(horizon);options=[item.get("option") for item in alternatives if item.get("option")]
+    selected=recommendation.strip();primary_goal=goals[0] if goals else "the stated decision goal"
+    question=next((gap.suggested_question.rstrip(" ?") for gap in gaps if gap.can_proceed_without),None)
+    reassess=next(iter(change_conditions),None) or next((gap.impact_on_decision for gap in gaps if gap.can_proceed_without),"Material new evidence changes the recommendation")
+    first_action=f"Gather the information needed to answer: {question}" if question else f"Confirm the constraints that materially distinguish {' and '.join(options[:2]) or selected}"
+    blueprints=[
+        ("Confirm the decision basis",first_action,"Record confirmed facts separately from remaining uncertainty"),
+        ("Test the recommendation reversibly",f"Take one reversible step toward {selected}",f"Document what the step reveals about {primary_goal}"),
+        ("Compare evidence with the decision goals",f"Compare the observed result with {primary_goal}","Identify which option is best supported by the observed evidence"),
+        ("Make the next commitment",f"Commit further to {selected} only if the checkpoint evidence supports it","Record the decision and the evidence that would reverse it"),
+    ]
+    if len(windows)==3:blueprints=[blueprints[0],blueprints[1],blueprints[3]]
+    phases=[{"phase":window,"objective":objective,"actions":[action],"checkpoint":checkpoint,"dependencies":[] if index==0 else ["The previous checkpoint is complete"],"reassessment_trigger":reassess} for index,(window,(objective,action,checkpoint)) in enumerate(zip(windows,blueprints))]
+    value,unit=horizon["value"],horizon["unit"]
+    return {"style":"phased","horizon_value":value,"horizon_unit":unit,"horizon_label":f"{value}-{unit[:-1].title()}",**({"horizon_days":value} if unit=="days" else {}),"basis":"explicitly requested horizon","phases":phases}
