@@ -59,8 +59,25 @@ def normalize_goals(text: str, extracted: list[str]) -> list[str]:
     return normalized[:6]
 
 
+_TENSION_AXES = (
+    (r"\b(?:preserve|protect|security|stability|safe|reserve|health|wellbeing)\b", r"\b(?:grow|build|expand|start|change|transition|pursue|increase)\b", "Protect stability while pursuing progress"),
+    (r"\b(?:learn|education|knowledge|explore|breadth|depth)\b", r"\b(?:earn|income|workforce|career|build|execute|launch|experience)\b", "Balance learning and exploration with execution and near-term progress"),
+    (r"\b(?:quick|soon|speed|rapid|immediate)\b", r"\b(?:quality|durable|sustainable|careful|reliable)\b", "Balance speed with durability and quality"),
+    (r"\b(?:health|wellbeing|capacity|burnout|time)\b", r"\b(?:workload|growth|expand|build|launch)\b", "Balance sustainable capacity with the desired level of progress"),
+)
+
+
 def goal_tensions(goals: list[str], options: list[str]) -> list[dict[str, Any]]:
-    return [{"goal_a": left, "goal_b": right, "tension": f"Balance '{left}' with '{right}'", "affected_options": options[:4]} for left, right in zip(goals, goals[1:]) if left.lower() != right.lower()]
+    tensions=[];seen=set()
+    for index,left in enumerate(goals):
+        for right in goals[index+1:]:
+            semantic_left=re.sub(r"\bbuild\s+(?:durable\s+)?(?:skills?|knowledge|capabilit(?:y|ies))\b","learn",left,flags=re.I)
+            semantic_right=re.sub(r"\bbuild\s+(?:durable\s+)?(?:skills?|knowledge|capabilit(?:y|ies))\b","learn",right,flags=re.I)
+            description=next((label for first,second,label in _TENSION_AXES if (re.search(first,semantic_left,re.I) and re.search(second,semantic_right,re.I)) or (re.search(second,semantic_left,re.I) and re.search(first,semantic_right,re.I))),None)
+            if not description or description in seen: continue
+            seen.add(description)
+            tensions.append({"goal_a":left,"goal_b":right,"tension":description,"affected_options":options[:4]})
+    return tensions[:4]
 
 
 def resource_ledger(facts: list[dict], text: str) -> dict[str, list[dict]]:
@@ -82,13 +99,18 @@ def decision_drivers(ledger: dict[str, list[dict]]) -> list[str]:
     return [f"{item['type'].replace('_',' ')}: {item['value']}" for item in priority[:7]]
 
 
-def deterministic_plan(horizon: dict[str, Any] | None, ledger: dict[str, list[dict]], uncertainties: list[str]) -> dict[str, Any]:
+def deterministic_plan(horizon: dict[str, Any] | None, ledger: dict[str, list[dict]], uncertainties: list[str], options: list[str] | None = None, goals: list[str] | None = None) -> dict[str, Any]:
     if horizon is None: return {}
-    verify = [f"Verify {item['type'].replace('_',' ')} before making an irreversible commitment" for item in ledger["risks"][:2]]
+    options=[item for item in (options or []) if item][:3];goals=[item for item in (goals or []) if item][:2]
+    option_summary=" and ".join(options[:2]) or "the viable options"
+    goal_summary=" and ".join(goals[:2]) or "the stated goals and constraints"
+    unknowns=[re.sub(r"^[a-z][a-z0-9_]+:\s*","",item,flags=re.I).strip() for item in uncertainties if item][:2]
+    verify=[f"Clarify {item[:1].lower()+item[1:]}" for item in unknowns]
+    if not verify: verify=[f"Compare {option_summary} against {goal_summary}"]
     phases = [
-        {"phase":"Early phase","objective":"Confirm decision-critical unknowns","actions":verify or ["Confirm the terms and constraints that differ across the options"],"checkpoint":"Record confirmed terms separately from uncertain possibilities","dependencies":[],"reassessment_trigger":uncertainties[0] if uncertainties else "Material new evidence changes option feasibility"},
-        {"phase":"Middle phase","objective":"Test the most reversible viable path","actions":["Run the smallest reversible test supported by the available resources"],"checkpoint":"Compare observed effects with the stated goals and constraints","dependencies":["Early-phase facts are confirmed"],"reassessment_trigger":"The test materially worsens runway, capacity, or risk"},
-        {"phase":"Final phase","objective":"Reassess and commit deliberately","actions":["Update the decision using confirmed evidence and the observed test result"],"checkpoint":"Document the selected option and evidence that would reverse it","dependencies":["The reversible test has usable results"],"reassessment_trigger":"A recommendation-change condition is met"},
+        {"phase":"Early phase","objective":"Confirm decision-critical unknowns","actions":verify,"checkpoint":f"Record what is confirmed about {option_summary}","dependencies":[],"reassessment_trigger":unknowns[0] if unknowns else "Material new evidence changes option feasibility"},
+        {"phase":"Middle phase","objective":f"Test the most reversible path involving {options[0] if options else 'the leading option'}","actions":[f"Test {options[0] if options else 'the leading option'} through one reversible next step tied to {goals[0] if goals else 'the primary goal'}"],"checkpoint":f"Compare the observed result against {goal_summary}","dependencies":["Decision-critical facts are confirmed"],"reassessment_trigger":"The test materially worsens a stated resource, capacity, or risk constraint"},
+        {"phase":"Final phase","objective":"Choose using confirmed evidence","actions":[f"Choose between {option_summary} using the confirmed results and {goal_summary}"],"checkpoint":"Document the selected option and the evidence that would reverse it","dependencies":["The reversible test produced usable evidence"],"reassessment_trigger":"A recommendation-change condition is met"},
     ]
     value,unit=horizon["value"],horizon["unit"]
     return {"style":"phased","horizon_value":value,"horizon_unit":unit,"horizon_label":f"{value}-{unit[:-1].title()}",**({"horizon_days":value} if unit=="days" else {}),"basis":"explicitly requested horizon","phases":phases}

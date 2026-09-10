@@ -32,8 +32,8 @@ def test_scenario_c_new_revenue_supersedes_stale_revenue(session):
 def test_scenario_d_competing_goals_have_tensions_without_weights(session):
     state=analyze(session,"Our goals are growth, security, health, time, and optionality. Should we stay, reduce scope, or pause?")
     phase=state.analysis_outputs["phase2"]
-    assert len(phase["competing_goals"])==5 and len(phase["goal_tensions"])==4
-    assert "weight" not in str(phase).lower()
+    assert len(phase["competing_goals"])==5 and 0<len(phase["goal_tensions"])<4
+    assert "weight" not in str(phase).lower() and "Balance '" not in str(phase)
 
 def test_scenario_e_infeasible_resource_plan_is_flagged(session):
     state=analyze(session,"Our 4-person team has a $4k budget and 6-week deadline. Hiring 2 engineers costs $9k monthly. Should we hire or reduce scope?")

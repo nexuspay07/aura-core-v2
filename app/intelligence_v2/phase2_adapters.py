@@ -6,7 +6,7 @@ from app.intelligence_v2.quality import decision_drivers, deterministic_plan, go
 class Phase2DecisionAdapters:
     def enrich(self,state):
         started=time.monotonic(); ledger=state.request.source_metadata.get("fact_ledger",{}); text=state.request.user_query
-        goals=normalize_goals(text,self._split_goals(ledger.get("goals",[]))+self._goals(text))
+        goals=[goal for goal in normalize_goals(text,self._split_goals(ledger.get("goals",[]))+self._goals(text)) if not self._instruction(goal)]
         normalized_resources=resource_ledger(ledger.get("facts",[]),text);resources=normalized_resources["resources"]
         uncertainties=list(dict.fromkeys([item for item in self._sentences(text,r"\b(?:may|might|uncertain|evaluating|risk|burnout|competitor)\b") if not self._instruction(item)]+[f"{gap.field}: {gap.why_needed}" for gap in state.information_gaps if gap.can_proceed_without]))
         risks=list(dict.fromkeys([item for item in ledger.get("risks",[])+self._sentences(text,r"\b(?:outage|technical debt|concentration|burnout|competitor)\b") if not self._instruction(item)]))
@@ -24,7 +24,7 @@ class Phase2DecisionAdapters:
         feasible=not (amounts.get("budget") is not None and amounts.get("hiring_cost") is not None and amounts["hiring_cost"]>amounts["budget"])
         complex_decision=bool(len(goals)>1 or len(resources)>=3 or len(options)>=2 or uncertainties or re.search(r"\b(?:should|decide|choose|allocate|trade-?off)\b",lower))
         participation={"context":True,"memory":bool(state.request.memory_context),"world_model":complex_decision,"goals":bool(goals),"multi_goal":len(goals)>1,"resource":bool(resources),"uncertainty":bool(uncertainties),"causal":bool(effects),"strategy":len(options)>1,"planning":complex_decision,"goal_task":complex_decision,"self_evaluation":complex_decision,"learning":False,"rl":False}
-        deliverables=requested_deliverables(text);plan=deterministic_plan(deliverables["plan_horizon"],normalized_resources,uncertainties) or {"style":"prioritized_actions"}
+        deliverables=requested_deliverables(text);plan=deterministic_plan(deliverables["plan_horizon"],normalized_resources,uncertainties,options,goals) or {"style":"prioritized_actions"}
         plan["feasible"]=feasible
         state.request.source_metadata["requested_deliverables"]=deliverables
         state.analysis_outputs["phase2"]={"world_state":{"facts":ledger.get("facts",[]),"constraints":state.request.constraints,"relationships":effects},"goals":goals,"competing_goals":goals if len(goals)>1 else [],"goal_tensions":tensions,"resources":resources,"constraints":normalized_resources["constraints"],"resource_risks":normalized_resources["risks"],"trends":normalized_resources["trends"],"decision_drivers":decision_drivers(normalized_resources),"uncertainties":uncertainties,"options":options,"tradeoffs":[{"option":option,"assessment":"compare against stated goals, resources, and risks"} for option in options],"causal_effects":effects,"risks":list(dict.fromkeys(risks+[item["value"] for item in normalized_resources["risks"]])),"plan":plan,"requested_deliverables":deliverables,"revision_reason":list(state.request.source_metadata.get("authoritative_user_constraints",{}).values()),"self_evaluation":{"requires_grounding":True,"resource_feasible":feasible,"has_change_triggers":True},"participation":participation}
@@ -35,7 +35,7 @@ class Phase2DecisionAdapters:
     @staticmethod
     def _sentences(text,pattern): return [s.strip() for s in re.split(r"[.;]\s*",text) if re.search(pattern,s,re.I)][:6]
     @staticmethod
-    def _instruction(text): return bool(re.search(r"\b(?:give|provide|show|tell|explain|include|write|create)\s+(?:me|us)\b|\bplease\b",text,re.I))
+    def _instruction(text): return bool(re.search(r"^\s*(?:please\s+)?(?:give|provide|show|tell|explain|include|write|create|describe|outline|list|compare)\b",text,re.I))
     @staticmethod
     def _goals(text):
         match=re.search(r"\bgoals?\s*(?:are|include|:)?\s*([^.;]+)",text,re.I)
@@ -47,7 +47,7 @@ class Phase2DecisionAdapters:
     def _options(text):
         numbered=[value.strip() for value in re.findall(r"(?:^|\n)\s*\d+[.)]\s*([^\n]+)",text)]
         if len(numbered)>=2:return numbered[:6]
-        match=re.search(r"\b(?:should (?:i|we)|choose between)\s+([^?]+)",text,re.I)
+        match=re.search(r"\b(?:should (?:i|we)|choose between|choosing(?: between)?|deciding between)\s+([^?;.]+)",text,re.I)
         if match:return [v.strip() for v in re.split(r",|\bor\b",match.group(1)) if v.strip()]
         return list(dict.fromkeys(re.findall(r"\bOffer\s+[A-Z]\b",text,re.I)))
     @staticmethod

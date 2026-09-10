@@ -52,8 +52,12 @@ def test_overlapping_goal_clauses_are_deduplicated():
 
 def test_conflicting_goals_create_structured_tensions():
     tensions=goal_tensions(["Preserve cash","Grow quickly"],["Stay","Expand"])
-    assert tensions==[{"goal_a":"Preserve cash","goal_b":"Grow quickly","tension":"Balance 'Preserve cash' with 'Grow quickly'","affected_options":["Stay","Expand"]}]
+    assert tensions==[{"goal_a":"Preserve cash","goal_b":"Grow quickly","tension":"Protect stability while pursuing progress","affected_options":["Stay","Expand"]}]
     assert "weight" not in str(tensions).lower()
+
+
+def test_related_goals_do_not_manufacture_a_mechanical_tension():
+    assert goal_tensions(["Build durable skills","Develop useful knowledge"],["Course","Self-study"])==[]
 
 
 def test_resource_ledger_separates_resources_constraints_risks_and_trends(session):
