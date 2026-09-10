@@ -169,7 +169,7 @@ def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], di
     if deliverables.get("assumptions") and not assumptions:
         assumptions = ["No additional assumptions were introduced; unresolved factors remain explicitly unknown."]
     change_conditions = list(recommendation["what_would_change_the_recommendation"])
-    modelable_unknowns=[f"{gap.field}: {gap.why_needed}" for gap in state.information_gaps if gap.can_proceed_without]
+    modelable_unknowns=[gap.why_needed for gap in state.information_gaps if gap.can_proceed_without]
     if deliverables.get("change_triggers") and not change_conditions:
         change_conditions = list(dict.fromkeys([*result.unresolved_questions,*[gap.impact_on_decision for gap in state.information_gaps if gap.can_proceed_without]]))[:3]
     recommendation["what_would_change_the_recommendation"] = change_conditions
@@ -235,4 +235,6 @@ def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], di
             "engine_timings_ms": state.request.source_metadata.get("timings_ms", {}),
         },
     }
+    from app.intelligence_v2.final_quality import finalize_decision_brief
+    response = finalize_decision_brief(response, state)
     return response, {"executive_report": response}

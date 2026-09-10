@@ -1,6 +1,10 @@
 import json
 
+import pytest
+
 from app.intelligence_v2.model_provider import InvalidModelResponseError, MockModelProvider, analysis_max_output_tokens, model_analysis_schema
+from app.intelligence_v2.final_quality import FinalBriefQualityError
+from app.intelligence_v2.quality import requested_deliverables
 from app.intelligence_v2.orchestrator import DecisionAnalysisOrchestrator, RETRY_COMPACTION_PROMPT
 from app.intelligence_v2.service import decision_v2_service
 from app.personal.ask import analysis_report
@@ -49,6 +53,59 @@ def test_education_compact_contract_preserves_tradeoffs_uncertainty_and_change_c
     execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current); brief,_=analysis_report(current,execution)
     assert execution.status=="READY" and len(brief["alternatives"])==2 and brief["unresolved_questions"] and brief["what_would_change_recommendation"]
     assert brief["decision_plan"]["horizon_label"]=="12-Month" and all(brief["completeness"].values())
+
+
+def test_education_brief_repairs_presentation_leaks_without_losing_requested_plan(session, caplog):
+    prompt=("I want to move into cybersecurity while preserving financial stability. "
+            "I earn $72,000 and am choosing a diploma or independent study. "
+            "Give me the trade-offs, uncertainty, recommendation-change conditions, "
+            "and a plan for the next 12 months.")
+    current=state(session,prompt)
+    assert current.classification.decision_type.value=="education_decision" and not current.clarification.questions
+    raw=grounded_response(); raw.update({"problem_summary":"Choose an education route.","recommended_option":"Study independently first","rationale":"It is reversible.","risks":["Employer recognition is uncertain","Give me uncertainty and risks","then doing a second,","someone who enjoys学习"],"unresolved_questions":["education_cost: Diploma tuition is unknown"],"recommendation_change_conditions":["Verified outcomes justify the diploma"]})
+    raw["alternatives"]=[{"option":"Study independently first","benefits":["user-query","More reversible"],"downsides":["Less structured"],"evidence_ids":["user-query"],"conditions_for_success":["Verify progress"]},{"option":"Take the diploma","benefits":["Structured instruction"],"downsides":["document:abc"],"evidence_ids":["user-query"],"conditions_for_success":["Verify outcomes"]}]
+    provider=MockModelProvider(raw);execution=DecisionAnalysisOrchestrator(provider).analyze(current)
+    brief,_=analysis_report(current,execution); rendered=json.dumps(brief,ensure_ascii=False)
+    assert provider.calls==1 and execution.status=="READY"
+    assert brief["recommendation"]["recommended_option"] and brief["recommendation"]["rationale"]
+    assert any(item["benefits"] or item["downsides"] for item in brief["alternatives"])
+    assert brief["decision_plan"]["horizon_label"]=="12-Month"
+    display_tradeoffs=json.dumps([{"benefits":item["benefits"],"downsides":item["downsides"]} for item in brief["alternatives"]])
+    assert "user-query" not in display_tradeoffs and "education_cost" not in rendered
+    assert "Give me uncertainty" not in rendered and "then doing a second" not in rendered and "学习" not in rendered
+    assert prompt not in brief["evidence_quality"]["known"]
+    assert all(len(item)<240 for item in brief["evidence_quality"]["known"])
+    assert "startup" not in " ".join(brief["goals"]).lower()
+    assert not execution.critique_findings
+    assert "final_quality_stage=passed" in caplog.text
+
+
+@pytest.mark.parametrize(("text","expected"),[("Create a startup plan for the next 30 days.",(30,"days")),("Provide a roadmap over 90 days.",(90,"days")),("Create a plan across the next 6 months.",(6,"months")),("Give me a plan for the next 12 months.",(12,"months"))])
+def test_alternate_plan_horizon_phrasing_is_detected(text,expected):
+    horizon=requested_deliverables(text)["plan_horizon"]
+    assert (horizon["value"],horizon["unit"])==expected
+
+
+def test_unrequested_plan_remains_absent_for_education_decision(session):
+    current=state(session,"Should I take a diploma or study independently?")
+    assert current.analysis_outputs["phase2"]["plan"].get("phases") is None
+
+
+def test_multilingual_content_is_preserved_when_present_in_user_source(session):
+    current=decision_v2_service.proceed_with_assumptions(state(session,"我应该参加文凭课程还是独立学习? Compare the options."))
+    raw=grounded_response();raw["risks"]=["学习进度可能不确定"]
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,_=analysis_report(current,execution)
+    assert "学习进度可能不确定" in brief["risks"]
+
+
+def test_dangling_required_recommendation_fails_closed(session, caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["recommended_option"]="Study independently, then doing a second,"
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    with pytest.raises(FinalBriefQualityError):
+        analysis_report(current,execution)
+    assert "final_quality_stage=failed failure_category=malformed_required_section" in caplog.text
 
 
 def test_evidence_ids_are_derived_from_option_grounding(session):

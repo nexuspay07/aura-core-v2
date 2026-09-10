@@ -28,6 +28,7 @@ from app.personal.ask import (
 from app.personal.safety import personal_safety_boundary
 from app.unified_intelligence.orchestrator import unified_aura_orchestrator
 from app.intelligence_v2.model_provider import ProviderTimeoutError, ProviderUnavailableError
+from app.intelligence_v2.final_quality import FinalBriefQualityError
 
 
 router = APIRouter(prefix="/personal", tags=["Personal Ask"])
@@ -92,6 +93,18 @@ def _failure(status_name: str, diagnostics: dict | None = None):
 def _safe_usage(usage: dict | None) -> dict:
     allowed = ("provider", "model", "latency_ms", "input_tokens", "output_tokens", "reasoning_tokens", "visible_output_tokens", "total_tokens", "payload_chars", "retry_payload_chars", "retry_count", "parsing_ms", "grounding_validation_ms")
     return {key: usage[key] for key in allowed if usage and usage.get(key) is not None}
+
+
+def _partial_analysis_response(state, session_id: int, usage: dict | None) -> dict:
+    return {"mode":"ANALYSIS_PARTIAL","session_id":session_id,"classification":state.classification.decision_type.value,"problem_understanding":state.request.user_query,"key_facts":[item.content for item in state.evidence if item.content][:12],"goals":state.request.source_metadata.get("fact_ledger",{}).get("goals",[]),"constraints":state.request.constraints,"assumptions":[],"message":"Aevric AI understood the available situation, but could not complete a reliable final recommendation. You can retry without re-entering these facts.","retryable":True,"recommendation":None,"telemetry":_safe_usage(usage)}
+
+
+def _save_partial(db, *, state, session_id: int, message: str, answers: list[dict], usage: dict | None):
+    response = _partial_analysis_response(state, session_id, usage)
+    save_session(db,session_id=session_id,report={"partial_analysis":response,"personal_ask":{"message":message,"clarification_answers":answers}},status="partial",summary=response["message"],recommendation=None)
+    turns=append_turn(db,session_id=session_id,role="assistant",content=response["message"],mode="ANALYSIS_PARTIAL",payload=dict(response))
+    db.commit();response["turns"]=turns
+    return response
 
 
 @router.post("/ask")
@@ -204,13 +217,14 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
         execution = decision_analysis_orchestrator.analyze(state)
         if execution.status == "PARTIAL":
             _log_provider_failure("ANALYSIS_PARTIAL", execution.usage)
-            response={"mode":"ANALYSIS_PARTIAL","session_id":session_id,"classification":state.classification.decision_type.value,"problem_understanding":state.request.user_query,"key_facts":[item.content for item in state.evidence if item.content][:12],"goals":state.request.source_metadata.get("fact_ledger",{}).get("goals",[]),"constraints":state.request.constraints,"assumptions":[],"message":"Aevric AI understood the available situation, but could not complete a reliable final recommendation. You can retry without re-entering these facts.","retryable":True,"recommendation":None,"telemetry":_safe_usage(execution.usage)}
-            save_session(db,session_id=session_id,report={"partial_analysis":response,"personal_ask":{"message":message,"clarification_answers":answers}},status="partial",summary=response["message"],recommendation=None)
-            turns=append_turn(db,session_id=session_id,role="assistant",content=response["message"],mode="ANALYSIS_PARTIAL",payload=dict(response));db.commit();response["turns"]=turns;return response
+            return _save_partial(db,state=state,session_id=session_id,message=message,answers=answers,usage=execution.usage)
         if execution.status != "READY":
             db.rollback()
             _failure(execution.status, execution.usage)
-        response, report = analysis_report(state, execution)
+        try:
+            response, report = analysis_report(state, execution)
+        except FinalBriefQualityError:
+            return _save_partial(db,state=state,session_id=session_id,message=message,answers=answers,usage=execution.usage)
         log_provider_stage(execution.usage.get("provider_attempt","initial"),"brief_constructed")
         report["personal_ask"] = {"message": message, "clarification_answers": answers}
         save_session(

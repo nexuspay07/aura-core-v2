@@ -8,8 +8,8 @@ class Phase2DecisionAdapters:
         started=time.monotonic(); ledger=state.request.source_metadata.get("fact_ledger",{}); text=state.request.user_query
         goals=normalize_goals(text,self._split_goals(ledger.get("goals",[]))+self._goals(text))
         normalized_resources=resource_ledger(ledger.get("facts",[]),text);resources=normalized_resources["resources"]
-        uncertainties=list(dict.fromkeys(self._sentences(text,r"\b(?:may|might|uncertain|evaluating|risk|burnout|competitor)\b")+[f"{gap.field}: {gap.why_needed}" for gap in state.information_gaps if gap.can_proceed_without]))
-        risks=list(dict.fromkeys(ledger.get("risks",[])+self._sentences(text,r"\b(?:outage|technical debt|concentration|burnout|competitor)\b")))
+        uncertainties=list(dict.fromkeys([item for item in self._sentences(text,r"\b(?:may|might|uncertain|evaluating|risk|burnout|competitor)\b") if not self._instruction(item)]+[f"{gap.field}: {gap.why_needed}" for gap in state.information_gaps if gap.can_proceed_without]))
+        risks=list(dict.fromkeys([item for item in ledger.get("risks",[])+self._sentences(text,r"\b(?:outage|technical debt|concentration|burnout|competitor)\b") if not self._instruction(item)]))
         tensions=[]
         effects=[]
         lower=text.lower()
@@ -34,6 +34,8 @@ class Phase2DecisionAdapters:
         return state
     @staticmethod
     def _sentences(text,pattern): return [s.strip() for s in re.split(r"[.;]\s*",text) if re.search(pattern,s,re.I)][:6]
+    @staticmethod
+    def _instruction(text): return bool(re.search(r"\b(?:give|provide|show|tell|explain|include|write|create)\s+(?:me|us)\b|\bplease\b",text,re.I))
     @staticmethod
     def _goals(text):
         match=re.search(r"\bgoals?\s*(?:are|include|:)?\s*([^.;]+)",text,re.I)

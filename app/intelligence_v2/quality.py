@@ -8,6 +8,8 @@ from typing import Any
 def requested_deliverables(text: str) -> dict[str, Any]:
     lower = text.lower()
     plan = re.search(r"\b(\d+)[- ](day|month)s?\s+(?:action\s+|practical\s+)?plan\b", lower)
+    if not plan:
+        plan = re.search(r"\b(?:plan|roadmap)\b[^.!?]{0,50}?\b(?:for|over|across)\s+(?:the\s+)?(?:next\s+)?(\d+)\s+(day|month)s?\b",lower)
     horizon={"value":int(plan.group(1)),"unit":f"{plan.group(2)}s"} if plan else None
     return {
         "recommendation": bool(re.search(r"\brecommend(?:ation|ed)?\b|what should (?:i|we) do", lower)),
