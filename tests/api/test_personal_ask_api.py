@@ -145,6 +145,7 @@ def test_personal_ask_session_isolation_and_safe_failures_rollback(monkeypatch, 
         monkeypatch.setattr(routes.decision_analysis_orchestrator, "provider", MockModelProvider(ProviderUnavailableError("secret should not leak", "rate_limit")))
         failed = client.post("/personal/ask", headers=headers, json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."})
         assert failed.status_code == 200 and failed.json()["mode"] == "ANALYSIS_PARTIAL"
+        assert "I have two job offers" not in " ".join(failed.json()["key_facts"])
         assert failed.json()["message"] == "Aevric AI understood the available situation, but could not complete a reliable final recommendation. You can retry without re-entering these facts."
         assert "secret" not in failed.text and "rate_limit" not in failed.text
         diagnostic = next(record.message for record in caplog.records if "personal_ask_provider_failure" in record.message)
@@ -155,6 +156,36 @@ def test_personal_ask_session_isolation_and_safe_failures_rollback(monkeypatch, 
         monkeypatch.setattr(routes.decision_analysis_orchestrator, "provider", MockModelProvider(ProviderTimeoutError("timeout", "timeout")))
         timeout_response = client.post("/personal/ask", headers=headers, json={"message": "I have two job offers. Offer A is remote. Offer B has a commute."})
         assert timeout_response.status_code == 200 and timeout_response.json()["mode"] == "ANALYSIS_PARTIAL"
+        assert "I have two job offers" not in " ".join(timeout_response.json()["key_facts"])
+    finally:
+        engine.dispose()
+
+
+def test_final_quality_failure_returns_only_normalized_partial_facts(monkeypatch, caplog):
+    caplog.set_level("WARNING",logger="uvicorn.error")
+    client, _, _, engine = _client(monkeypatch)
+    prompt=("I have two job offers. Offer A is remote. Offer B has a commute. I'm 20 years old. Financial stability matters to me. "
+            "My goal is to choose a sustainable role. "
+            "I have limited financial resources and my time is a material constraint. "
+            "My options are accept Offer A or accept Offer B. Which job offer should I choose? "
+            "Give me a recommendation. Explain the trade-offs. Tell me what you're uncertain about. Give me a 12-month plan.")
+    raw=_model_response();raw["recommended_option"]="Focus more tightly on income-generating";raw["rationale"]="PRIVATE_PROVIDER_OUTPUT"
+    monkeypatch.setattr(routes.decision_analysis_orchestrator,"provider",MockModelProvider(raw))
+    try:
+        response=client.post("/personal/ask",headers={"Authorization":"Bearer test"},json={"message":prompt})
+        assert response.status_code==200
+        public=response.json();rendered=response.text
+        assert public["mode"]=="ANALYSIS_PARTIAL"
+        assert public["message"]=="Aevric AI understood the available situation, but could not complete a reliable final recommendation. You can retry without re-entering these facts."
+        assert any(item.startswith("Age: 20") for item in public["key_facts"])
+        assert any(item.startswith("Resource constraint:") for item in public["key_facts"])
+        assert public["goals"]==["to choose a sustainable role"]
+        assert prompt not in public["key_facts"] and prompt not in public["problem_understanding"] and "PRIVATE_PROVIDER_OUTPUT" not in rendered
+        assert not any(fragment in " ".join(public["key_facts"]) for fragment in ("Give me","Explain the trade-offs","Tell me","12-month plan","user-query","source_metadata"))
+        assert "required_field" not in rendered and "quality_rule" not in rendered
+        diagnostic="\n".join(record.message for record in caplog.records if "final_quality_stage=failed" in record.message)
+        assert "required_field=recommended_option quality_rule=trailing_modifier" in diagnostic
+        assert prompt not in diagnostic and "PRIVATE_PROVIDER_OUTPUT" not in diagnostic
     finally:
         engine.dispose()
 

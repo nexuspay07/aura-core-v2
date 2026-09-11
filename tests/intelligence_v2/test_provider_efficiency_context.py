@@ -121,14 +121,27 @@ def test_multilingual_content_is_preserved_when_present_in_user_source(session):
     assert "学习进度可能不确定" in brief["risks"]
 
 
-@pytest.mark.parametrize("recommendation",["Study independently, then doing a second,","Study independently while keeping open the later","Choose the reversible path without committing to another long, expensive degree right","Focus more tightly on income-generating"])
-def test_dangling_required_recommendation_fails_closed(session, caplog, recommendation):
+@pytest.mark.parametrize(("recommendation","quality_rule"),[("Study independently, then doing a second,","dangling"),("Study independently while keeping open the later","dangling_english"),("Choose the reversible path without committing to another long, expensive degree right","subordinate_modifier"),("Focus more tightly on income-generating","trailing_modifier")])
+def test_dangling_required_recommendation_fails_closed(session, caplog, recommendation, quality_rule):
     current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
     raw=grounded_response();raw["recommended_option"]=recommendation
     execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
-    with pytest.raises(FinalBriefQualityError):
+    with pytest.raises(FinalBriefQualityError) as captured:
         analysis_report(current,execution)
-    assert "final_quality_stage=failed failure_category=malformed_required_section" in caplog.text
+    assert captured.value.required_field=="recommended_option" and captured.value.quality_rule==quality_rule
+    expected=f"final_quality_stage=failed failure_category=malformed_required_section required_field=recommended_option quality_rule={quality_rule}"
+    assert expected in caplog.text and recommendation not in caplog.text
+
+
+def test_required_rationale_diagnostic_identifies_field_without_content(session, caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["rationale"]="Choose this route because"
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    with pytest.raises(FinalBriefQualityError) as captured:
+        analysis_report(current,execution)
+    assert captured.value.required_field=="rationale" and captured.value.quality_rule=="dangling"
+    assert "required_field=rationale quality_rule=dangling" in caplog.text
+    assert raw["rationale"] not in caplog.text
 
 
 def test_production_shaped_education_brief_has_integrity_without_provider_network(session):
