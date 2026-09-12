@@ -145,6 +145,43 @@ def test_required_rationale_diagnostic_identifies_field_without_content(session,
     assert raw["rationale"] not in caplog.text
 
 
+@pytest.mark.parametrize("text",["Choose this path,","Choose this path;","Choose this path:","Compare A and","Choose A or","It is safer but","Choose it because","Choose it because."])
+def test_unambiguous_dangling_fragments_remain_rejected(text):
+    assert _clean_with_rule(text,EDUCATION,optional=False,reject_instructions=False)==("","dangling")
+
+
+@pytest.mark.parametrize("text",["Learning by doing","Learning by doing.","This is the person I spoke with","This is the person I spoke with.","This is what the evidence points to","This is what the evidence points to.","We should act then","We should act then.","LEARNING BY DOING","Learning by doing。"])
+def test_grammatically_complete_ambiguous_terminal_words_are_preserved(text):
+    assert _clean_with_rule(text,EDUCATION,optional=False,reject_instructions=False)==(text,None)
+
+
+@pytest.mark.parametrize("text",["We should compare and then","We should compare and then.","I want to","I want to.","Start doing","Start doing.","A condition with","A condition with."])
+def test_context_proves_ambiguous_terminal_word_is_incomplete(text):
+    assert _clean_with_rule(text,EDUCATION,optional=False,reject_instructions=False)==("","dangling")
+
+
+def test_marker_removal_preserves_complete_gerund_and_rejects_incomplete_subordinator():
+    assert _clean_with_rule("Learning by doing [user-query]",EDUCATION,optional=False,reject_instructions=False)==("Learning by doing",None)
+    assert _clean_with_rule("Choose it because [user-query]",EDUCATION,optional=False,reject_instructions=False)==("","dangling")
+
+
+def test_provider_shaped_ambiguous_rationale_passes_final_quality(session):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["rationale"]="Learning by doing"
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,_=analysis_report(current,execution)
+    assert execution.status=="READY" and brief["recommendation"]["rationale"]=="Learning by doing"
+
+
+def test_provider_shaped_incomplete_rationale_fails_final_quality(session):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["rationale"]="Choose it because."
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    with pytest.raises(FinalBriefQualityError) as captured:
+        analysis_report(current,execution)
+    assert captured.value.required_field=="rationale" and captured.value.quality_rule=="dangling"
+
+
 def test_malformed_requested_change_condition_fails_closed(session, caplog):
     current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION+" Explain what would change the recommendation."))
     raw=grounded_response();raw["recommendation_change_conditions"]=["Shift toward an additional full-"]

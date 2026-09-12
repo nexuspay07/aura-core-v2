@@ -19,7 +19,9 @@ class FinalBriefQualityError(RuntimeError):
 _INTERNAL_ID=re.compile(r"\[?(?:user-query|(?:derived|memory|document(?:-chunk)?):[\w.-]+)\]?",re.I)
 _MACHINE_PREFIX=re.compile(r"^[a-z][a-z0-9]*_[a-z0-9_]+:\s*",re.I)
 _INSTRUCTION=re.compile(r"\b(?:give|provide|show|tell|explain|include|write|create)\s+(?:me|us)\b|\bplease\b",re.I)
-_DANGLING=re.compile(r"(?:[,;:]|\b(?:and|or|but|because|then|doing|with|to))\s*$",re.I)
+_SENTENCE_TERMINATOR=r"[.!?\u3002\uff01\uff1f]?"
+_DANGLING=re.compile(rf"(?:[,;:]|\b(?:and|or|but|because)){_SENTENCE_TERMINATOR}\s*$",re.I)
+_AMBIGUOUS_DANGLING=re.compile(rf"(?:\b(?:and|or|but)\s+(?:then|doing|with|to)|\bthen\s+(?:doing|with|to)|\b(?:want|need|intend|plan|aim|try|attempt|expect|hope|decide|choose|going|able|ready)\s+to|\b(?:start|begin|continue|keep)\s+doing|\b(?:a|an|the|this|that|each|any)\s+[\w'-]+\s+with){_SENTENCE_TERMINATOR}\s*$",re.I)
 _REQUEST_INSTRUCTION=re.compile(r"^\s*(?:please\s+)?(?:give|provide|show|tell|explain|include|write|create|describe|outline|list)\b",re.I)
 _DANGLING_ENGLISH=re.compile(r"(?:\b(?:a|an|the)|\bthe\s+(?:later|former))\s*$",re.I)
 _GENERIC_PLAN=re.compile(r"\b(?:terms and constraints that differ across the options|smallest reversible test supported by the available resources|update the decision using confirmed evidence)\b",re.I)
@@ -52,6 +54,7 @@ def _clean_with_rule(value,source,*,optional=True,reject_instructions=True):
     if _TRAILING_BOUNDARY.search(text):return "", "trailing_boundary"
     if english and _TERMINAL_SENTENCE_FRAGMENT.search(text):return "", "sentence_fragment"
     if _DANGLING.search(text):return "", "dangling"
+    if english and _AMBIGUOUS_DANGLING.search(text):return "", "dangling"
     if english and _DANGLING_ENGLISH.search(text) and not _TERMINAL_UPPERCASE_LABEL.search(text):return "", "dangling_english"
     if english and unfinished_modifier:return "", "trailing_modifier"
     if english and unfinished_degree:return "", "subordinate_modifier"
