@@ -138,7 +138,7 @@ def final_decision_plan(horizon: dict[str, Any] | None, *, recommendation: str, 
     windows=_time_windows(horizon);options=[item.get("option") for item in alternatives if item.get("option")]
     selected=recommendation.strip();primary_goal=goals[0] if goals else "the stated decision goal"
     question=next((gap.suggested_question.rstrip(" ?") for gap in gaps if gap.can_proceed_without),None)
-    reassess=next(iter(change_conditions),None) or next((gap.impact_on_decision for gap in gaps if gap.can_proceed_without),"Material new evidence changes the recommendation")
+    global_boundary=next(iter(change_conditions),None) or next((gap.impact_on_decision for gap in gaps if gap.can_proceed_without),"Material new evidence changes the recommendation")
     first_action=f"Gather the information needed to answer: {question}" if question else f"Confirm the constraints that materially distinguish {' and '.join(options[:2]) or selected}"
     blueprints=[
         ("Confirm the decision basis",first_action,"Record confirmed facts separately from remaining uncertainty"),
@@ -147,6 +147,13 @@ def final_decision_plan(horizon: dict[str, Any] | None, *, recommendation: str, 
         ("Make the next commitment",f"Commit further to {selected} only if the checkpoint evidence supports it","Record the decision and the evidence that would reverse it"),
     ]
     if len(windows)==3:blueprints=[blueprints[0],blueprints[1],blueprints[3]]
-    phases=[{"phase":window,"objective":objective,"actions":[action],"checkpoint":checkpoint,"dependencies":[] if index==0 else ["The previous checkpoint is complete"],"reassessment_trigger":reassess} for index,(window,(objective,action,checkpoint)) in enumerate(zip(windows,blueprints))]
+    phase_triggers=[
+        "The decision-critical information changes which options are feasible",
+        "The reversible test produces evidence against the recommended direction",
+        "The observed results no longer support the stated decision goals",
+        global_boundary,
+    ]
+    if len(windows)==3:phase_triggers=[phase_triggers[0],phase_triggers[1],phase_triggers[3]]
+    phases=[{"phase":window,"objective":objective,"actions":[action],"checkpoint":checkpoint,"dependencies":[] if index==0 else ["The previous checkpoint is complete"],"reassessment_trigger":phase_triggers[index]} for index,(window,(objective,action,checkpoint)) in enumerate(zip(windows,blueprints))]
     value,unit=horizon["value"],horizon["unit"]
     return {"style":"phased","horizon_value":value,"horizon_unit":unit,"horizon_label":f"{value}-{unit[:-1].title()}",**({"horizon_days":value} if unit=="days" else {}),"basis":"explicitly requested horizon","phases":phases}

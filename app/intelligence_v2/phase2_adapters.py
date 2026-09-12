@@ -16,7 +16,7 @@ class Phase2DecisionAdapters:
         if "technical debt" in lower: effects.append({"cause":"technical debt","effect":"increased outage and customer-retention risk","qualification":"may"})
         if "customer" in lower and ("concentration" in lower or "% of revenue" in lower): effects.append({"cause":"customer concentration","effect":"greater revenue and runway exposure if renewal is lost","qualification":"may"})
         if "burnout" in lower: effects.append({"cause":"sustained workload","effect":"reduced health and execution capacity","qualification":"may"})
-        options=ledger.get("options",[]); options=options if len(options)>=2 else self._options(text)
+        options=ledger.get("options",[]); options=options if options else self._options(text)
         if not goals and options:
             goals=[f"evaluate {option}" for option in options]
         tensions=goal_tensions(goals,options)

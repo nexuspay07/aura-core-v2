@@ -3,7 +3,8 @@ import json
 import pytest
 
 from app.intelligence_v2.model_provider import InvalidModelResponseError, MockModelProvider, analysis_max_output_tokens, model_analysis_schema
-from app.intelligence_v2.final_quality import FinalBriefQualityError
+from app.intelligence_v2.final_quality import FinalBriefQualityError, _clean_with_rule
+from app.intelligence_v2.fact_extraction import extract_fact_ledger
 from app.intelligence_v2.quality import requested_deliverables
 from app.intelligence_v2.orchestrator import DecisionAnalysisOrchestrator, RETRY_COMPACTION_PROMPT
 from app.intelligence_v2.service import decision_v2_service
@@ -144,6 +145,62 @@ def test_required_rationale_diagnostic_identifies_field_without_content(session,
     assert raw["rationale"] not in caplog.text
 
 
+def test_malformed_requested_change_condition_fails_closed(session, caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION+" Explain what would change the recommendation."))
+    raw=grounded_response();raw["recommendation_change_conditions"]=["Shift toward an additional full-"]
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    with pytest.raises(FinalBriefQualityError) as captured:
+        analysis_report(current,execution)
+    assert "missing_change_conditions" in captured.value.categories
+    assert "Shift toward" not in caplog.text
+
+
+@pytest.mark.parametrize("article",["a","A","an","An","the","The"])
+def test_terminal_article_fragment_is_rejected_case_insensitively(article):
+    text=f"A complete thought. {article}"
+    clean,rule=_clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)
+    assert clean=="" and rule in {"sentence_fragment","dangling_english"}
+
+
+@pytest.mark.parametrize("boundary",["-","‑","–","—"])
+def test_truncated_terminal_boundary_is_rejected_before_cleaning(boundary):
+    text=f"Shift toward an additional full{boundary}"
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==("","trailing_boundary")
+
+
+def test_valid_hyphenated_and_multilingual_prose_remain_supported():
+    assert _clean_with_rule("Use a well-tested approach.","An English decision request.")[0]=="Use a well-tested approach."
+    multilingual="学習進度はまだ不確実です"
+    assert _clean_with_rule(multilingual,f"Compare the options in Japanese: {multilingual}")[0]==multilingual
+
+
+@pytest.mark.parametrize(("prompt","expected"),[
+    ("My options are finish my IT program and pursue a degree in economics or finance.",["finish my IT program and pursue a degree in economics or finance"]),
+    ("I have three options: enter the workforce, build projects, or pursue a degree in economics or finance.",["enter the workforce","build projects","pursue a degree in economics or finance"]),
+    ("I have three options: 1. Enter the workforce. 2. Build projects. 3. Pursue a degree.",["Enter the workforce","Build projects","Pursue a degree"]),
+    ("My options are full-time or part-time study.",["full-time or part-time study"]),
+])
+def test_option_normalization_uses_structural_separators(prompt,expected):
+    assert extract_fact_ledger(prompt)["options"]==expected
+
+
+def test_internal_or_option_remains_one_option_through_phase2(session):
+    prompt="My option is pursue another degree in economics or finance. Should I pursue it?"
+    current=state(session,prompt)
+    assert current.analysis_outputs["phase2"]["options"]==["pursue another degree in economics or finance"]
+
+
+def test_equivalent_gap_unknowns_are_deduplicated_but_distinct_unknowns_remain(session):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["unresolved_questions"]=["How expensive would a second degree be and how would you fund it?","Would employers recognize independent study?"]
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,_=analysis_report(current,execution)
+    visible=[*brief["evidence_quality"]["unknown"],*brief["unresolved_questions"],*brief["uncertainties"]]
+    cost_items=[item for item in visible if any(word in item.lower() for word in ("expensive","cost","tuition","fund"))]
+    assert len(cost_items)==1 and any("employer" in item.lower() for item in visible)
+    assert "education_cost" not in json.dumps(brief)
+
+
 def test_production_shaped_education_brief_has_integrity_without_provider_network(session):
     prompt=("I'm 20 years old and currently studying Information Technology. Education genuinely matters to me. "
             "I have limited financial resources and my time is a material constraint. My goal is to build companies eventually. "
@@ -156,6 +213,8 @@ def test_production_shaped_education_brief_has_integrity_without_provider_networ
     assert provider.calls==1 and execution.status=="READY" and brief["recommendation"]["recommended_option"] in actions
     assert [phase["phase"] for phase in plan["phases"]]==["Months 1–3","Months 4–6","Months 7–9","Months 10–12"]
     assert all(phase["checkpoint"] and phase["reassessment_trigger"] for phase in plan["phases"])
+    assert len({phase["reassessment_trigger"] for phase in plan["phases"]})==4
+    assert sum(phase["reassessment_trigger"]==raw["recommendation_change_conditions"][0] for phase in plan["phases"])==1
     assert len(current.analysis_outputs["phase2"]["options"])==3
     assert any(item.startswith("Age:") for item in known) and any(item.startswith("Current status:") for item in known)
     assert any(item.startswith("Option:") for item in known) and not all(item.startswith("Goal:") for item in known)
