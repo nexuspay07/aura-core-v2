@@ -27,7 +27,7 @@ _TRAILING_MODIFIER=re.compile(r"\b[a-z]+-[a-z]*(?:ing|ed|ive|al|ic|ous|able|ible
 _TERMINAL_DEGREE_MODIFIER=re.compile(r"\b(?:right|more|less|very|too|quite|rather|almost|nearly)$",re.I)
 _TRAILING_BOUNDARY=re.compile(r"[-\u2011\u2013\u2014]\s*$")
 _TERMINAL_SENTENCE_FRAGMENT=re.compile(r"(?:^|[.!?]\s+)[A-Za-z]\s*$")
-_OPTION_LABEL=re.compile(r"\b(?:offer|option|alternative|plan|path|choice)\s+[A-Z]$",re.I)
+_TERMINAL_UPPERCASE_LABEL=re.compile(r"\S\s+A$")
 _SCRIPT=re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]")
 _MOJIBAKE=re.compile(r"(?:Ã.|Â.|â[\x80-\xbf]|å.{0,5}ä)")
 
@@ -52,7 +52,7 @@ def _clean_with_rule(value,source,*,optional=True,reject_instructions=True):
     if _TRAILING_BOUNDARY.search(text):return "", "trailing_boundary"
     if english and _TERMINAL_SENTENCE_FRAGMENT.search(text):return "", "sentence_fragment"
     if _DANGLING.search(text):return "", "dangling"
-    if english and _DANGLING_ENGLISH.search(text) and not _OPTION_LABEL.search(text):return "", "dangling_english"
+    if english and _DANGLING_ENGLISH.search(text) and not _TERMINAL_UPPERCASE_LABEL.search(text):return "", "dangling_english"
     if english and unfinished_modifier:return "", "trailing_modifier"
     if english and unfinished_degree:return "", "subordinate_modifier"
     return text, None

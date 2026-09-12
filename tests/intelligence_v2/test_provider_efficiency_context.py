@@ -162,6 +162,29 @@ def test_terminal_article_fragment_is_rejected_case_insensitively(article):
     assert clean=="" and rule in {"sentence_fragment","dangling_english"}
 
 
+@pytest.mark.parametrize("text",["Compare Route A","Choose Program A","Evaluate Track A","Review Scenario A","Use Degree A"])
+def test_terminal_uppercase_label_is_preserved_contextually(text):
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==(text,None)
+
+
+@pytest.mark.parametrize("text",["Choose a","Compare an","Evaluate the"])
+def test_lowercase_terminal_articles_remain_rejected(text):
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==("","dangling_english")
+
+
+@pytest.mark.parametrize(("text","expected"),[("Compare Route A [user-query]","Compare Route A"),("Compare Route A.","Compare Route A."),("Compare Route A","Compare Route A")])
+def test_terminal_label_survives_metadata_removal_and_optional_period(text,expected):
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==(expected,None)
+
+
+def test_problem_understanding_terminal_label_passes_final_quality(session):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["problem_summary"]="Compare Route A"
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,_=analysis_report(current,execution)
+    assert execution.status=="READY" and brief["problem_understanding"]=="Compare Route A"
+
+
 @pytest.mark.parametrize("boundary",["-","‑","–","—"])
 def test_truncated_terminal_boundary_is_rejected_before_cleaning(boundary):
     text=f"Shift toward an additional full{boundary}"
