@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.intelligence_v2.model_provider import InvalidModelResponseError, MockModelProvider, analysis_max_output_tokens, model_analysis_schema
-from app.intelligence_v2.final_quality import FinalBriefQualityError, _clean_with_rule, _final_semantic_failure, analyze_semantic_completeness, normalized_public_facts
+from app.intelligence_v2.final_quality import FinalBriefQualityError, QualitySeverity, _clean_with_rule, _final_semantic_failure, _quality_severity, analyze_semantic_completeness, normalized_public_facts
 from app.intelligence_v2.fact_extraction import extract_fact_ledger
 from app.intelligence_v2.quality import requested_deliverables
 from app.intelligence_v2.orchestrator import DecisionAnalysisOrchestrator, RETRY_COMPACTION_PROMPT
@@ -455,6 +455,102 @@ def test_provider_shaped_unmatched_quote_rationale_still_fails_safely(session,ca
 def test_truncated_terminal_boundary_is_rejected_before_cleaning(boundary):
     text=f"Shift toward an additional full{boundary}"
     assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==("","trailing_boundary")
+
+
+def test_quality_severity_model_is_explicit_and_deterministic():
+    assert _quality_severity()==QualitySeverity.HARD_FAILURE
+    assert _quality_severity(recoverable=True)==QualitySeverity.RECOVERABLE
+    assert _quality_severity(optional=True)==QualitySeverity.FIELD_DEGRADATION
+
+
+@pytest.mark.parametrize("boundary",["-","‑","–","—"])
+def test_complete_terminal_boundary_is_repaired_once(boundary,caplog):
+    text=f"Balancing formal education with career momentum{boundary}"
+    clean,rule=_clean_with_rule(text,EDUCATION,optional=False,field="problem_understanding")
+    assert (clean,rule)==("Balancing formal education with career momentum",None)
+    assert "quality_action=repaired required_field=problem_understanding quality_rule=trailing_boundary" in caplog.text
+    assert text not in caplog.text
+
+
+@pytest.mark.parametrize("boundary",["-","‑","–","—"])
+def test_incomplete_terminal_boundary_remains_hard_failure(boundary):
+    assert _clean_with_rule(f"Choosing between work and{boundary}",EDUCATION,optional=False)==("","trailing_boundary")
+
+
+def test_duplicate_terminal_punctuation_is_recovered_without_semantic_change(caplog):
+    clean,rule=_clean_with_rule("Compare the validated options..",EDUCATION,optional=False,field="problem_understanding")
+    assert (clean,rule)==("Compare the validated options.",None)
+    assert "quality_action=repaired required_field=problem_understanding quality_rule=duplicate_punctuation" in caplog.text
+
+
+def test_one_bad_optional_risk_is_degraded_without_losing_valid_items(session,caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["risks"]=["Progress may be slower","Choose A or","The route may require adjustment"]
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,_=analysis_report(current,execution)
+    assert brief["risks"]==["Progress may be slower","The route may require adjustment"]
+    assert "quality_action=degraded required_field=risks quality_rule=incomplete_coordination" in caplog.text
+    assert raw["risks"][1] not in caplog.text
+
+
+def test_recoverable_required_fields_preserve_complete_education_brief(session):
+    prompt=("I'm 20 years old and currently studying Information Technology. Education genuinely matters to me. "
+            "I have limited financial resources and my time is a material constraint. My goal is to build companies eventually. "
+            "Three paths: enter the workforce, build practical projects, or pursue another degree. "
+            "Explain the trade-offs, assumptions, uncertainty, risks, and what would change the recommendation, and give me a practical 12-month plan.")
+    current=decision_v2_service.proceed_with_assumptions(state(session,prompt))
+    raw=grounded_response();raw["problem_summary"]="Balancing formal education with career momentum—";raw["rationale"]="This keeps the decision reversible—"
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,_=analysis_report(current,execution)
+    assert execution.status=="READY"
+    assert brief["problem_understanding"]=="Balancing formal education with career momentum"
+    assert brief["recommendation"]["rationale"]=="This keeps the decision reversible"
+    assert len(current.analysis_outputs["phase2"]["options"])==3
+    assert len(brief["decision_plan"]["phases"])==4
+    assert _final_semantic_failure(brief,current.request.user_query) is None
+
+
+@pytest.mark.parametrize(("field","value","rule"),[
+    ("recommended_option","Choose A or","incomplete_coordination"),
+    ("rationale","Choose this option because","incomplete_coordination"),
+    ("problem_summary","Choosing between work and—","trailing_boundary"),
+])
+def test_broken_required_semantics_still_fail_safely(session,field,value,rule,caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw[field]=value
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    with pytest.raises(FinalBriefQualityError) as captured:analysis_report(current,execution)
+    expected="problem_understanding" if field=="problem_summary" else field
+    assert captured.value.required_field==expected and captured.value.quality_rule==rule
+    assert "quality_action=hard_failure" in caplog.text and value not in caplog.text
+
+
+def test_requested_risk_section_cannot_be_degraded_to_empty(session):
+    prompt=EDUCATION+" Include risks."
+    current=decision_v2_service.proceed_with_assumptions(state(session,prompt))
+    raw=grounded_response();raw["risks"]=["Choose A or"]
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    with pytest.raises(FinalBriefQualityError) as captured:analysis_report(current,execution)
+    assert "missing_risks" in captured.value.categories
+
+
+def test_exact_raw_source_copy_in_required_field_is_hard_failure(session,caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["rationale"]=EDUCATION
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    with pytest.raises(FinalBriefQualityError) as captured:analysis_report(current,execution)
+    assert captured.value.required_field=="rationale" and captured.value.quality_rule=="source_copy"
+    assert "quality_action=hard_failure" in caplog.text and EDUCATION not in caplog.text
+
+
+def test_exact_raw_source_copy_optional_item_is_degraded(session,caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["risks"]=[EDUCATION,"Progress may be slower"]
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,_=analysis_report(current,execution)
+    assert brief["risks"]==["Progress may be slower"]
+    assert "quality_action=degraded required_field=risks quality_rule=source_copy" in caplog.text
+    assert EDUCATION not in caplog.text
 
 
 def test_valid_hyphenated_and_multilingual_prose_remain_supported():

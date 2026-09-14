@@ -4,8 +4,15 @@ from __future__ import annotations
 import logging
 import re
 import time
+from enum import Enum
 
 logger=logging.getLogger("uvicorn.error")
+
+
+class QualitySeverity(str,Enum):
+    HARD_FAILURE="hard_failure"
+    RECOVERABLE="recoverable"
+    FIELD_DEGRADATION="field_degradation"
 
 
 class FinalBriefQualityError(RuntimeError):
@@ -15,6 +22,7 @@ class FinalBriefQualityError(RuntimeError):
         self.categories = tuple(dict.fromkeys(categories))
         self.required_field = required_field
         self.quality_rule = quality_rule
+        self.severity = QualitySeverity.HARD_FAILURE
         super().__init__("final decision brief failed quality validation")
 _INTERNAL_ID=re.compile(r"\[?(?:user-query|(?:derived|memory|document(?:-chunk)?):[\w.-]+)\]?",re.I)
 _MACHINE_PREFIX=re.compile(r"^[a-z][a-z0-9]*_[a-z0-9_]+:\s*",re.I)
@@ -34,7 +42,7 @@ _OPENING_QUOTES={"\u2018":"\u2019","\u201c":"\u201d"}
 _BRACKETS={"(":")","[":"]","{":"}"}
 _SYMMETRIC_QUOTES={'"',"'"}
 _SUBORDINATOR=re.compile(r"\b(if|when|because|although|while|unless)\b",re.I)
-_ADJECTIVE_FORM=re.compile(r"^(?![a-z'-]*(?:ment|tion|sion|ness|ity|ship|ance|ence|er|or)$)[a-z][a-z'-]*(?:al|ial|ic|ive|ous|ary|ory|able|ible|ent|ant|less|ful)$",re.I)
+_ADJECTIVE_FORM=re.compile(r"^(?:full|(?![a-z'-]*(?:ment|tion|sion|ness|ity|ship|ance|ence|er|or)$)[a-z][a-z'-]*(?:al|ial|ic|ive|ous|ary|ory|able|ible|ent|ant|less|ful))$",re.I)
 
 def _is_apostrophe(text,index):
     previous=text[index-1] if index else "";following=text[index+1] if index+1<len(text) else ""
@@ -110,11 +118,24 @@ def _unexpected_language(text,source):
     source_has_script=bool(_SCRIPT.search(source)); requested=bool(re.search(r"\b(?:translate|in (?:chinese|japanese|korean)|multilingual)\b",source,re.I))
     return not source_has_script and not requested and bool(_SCRIPT.search(text) or _MOJIBAKE.search(text))
 
-def _clean_with_rule(value,source,*,optional=True,reject_instructions=True):
+def _quality_severity(*,optional=False,recoverable=False):
+    if recoverable:return QualitySeverity.RECOVERABLE
+    return QualitySeverity.FIELD_DEGRADATION if optional else QualitySeverity.HARD_FAILURE
+
+def _quality_event(action,field,rule):
+    logger.warning("final_quality_stage=recovered quality_action=%s required_field=%s quality_rule=%s",action,field,rule)
+
+def _clean_with_rule(value,source,*,optional=True,reject_instructions=True,reject_source_copy=False,field="unknown",allow_recovery=True):
     if not isinstance(value,str): return "", "empty_after_normalization"
     text=re.sub(r"Monthly budget appears able to absorb ownership costs better given a (\$[\d,]+) surplus\.?",r"You currently have a \1 monthly surplus before any additional car-related costs.",value,flags=re.I)
     text=_MACHINE_PREFIX.sub("",_INTERNAL_ID.sub("",text)).strip(" \t\r\n•")
     text=re.sub(r"\s+([,.;:!?])",r"\1",text);text=re.sub(r"\s{2,}"," ",text).strip()
+    collapsed=re.sub(r"([.!?])\1+$",r"\1",text)
+    if collapsed!=text:
+        text=collapsed
+        if allow_recovery:_quality_event("repaired",field,"duplicate_punctuation")
+    normalized_source=re.sub(r"\s+"," ",str(source)).strip()
+    if reject_source_copy and text==normalized_source:return "", "source_copy"
     if reject_instructions and (_INSTRUCTION.search(text) or _REQUEST_INSTRUCTION.search(text)): return "", "instruction"
     unexpected_language=_unexpected_language(text,source)
     if unexpected_language:
@@ -126,21 +147,30 @@ def _clean_with_rule(value,source,*,optional=True,reject_instructions=True):
     if not text:return "", "unexpected_language" if unexpected_language else "empty_after_normalization"
     structure=analyze_semantic_completeness(text,english=english)
     if not structure["complete"]:return "", structure["rule"]
-    if _TRAILING_BOUNDARY.search(text):return "", "trailing_boundary"
+    if _TRAILING_BOUNDARY.search(text):
+        candidate=_TRAILING_BOUNDARY.sub("",text).rstrip()
+        if _quality_severity(recoverable=allow_recovery) is QualitySeverity.RECOVERABLE and candidate:
+            repaired,_=_clean_with_rule(candidate,source,optional=optional,reject_instructions=reject_instructions,reject_source_copy=reject_source_copy,field=field,allow_recovery=False)
+            if repaired:
+                _quality_event("repaired",field,"trailing_boundary")
+                return repaired,None
+        return "", "trailing_boundary"
     if _DANGLING.search(text):return "", "dangling"
     if english and _AMBIGUOUS_DANGLING.search(text):return "", "dangling"
     if english and unfinished_modifier:return "", "trailing_modifier"
     if english and unfinished_degree:return "", "subordinate_modifier"
     return text, None
 
-def _clean(value,source,*,optional=True,reject_instructions=True):
-    return _clean_with_rule(value,source,optional=optional,reject_instructions=reject_instructions)[0]
+def _clean(value,source,*,optional=True,reject_instructions=True,reject_source_copy=False,field="unknown"):
+    return _clean_with_rule(value,source,optional=optional,reject_instructions=reject_instructions,reject_source_copy=reject_source_copy,field=field)[0]
 
-def _list(values,source):
+def _list(values,source,field="optional_item",reject_source_copy=False):
     result=[]
     for value in values or []:
-        clean=_clean(value,source)
+        clean,rule=_clean_with_rule(value,source,reject_source_copy=reject_source_copy,field=field)
         if clean and clean.lower() not in {item.lower() for item in result}:result.append(clean)
+        elif clean and _quality_severity(optional=True) is QualitySeverity.FIELD_DEGRADATION:_quality_event("degraded",field,"duplicate_item")
+        elif rule and _quality_severity(optional=True) is QualitySeverity.FIELD_DEGRADATION:_quality_event("degraded",field,rule)
     return result
 
 def _semantic_structure(value,source):
@@ -238,26 +268,26 @@ def finalize_decision_brief(response,state):
     logger.warning("final_quality_stage=started")
     response["key_facts"]=normalized_public_facts(state)
     for key in ("derived_facts","risks","goals","decision_drivers","uncertainties","prioritized_actions","what_would_change_recommendation","limitations"):
-        response[key]=_list(response.get(key),source)
+        response[key]=_list(response.get(key),source,key,reject_source_copy=True)
     internal_fields={gap.field.lower() for gap in state.information_gaps}
     response["limitations"]=[item for item in response["limitations"] if not any(re.search(rf"\b{re.escape(field)}\b",item,re.I) for field in internal_fields)]
     alternatives=[]
     for item in response.get("alternatives",[]):
-        option=_clean(item.get("option"),source,optional=False)
+        option=_clean(item.get("option"),source,optional=False,reject_source_copy=True,field="alternative_option")
         if not option:continue
-        normalized={**item,"option":option,"benefits":_list(item.get("benefits"),source),"downsides":_list(item.get("downsides"),source),"assumptions":_list(item.get("assumptions"),source),"conditions_for_success":_list(item.get("conditions_for_success"),source),"evidence_ids":[]}
+        normalized={**item,"option":option,"benefits":_list(item.get("benefits"),source,"benefits",True),"downsides":_list(item.get("downsides"),source,"downsides",True),"assumptions":_list(item.get("assumptions"),source,"assumptions",True),"conditions_for_success":_list(item.get("conditions_for_success"),source,"conditions_for_success",True),"evidence_ids":[]}
         alternatives.append(normalized)
     response["alternatives"]=alternatives
     recommendation=response.get("recommendation",{})
-    recommendation["recommended_option"],option_rule=_clean_with_rule(recommendation.get("recommended_option"),source,optional=False,reject_instructions=False)
-    recommendation["rationale"],rationale_rule=_clean_with_rule(recommendation.get("rationale"),source,optional=False,reject_instructions=False)
-    recommendation["prerequisites"]=_list(recommendation.get("prerequisites"),source);recommendation["what_would_change_the_recommendation"]=_list(recommendation.get("what_would_change_the_recommendation"),source)
-    response["analysis"],analysis_rule=_clean_with_rule(response.get("analysis"),source,optional=False)
-    response["problem_understanding"],problem_rule=_clean_with_rule(response.get("problem_understanding"),source,optional=False)
-    unresolved=_list(response.get("unresolved_questions"),source)
+    recommendation["recommended_option"],option_rule=_clean_with_rule(recommendation.get("recommended_option"),source,optional=False,reject_instructions=False,reject_source_copy=True,field="recommended_option")
+    recommendation["rationale"],rationale_rule=_clean_with_rule(recommendation.get("rationale"),source,optional=False,reject_instructions=False,reject_source_copy=True,field="rationale")
+    recommendation["prerequisites"]=_list(recommendation.get("prerequisites"),source,"prerequisites",True);recommendation["what_would_change_the_recommendation"]=_list(recommendation.get("what_would_change_the_recommendation"),source,"recommendation_change_conditions",True)
+    response["analysis"],analysis_rule=_clean_with_rule(response.get("analysis"),source,optional=False,reject_source_copy=True,field="analysis")
+    response["problem_understanding"],problem_rule=_clean_with_rule(response.get("problem_understanding"),source,optional=False,reject_source_copy=True,field="problem_understanding")
+    unresolved=_list(response.get("unresolved_questions"),source,"unresolved_questions",True)
     unresolved,uncertainty_keys=_dedupe_uncertainties(unresolved,state)
-    unknown,all_uncertainty_keys=_dedupe_uncertainties(_list(response.get("evidence_quality",{}).get("unknown",[]),source),state,set(uncertainty_keys))
-    response["evidence_quality"]={"known":response["key_facts"],"derived":response["derived_facts"],"assumed":_list(response.get("assumptions"),source),"unknown":unknown}
+    unknown,all_uncertainty_keys=_dedupe_uncertainties(_list(response.get("evidence_quality",{}).get("unknown",[]),source,"unknown",True),state,set(uncertainty_keys))
+    response["evidence_quality"]={"known":response["key_facts"],"derived":response["derived_facts"],"assumed":_list(response.get("assumptions"),source,"assumptions",True),"unknown":unknown}
     response["assumptions"]=response["evidence_quality"]["assumed"]
     response["unresolved_questions"]=unresolved
     tensions=[]
@@ -270,7 +300,7 @@ def finalize_decision_brief(response,state):
     required_failure=("recommended_option",option_rule) if not recommendation.get("recommended_option") else (("rationale",rationale_rule) if not recommendation.get("rationale") else (("analysis",analysis_rule) if not response.get("analysis") else (("problem_understanding",problem_rule) if not response.get("problem_understanding") else None)))
     if required_failure:
         required_field,quality_rule=required_failure
-        logger.warning("final_quality_stage=failed failure_category=malformed_required_section required_field=%s quality_rule=%s",required_field,quality_rule or "unknown")
+        logger.warning("final_quality_stage=failed failure_category=malformed_required_section required_field=%s quality_rule=%s quality_action=hard_failure",required_field,quality_rule or "unknown")
         raise FinalBriefQualityError(["malformed_required_section"],required_field=required_field,quality_rule=quality_rule or "unknown")
     deliverables=response.get("requested_deliverables",{})
     horizon=deliverables.get("plan_horizon")
@@ -279,7 +309,7 @@ def finalize_decision_brief(response,state):
         response["decision_plan"]=final_decision_plan(horizon,recommendation=recommendation["recommended_option"],alternatives=alternatives,goals=response.get("goals",[]),gaps=state.information_gaps,change_conditions=recommendation["what_would_change_the_recommendation"])
         if plan_failure:=_final_semantic_failure({"decision_plan":response["decision_plan"]},source):
             required_field,quality_rule=plan_failure
-            logger.warning("final_quality_stage=failed failure_category=malformed_final_response required_field=%s quality_rule=%s",required_field,quality_rule)
+            logger.warning("final_quality_stage=failed failure_category=malformed_final_response required_field=%s quality_rule=%s quality_action=hard_failure",required_field,quality_rule)
             raise FinalBriefQualityError(["malformed_final_response"],required_field=required_field,quality_rule=quality_rule)
     response["decision_plan"]=_plan(response.get("decision_plan",{}),source)
     gap_prose={gap.why_needed.lower() for gap in state.information_gaps if gap.can_proceed_without}
@@ -304,7 +334,7 @@ def finalize_decision_brief(response,state):
     response["completeness"].update({"recommendation":bool(recommendation.get("recommended_option") and recommendation.get("rationale")),"tradeoffs":not deliverables.get("tradeoffs") or bool(alternatives),"assumptions":not deliverables.get("assumptions") or bool(response["assumptions"]),"uncertainty":not deliverables.get("uncertainty") or bool(unknown or unresolved),"risks":not deliverables.get("risks") or bool(response["risks"]),"ranking":not deliverables.get("ranking") or len(alternatives)>=2,"next_steps":not deliverables.get("next_steps") or bool(response["prioritized_actions"]),"change_triggers":not deliverables.get("change_triggers") or bool(recommendation.get("what_would_change_the_recommendation")),"plan":not horizon or bool(plan.get("phases"))})
     if failures:
         required_field,quality_rule=required_failure or ("unknown","unknown")
-        logger.warning("final_quality_stage=failed failure_category=%s required_field=%s quality_rule=%s",",".join(sorted(set(failures))),required_field,quality_rule or "unknown")
+        logger.warning("final_quality_stage=failed failure_category=%s required_field=%s quality_rule=%s quality_action=hard_failure",",".join(sorted(set(failures))),required_field,quality_rule or "unknown")
         raise FinalBriefQualityError(failures,required_field=required_field,quality_rule=quality_rule or "unknown")
     logger.warning("final_quality_stage=passed")
     return response
