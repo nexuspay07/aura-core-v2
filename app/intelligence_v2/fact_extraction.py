@@ -28,7 +28,15 @@ def _extract_options(text):
     marker=header or either
     if not marker:return []
     tail=text[marker.end():][:800].strip()
-    numbered=[item.strip(" \t\r\n-•.;") for item in re.findall(r"(?:^|[.;]\s*)\d+[.)]\s*(.+?)(?=(?:[.;]\s*)\d+[.)]|$)",tail,re.S)]
+    markers=list(re.finditer(r"(?:^|(?<=[.;\n]))\s*\d+[.)]\s*",tail))
+    numbered=[]
+    for index,numbered_marker in enumerate(markers):
+        end=markers[index+1].start() if index+1<len(markers) else len(tail)
+        item=tail[numbered_marker.end():end]
+        boundary=re.search(r"\n\s*\n|[.?!]\s+(?=(?:please|give|provide|show|tell|explain|include|write|create|describe|outline|list|compare|what|which|should|how|can|could|would)\b)",item,re.I)
+        if boundary:item=item[:boundary.start()]
+        item=item.strip(" \t\r\n-•.;")
+        if item:numbered.append(item)
     if len(numbered)>=2:return numbered[:4]
     bullets=[line.strip(" \t-•") for line in tail.splitlines() if re.match(r"^\s*[-•]\s+",line)]
     if len(bullets)>=2:return bullets[:4]

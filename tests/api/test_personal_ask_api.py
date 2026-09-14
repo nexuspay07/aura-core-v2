@@ -190,6 +190,21 @@ def test_final_quality_failure_returns_only_normalized_partial_facts(monkeypatch
         engine.dispose()
 
 
+def test_structurally_incomplete_required_field_uses_safe_partial_response(monkeypatch,caplog):
+    caplog.set_level("WARNING",logger="uvicorn.error");client,_,_,engine=_client(monkeypatch)
+    raw=_model_response();raw["recommended_option"]="Choose this path if work and self";raw["rationale"]="PRIVATE_STRUCTURAL_FRAGMENT"
+    monkeypatch.setattr(routes.decision_analysis_orchestrator,"provider",MockModelProvider(raw))
+    try:
+        response=client.post("/personal/ask",headers={"Authorization":"Bearer test"},json={"message":"I have two job offers. Offer A is remote. Offer B has a commute. Which should I choose?"})
+        assert response.status_code==200 and response.json()["mode"]=="ANALYSIS_PARTIAL"
+        assert "PRIVATE_STRUCTURAL_FRAGMENT" not in response.text and "if work and self" not in response.text
+        diagnostic="\n".join(record.message for record in caplog.records if "final_quality_stage=failed" in record.message)
+        assert "required_field=recommended_option quality_rule=open_conditional" in diagnostic
+        assert "PRIVATE_STRUCTURAL_FRAGMENT" not in diagnostic and "if work and self" not in diagnostic
+    finally:
+        engine.dispose()
+
+
 def test_provider_categories_and_timeout_remain_sanitized_without_real_calls(monkeypatch, caplog):
     client, _, _, engine = _client(monkeypatch)
     try:

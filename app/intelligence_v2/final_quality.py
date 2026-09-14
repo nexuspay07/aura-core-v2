@@ -33,6 +33,59 @@ _TERMINAL_UPPERCASE_LABEL=re.compile(r"\S\s+A$")
 _SCRIPT=re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]")
 _MOJIBAKE=re.compile(r"(?:Ã.|Â.|â[\x80-\xbf]|å.{0,5}ä)")
 
+_OPENING_QUOTES={"\u2018":"\u2019","\u201c":"\u201d"}
+_BRACKETS={"(":")","[":"]","{":"}"}
+_SUBORDINATOR=re.compile(r"\b(if|when|because|although|while|unless)\b",re.I)
+_ADJECTIVE_FORM=re.compile(r"^(?![a-z'-]*(?:ment|tion|sion|ness|ity|ship|ance|ence|er|or)$)[a-z][a-z'-]*(?:al|ial|ic|ive|ous|ary|ory|able|ible|ent|ant|less|ful)$",re.I)
+
+def _unbalanced_pair_rule(text):
+    stack=[];pairs={**_BRACKETS,**_OPENING_QUOTES};closers={value:key for key,value in pairs.items()}
+    for character in text:
+        if character in pairs:stack.append(character)
+        elif character in closers:
+            if not stack or stack.pop()!=closers[character]:return "unbalanced_quote" if character in _OPENING_QUOTES.values() else "unbalanced_bracket"
+    if any(character in _OPENING_QUOTES for character in stack):return "unbalanced_quote"
+    if stack:return "unbalanced_bracket"
+    if len(re.findall(r'(?<!\\)"',text))%2:return "unbalanced_quote"
+    single=[match.start() for match in re.finditer("'",text) if not (match.start()>0 and match.start()+1<len(text) and text[match.start()-1].isalnum() and text[match.start()+1].isalnum())]
+    if len(single)%2 and not (len(single)==1 and single[0]>0 and text[single[0]-1].isalnum()):return "unbalanced_quote"
+    return None
+
+def _clause_has_predicate(clause,subordinator):
+    clause=re.sub(r"^then\b", "", clause.strip(),flags=re.I).strip(" ,")
+    words=re.findall(r"[A-Za-z][A-Za-z'-]*",clause)
+    if subordinator.lower()=="while" and len(words)==1 and words[0].lower().endswith("ing"):return True
+    if len(words)<2:return False
+    if re.fullmatch(r"[A-Za-z'-]+\s+(?:and|or)\s+[A-Za-z'-]+",clause,re.I):return False
+    if words[0].lower() in {"the","a","an","this","that","these","those","my","your","our","their","its"} and len(words)<3:return False
+    return bool(re.search(r"\b(?:is|are|was|were|be|been|being|has|have|had|can|could|will|would|should|may|might|must|do|does|did)\b",clause,re.I) or any(re.search(r"(?:ed|ing|s)$",word,re.I) for word in words[1:]) or words[0].lower() not in {"the","a","an","this","that","these","those"})
+
+def analyze_semantic_completeness(text):
+    """Return bounded, content-free structural completeness diagnostics."""
+    if not isinstance(text,str) or not text.strip():return {"complete":False,"rule":"empty_after_normalization"}
+    text=text.strip();pair_rule=_unbalanced_pair_rule(text)
+    if pair_rule:return {"complete":False,"rule":pair_rule}
+    core=re.sub(r"[.!?\u3002\uff01\uff1f]+$","",text).strip()
+    if re.search(r"(?:[,;:]|\b(?:and|or|but|because))$",core,re.I):return {"complete":False,"rule":"incomplete_coordination"}
+    matches=list(_SUBORDINATOR.finditer(core))
+    if matches:
+        marker=matches[-1];tail=core[marker.end():].strip()
+        if marker.start()==0:
+            comma=core.find(",",marker.end())
+            if comma<0 or not _clause_has_predicate(core[comma+1:],marker.group(1)):return {"complete":False,"rule":"open_conditional"}
+        elif not _clause_has_predicate(tail,marker.group(1)):
+            return {"complete":False,"rule":"open_conditional"}
+    if re.search(r"(?:^|[,;:])\s*then$",core,re.I):return {"complete":False,"rule":"open_conditional"}
+    noun_match=re.search(r"\b(a|an|the)\s+([A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*)*)$",core,re.I)
+    if noun_match and all(_ADJECTIVE_FORM.fullmatch(word) for word in noun_match.group(2).split()):return {"complete":False,"rule":"incomplete_noun_phrase"}
+    if re.search(r"\b(?:through|via)\s+self$",core,re.I):return {"complete":False,"rule":"incomplete_complement"}
+    if re.search(r"\b(?:and|or|but)\s+(?:then|doing|with|to)$",core,re.I) or re.search(r"\b(?:want|need|intend|plan|aim|try|attempt|expect|hope|decide|choose|going|able|ready)\s+to$",core,re.I):return {"complete":False,"rule":"incomplete_complement"}
+    if re.search(r"\b(?:start|begin|continue|keep)\s+doing$",core,re.I) or re.search(r"\b(?:a|an|the|this|that|each|any)\s+[\w'-]+\s+with$",core,re.I):return {"complete":False,"rule":"incomplete_complement"}
+    words=re.findall(r"[A-Za-z][A-Za-z'-]*",core)
+    first=next((word for word in words if word.lower() not in {"a","an","the"}),"")
+    if words and words[-1].lower().endswith("ly") and _ADJECTIVE_FORM.fullmatch(first) and not re.search(r"\b(?:is|are|was|were|be|become|becomes|became|remain|remains|stays?|seems?|appears?)\b",core,re.I):return {"complete":False,"rule":"incomplete_noun_phrase"}
+    return {"complete":True,"rule":None}
+
 def _unexpected_language(text,source):
     source_has_script=bool(_SCRIPT.search(source)); requested=bool(re.search(r"\b(?:translate|in (?:chinese|japanese|korean)|multilingual)\b",source,re.I))
     return not source_has_script and not requested and bool(_SCRIPT.search(text) or _MOJIBAKE.search(text))
@@ -51,6 +104,8 @@ def _clean_with_rule(value,source,*,optional=True,reject_instructions=True):
     unfinished_modifier=bool(_TRAILING_MODIFIER.search(text) and not re.search(r"\b(?:is|are|was|were|be|seems?|remains?|becomes?)\s+[a-z]+-[a-z]*(?:ing|ed|ive|al|ic|ous|able|ible|ary|ory|ful|less)$",text,re.I))
     unfinished_degree=bool(re.search(r"\b(?:without|while|before|after|through|by)\b",text,re.I) and _TERMINAL_DEGREE_MODIFIER.search(text))
     if not text:return "", "unexpected_language" if unexpected_language else "empty_after_normalization"
+    structure=analyze_semantic_completeness(text)
+    if english and not structure["complete"]:return "", structure["rule"]
     if _TRAILING_BOUNDARY.search(text):return "", "trailing_boundary"
     if english and _TERMINAL_SENTENCE_FRAGMENT.search(text):return "", "sentence_fragment"
     if _DANGLING.search(text):return "", "dangling"
@@ -77,6 +132,32 @@ def _semantic_structure(value,source):
     if isinstance(value,dict):
         return {key:clean for key,item in value.items() if (clean:=_semantic_structure(item,source)) not in ("",[],{})}
     return value
+
+def _final_semantic_failure(response):
+    fields={
+        "problem_understanding":response.get("problem_understanding"),"analysis":response.get("analysis"),
+        "key_facts":response.get("key_facts"),"derived_facts":response.get("derived_facts"),"alternatives":response.get("alternatives"),
+        "risks":response.get("risks"),"goals":response.get("goals"),"goal_tensions":response.get("goal_tensions"),
+        "resources":response.get("resources"),"constraints":response.get("constraints"),"resource_risks":response.get("resource_risks"),
+        "trends":response.get("trends"),"decision_drivers":response.get("decision_drivers"),"uncertainties":response.get("uncertainties"),
+        "causal_effects":response.get("causal_effects"),"prioritized_actions":response.get("prioritized_actions"),
+        "unresolved_questions":response.get("unresolved_questions"),"limitations":response.get("limitations"),
+        "assumptions":response.get("assumptions"),"confidence_rationale":response.get("confidence_rationale"),
+        "what_would_change_recommendation":response.get("what_would_change_recommendation"),
+        "recommendation":response.get("recommendation"),"evidence_quality":response.get("evidence_quality"),
+        "decision_plan":response.get("decision_plan"),"next_move":response.get("next_move"),"what_changed":response.get("what_changed"),
+    }
+    def visit(value):
+        if isinstance(value,str):
+            if not value.strip():return None
+            result=analyze_semantic_completeness(value)
+            return result["rule"] if not result["complete"] else None
+        if isinstance(value,list):return next((rule for item in value if (rule:=visit(item))),None)
+        if isinstance(value,dict):return next((rule for item in value.values() if (rule:=visit(item))),None)
+        return None
+    for field,value in fields.items():
+        if rule:=visit(value):return field,rule
+    return None
 
 _UNCERTAINTY_STOP={"a","an","and","are","be","do","for","how","if","in","is","it","of","or","the","this","to","what","would","you","your"}
 _UNCERTAINTY_EQUIVALENTS={"expensive":"cost","expense":"cost","expenses":"cost","costs":"cost","tuition":"cost","fund":"funding","funded":"funding","finance":"funding","financing":"funding","cover":"funding","pay":"funding","program":"education","degree":"education","school":"education","studies":"education"}
@@ -167,19 +248,28 @@ def finalize_decision_brief(response,state):
     response["goal_tensions"]=tensions
     for key in ("resources","constraints","resource_risks","trends","causal_effects","confidence_rationale","what_changed"):
         response[key]=_semantic_structure(response.get(key,[]),source)
+    required_failure=("recommended_option",option_rule) if not recommendation.get("recommended_option") else (("rationale",rationale_rule) if not recommendation.get("rationale") else (("analysis",analysis_rule) if not response.get("analysis") else (("problem_understanding",problem_rule) if not response.get("problem_understanding") else None)))
+    if required_failure:
+        required_field,quality_rule=required_failure
+        logger.warning("final_quality_stage=failed failure_category=malformed_required_section required_field=%s quality_rule=%s",required_field,quality_rule or "unknown")
+        raise FinalBriefQualityError(["malformed_required_section"],required_field=required_field,quality_rule=quality_rule or "unknown")
     deliverables=response.get("requested_deliverables",{})
     horizon=deliverables.get("plan_horizon")
     if horizon:
         from app.intelligence_v2.quality import final_decision_plan
         response["decision_plan"]=final_decision_plan(horizon,recommendation=recommendation["recommended_option"],alternatives=alternatives,goals=response.get("goals",[]),gaps=state.information_gaps,change_conditions=recommendation["what_would_change_the_recommendation"])
+        if plan_failure:=_final_semantic_failure({"decision_plan":response["decision_plan"]}):
+            required_field,quality_rule=plan_failure
+            logger.warning("final_quality_stage=failed failure_category=malformed_final_response required_field=%s quality_rule=%s",required_field,quality_rule)
+            raise FinalBriefQualityError(["malformed_final_response"],required_field=required_field,quality_rule=quality_rule)
     response["decision_plan"]=_plan(response.get("decision_plan",{}),source)
     gap_prose={gap.why_needed.lower() for gap in state.information_gaps if gap.can_proceed_without}
     response["uncertainties"],_= _dedupe_uncertainties([item for item in response["uncertainties"] if item.lower() not in gap_prose],state,set(all_uncertainty_keys))
-    response["next_move"]=response["decision_plan"].get("phases",[{}])[0].get("actions",[None])[0] if horizon else _clean(response.get("next_move"),source,reject_instructions=False)
+    phases=response["decision_plan"].get("phases",[])
+    response["next_move"]=phases[0].get("actions",[None])[0] if horizon and phases else (_clean(response.get("next_move"),source,reject_instructions=False) if not horizon else None)
     response["evidence_used"]=[];response["citations"]=[]
     plan=response.get("decision_plan",{})
-    required_failure=("recommended_option",option_rule) if not recommendation.get("recommended_option") else (("rationale",rationale_rule) if not recommendation.get("rationale") else (("analysis",analysis_rule) if not response.get("analysis") else (("problem_understanding",problem_rule) if not response.get("problem_understanding") else None)))
-    if required_failure:failures.append("malformed_required_section")
+    required_failure=None
     if deliverables.get("tradeoffs") and not any(item.get("benefits") or item.get("downsides") for item in alternatives):failures.append("missing_tradeoffs")
     if deliverables.get("assumptions") and not response["assumptions"]:failures.append("missing_assumptions")
     if deliverables.get("uncertainty") and not (unknown or unresolved):failures.append("missing_uncertainty")
@@ -188,6 +278,9 @@ def finalize_decision_brief(response,state):
     if deliverables.get("next_steps") and not response["prioritized_actions"]:failures.append("missing_next_steps")
     if deliverables.get("change_triggers") and not recommendation.get("what_would_change_the_recommendation"):failures.append("missing_change_conditions")
     if horizon and (not plan.get("phases") or plan.get("horizon_value")!=horizon.get("value") or plan.get("horizon_unit")!=horizon.get("unit") or any(not phase.get("actions") for phase in plan.get("phases",[]))):failures.append("missing_requested_plan")
+    final_semantic_failure=_final_semantic_failure(response)
+    if final_semantic_failure:
+        required_failure=required_failure or final_semantic_failure;failures.append("malformed_final_response")
     elapsed=round((time.perf_counter()-started)*1000,3);response.setdefault("telemetry",{})["final_quality_ms"]=elapsed
     response["completeness"].update({"recommendation":bool(recommendation.get("recommended_option") and recommendation.get("rationale")),"tradeoffs":not deliverables.get("tradeoffs") or bool(alternatives),"assumptions":not deliverables.get("assumptions") or bool(response["assumptions"]),"uncertainty":not deliverables.get("uncertainty") or bool(unknown or unresolved),"risks":not deliverables.get("risks") or bool(response["risks"]),"ranking":not deliverables.get("ranking") or len(alternatives)>=2,"next_steps":not deliverables.get("next_steps") or bool(response["prioritized_actions"]),"change_triggers":not deliverables.get("change_triggers") or bool(recommendation.get("what_would_change_the_recommendation")),"plan":not horizon or bool(plan.get("phases"))})
     if failures:

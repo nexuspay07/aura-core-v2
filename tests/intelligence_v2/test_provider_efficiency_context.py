@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.intelligence_v2.model_provider import InvalidModelResponseError, MockModelProvider, analysis_max_output_tokens, model_analysis_schema
-from app.intelligence_v2.final_quality import FinalBriefQualityError, _clean_with_rule
+from app.intelligence_v2.final_quality import FinalBriefQualityError, _clean_with_rule, analyze_semantic_completeness, normalized_public_facts
 from app.intelligence_v2.fact_extraction import extract_fact_ledger
 from app.intelligence_v2.quality import requested_deliverables
 from app.intelligence_v2.orchestrator import DecisionAnalysisOrchestrator, RETRY_COMPACTION_PROMPT
@@ -122,7 +122,7 @@ def test_multilingual_content_is_preserved_when_present_in_user_source(session):
     assert "学习进度可能不确定" in brief["risks"]
 
 
-@pytest.mark.parametrize(("recommendation","quality_rule"),[("Study independently, then doing a second,","dangling"),("Study independently while keeping open the later","dangling_english"),("Choose the reversible path without committing to another long, expensive degree right","subordinate_modifier"),("Focus more tightly on income-generating","trailing_modifier")])
+@pytest.mark.parametrize(("recommendation","quality_rule"),[("Study independently, then doing a second,","incomplete_coordination"),("Study independently while keeping open the later","dangling_english"),("Choose the reversible path without committing to another long, expensive degree right","subordinate_modifier"),("Focus more tightly on income-generating","trailing_modifier")])
 def test_dangling_required_recommendation_fails_closed(session, caplog, recommendation, quality_rule):
     current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
     raw=grounded_response();raw["recommended_option"]=recommendation
@@ -140,14 +140,14 @@ def test_required_rationale_diagnostic_identifies_field_without_content(session,
     execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
     with pytest.raises(FinalBriefQualityError) as captured:
         analysis_report(current,execution)
-    assert captured.value.required_field=="rationale" and captured.value.quality_rule=="dangling"
-    assert "required_field=rationale quality_rule=dangling" in caplog.text
+    assert captured.value.required_field=="rationale" and captured.value.quality_rule=="incomplete_coordination"
+    assert "required_field=rationale quality_rule=incomplete_coordination" in caplog.text
     assert raw["rationale"] not in caplog.text
 
 
 @pytest.mark.parametrize("text",["Choose this path,","Choose this path;","Choose this path:","Compare A and","Choose A or","It is safer but","Choose it because","Choose it because."])
 def test_unambiguous_dangling_fragments_remain_rejected(text):
-    assert _clean_with_rule(text,EDUCATION,optional=False,reject_instructions=False)==("","dangling")
+    assert _clean_with_rule(text,EDUCATION,optional=False,reject_instructions=False)==("","incomplete_coordination")
 
 
 @pytest.mark.parametrize("text",["Learning by doing","Learning by doing.","This is the person I spoke with","This is the person I spoke with.","This is what the evidence points to","This is what the evidence points to.","We should act then","We should act then.","LEARNING BY DOING","Learning by doing。"])
@@ -157,12 +157,12 @@ def test_grammatically_complete_ambiguous_terminal_words_are_preserved(text):
 
 @pytest.mark.parametrize("text",["We should compare and then","We should compare and then.","I want to","I want to.","Start doing","Start doing.","A condition with","A condition with."])
 def test_context_proves_ambiguous_terminal_word_is_incomplete(text):
-    assert _clean_with_rule(text,EDUCATION,optional=False,reject_instructions=False)==("","dangling")
+    assert _clean_with_rule(text,EDUCATION,optional=False,reject_instructions=False)==("","incomplete_complement")
 
 
 def test_marker_removal_preserves_complete_gerund_and_rejects_incomplete_subordinator():
     assert _clean_with_rule("Learning by doing [user-query]",EDUCATION,optional=False,reject_instructions=False)==("Learning by doing",None)
-    assert _clean_with_rule("Choose it because [user-query]",EDUCATION,optional=False,reject_instructions=False)==("","dangling")
+    assert _clean_with_rule("Choose it because [user-query]",EDUCATION,optional=False,reject_instructions=False)==("","incomplete_coordination")
 
 
 def test_provider_shaped_ambiguous_rationale_passes_final_quality(session):
@@ -179,7 +179,69 @@ def test_provider_shaped_incomplete_rationale_fails_final_quality(session):
     execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
     with pytest.raises(FinalBriefQualityError) as captured:
         analysis_report(current,execution)
-    assert captured.value.required_field=="rationale" and captured.value.quality_rule=="dangling"
+    assert captured.value.required_field=="rationale" and captured.value.quality_rule=="incomplete_coordination"
+
+
+@pytest.mark.parametrize(("text","rule"),[
+    ("Choose this path if work and self","open_conditional"),("Choose this path if the user","open_conditional"),
+    ("Proceed when financial","open_conditional"),("Do this because formal","open_conditional"),
+    ("If X happens, then","open_conditional"),("Relevant subjects can be explored through self","incomplete_complement"),
+    ("This affects how valuable a formal","incomplete_noun_phrase"),("An additional financial","incomplete_noun_phrase"),
+    ("The strategic","incomplete_noun_phrase"),("Additional degree planning financially","incomplete_noun_phrase"),
+    ("Learning can continue while working, so ‘","unbalanced_quote"),("An unmatched (aside","unbalanced_bracket"),
+])
+def test_structural_semantic_fragments_are_rejected(text,rule):
+    assert analyze_semantic_completeness(text)=={"complete":False,"rule":rule}
+
+
+@pytest.mark.parametrize("text",[
+    "Choose this path if the user confirms funding.","If funding improves, pursue the degree.","Pursue the degree if funding improves.",
+    "We should act then.","Learning by doing.","This is what the evidence points to.","The process is formal.",
+    "The approach is strategic.","Financially stable.","Become financially independent.",
+    "The user's choice is viable.","James' plan is viable.",'Compare "Option A" with "Option B".',"Compare ‘Option A’ with ‘Option B’.",
+])
+def test_structural_semantic_complete_controls_are_preserved(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
+
+
+def test_malformed_required_input_cannot_enter_plan_synthesis(session,monkeypatch):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION));raw=grounded_response();raw["recommended_option"]="Choose this path if work and self"
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current);called=False
+    def forbidden(*_args,**_kwargs):
+        nonlocal called;called=True;raise AssertionError("malformed input reached plan synthesis")
+    monkeypatch.setattr("app.intelligence_v2.quality.final_decision_plan",forbidden)
+    with pytest.raises(FinalBriefQualityError):analysis_report(current,execution)
+    assert called is False
+
+
+def test_final_recursive_validation_rejects_malformed_synthesized_plan(session,monkeypatch):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION));execution=DecisionAnalysisOrchestrator(MockModelProvider(grounded_response())).analyze(current)
+    malformed={"style":"phased","horizon_value":12,"horizon_unit":"months","horizon_label":"12-Month","phases":[{"phase":"Months 1–12","objective":"Test the recommendation","actions":["Act on ‘"],"checkpoint":"Record the result","dependencies":[],"reassessment_trigger":"Material evidence changes the decision"}]}
+    monkeypatch.setattr("app.intelligence_v2.quality.final_decision_plan",lambda *_args,**_kwargs:malformed)
+    with pytest.raises(FinalBriefQualityError) as captured:analysis_report(current,execution)
+    assert captured.value.required_field=="decision_plan" and captured.value.quality_rule=="unbalanced_quote"
+
+
+def test_production_shaped_options_survive_ledger_phase2_and_known(session):
+    prompt=("I am 20 years old and currently studying Information Technology. Education genuinely matters to me. "
+            "I have limited financial resources and my time is a material constraint. My goal is to build companies eventually. "
+            "I have three options: 1. Pursue an immediate degree in economics or finance. "
+            "2. Finish IT, enter the workforce, and learn independently. "
+            "3. Work after graduation but later pursue another degree once I am more financially established. "
+            "Explain the trade-offs and give me a practical plan for the next 12 months.")
+    current=state(session,prompt);ledger=current.request.source_metadata["fact_ledger"]["options"];phase=current.analysis_outputs["phase2"]["options"]
+    known=[item.removeprefix("Option: ") for item in normalized_public_facts(current) if item.startswith("Option: ")]
+    assert len(ledger)==len(phase)==len(known)==3
+    assert ledger==phase==known and "economics or finance" in known[0] and all("Explain" not in item for item in known)
+
+
+@pytest.mark.parametrize(("prompt","expected"),[
+    ("I have two options: 1. Stay employed. 2. Leave for the new role. What should I choose?",["Stay employed","Leave for the new role"]),
+    ("I have four options: 1. Repair. 2. Replace. 3. Defer. 4. Cancel. Explain the trade-offs.",["Repair","Replace","Defer","Cancel"]),
+    ("I have three options:\n1. Enter the workforce\n2. Build practical projects\n3. Pursue a degree in economics or finance\n\nGive me a recommendation.",["Enter the workforce","Build practical projects","Pursue a degree in economics or finance"]),
+])
+def test_numbered_option_boundaries_stop_before_following_requests(prompt,expected):
+    assert extract_fact_ledger(prompt)["options"]==expected
 
 
 def test_malformed_requested_change_condition_fails_closed(session, caplog):
