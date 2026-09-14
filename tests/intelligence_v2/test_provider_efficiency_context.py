@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.intelligence_v2.model_provider import InvalidModelResponseError, MockModelProvider, analysis_max_output_tokens, model_analysis_schema
-from app.intelligence_v2.final_quality import FinalBriefQualityError, _clean_with_rule, analyze_semantic_completeness, normalized_public_facts
+from app.intelligence_v2.final_quality import FinalBriefQualityError, _clean_with_rule, _final_semantic_failure, analyze_semantic_completeness, normalized_public_facts
 from app.intelligence_v2.fact_extraction import extract_fact_ledger
 from app.intelligence_v2.quality import requested_deliverables
 from app.intelligence_v2.orchestrator import DecisionAnalysisOrchestrator, RETRY_COMPACTION_PROMPT
@@ -204,6 +204,80 @@ def test_structural_semantic_complete_controls_are_preserved(text):
     assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
 
 
+@pytest.mark.parametrize("text",[
+    "It's reasonable to work first.","I'm still learning.","You're balancing two priorities.",
+    "The user's goal is education.","The students' priorities differ.",
+    "It’s reasonable to work first.","I’m still learning.","You’re balancing two priorities.",
+    "The user’s goal is education.","The students’ priorities differ.",
+])
+def test_contextual_straight_and_curly_apostrophes_are_preserved(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
+
+
+@pytest.mark.parametrize("text",[
+    'He said "continue working."','He said “continue working.”',"He called it 'practical'.",
+    "He called it ‘practical’.","She said “the option is ‘work first’.”",
+    'She said "the option is ‘work first’."',"She said ‘the option is \"work first\".’",
+])
+def test_balanced_and_nested_quotations_are_preserved(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
+
+
+@pytest.mark.parametrize("text",[
+    'He said "continue working.','He said “continue working.','The recommendation is "work first.',
+    "He called it 'practical.","He called it ‘practical.",
+])
+def test_genuine_unmatched_quotations_remain_rejected(text):
+    assert analyze_semantic_completeness(text)=={"complete":False,"rule":"unbalanced_quote"}
+
+
+@pytest.mark.parametrize("text",['"work first"','"work first".','“work first”','“work first”.'])
+def test_balanced_quote_punctuation_variants_are_preserved(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
+
+
+@pytest.mark.parametrize("text",[
+    'He said "work first”.','He said “work first".',"He said 'work first’.","He said ‘work first'.",
+    'She said “the option is "work first”".',
+])
+def test_mixed_or_crossing_quote_typography_fails_closed(text):
+    assert analyze_semantic_completeness(text)=={"complete":False,"rule":"unbalanced_quote"}
+
+
+@pytest.mark.parametrize("text",["The board is 6' long.","The board is 6′ long and 2″ wide."])
+def test_measurement_and_prime_marks_are_not_unmatched_quotes(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
+
+
+@pytest.mark.parametrize("marker",["[user-query]","[derived:test]","[memory:test]","[document:test]"])
+@pytest.mark.parametrize(("template","valid"),[
+    ('He said "work first." {}',True),('He said "work first. {}',False),
+    ('He said {} "work first."',True),('He said {} "work first.',False),
+])
+def test_quote_verdict_is_stable_across_evidence_marker_removal(marker,template,valid):
+    text=template.format(marker);clean,rule=_clean_with_rule(text,EDUCATION,optional=False,reject_instructions=False)
+    assert bool(clean) is valid
+    assert rule is None if valid else rule=="unbalanced_quote"
+
+
+@pytest.mark.parametrize("text",["Il faut d’abord comparer les options.","彼は「まず働く」と言った。"])
+def test_supported_multilingual_apostrophe_and_quote_controls_are_preserved(text):
+    assert _clean_with_rule(text,text+" This is sufficient source context.",optional=False,reject_instructions=False)==(text,None)
+
+
+@pytest.mark.parametrize(("text","english","valid"),[
+    ("The user's goal is education.",True,True),("The user’s goal is education.",True,True),
+    ('He said “continue working.',True,False),("Il faut d’abord comparer les options.",True,True),
+    ("彼は「まず働く」と言った。",False,True),
+])
+def test_stage_one_and_stage_two_share_quote_language_contract(text,english,valid):
+    source=EDUCATION if english else "教育の選択肢を比較してください。"
+    clean,rule=_clean_with_rule(text,source,optional=False,reject_instructions=False)
+    recursive=_final_semantic_failure({"analysis":text},source)
+    assert bool(clean) is valid
+    assert recursive is None if valid else recursive==("analysis",rule)
+
+
 def test_malformed_required_input_cannot_enter_plan_synthesis(session,monkeypatch):
     current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION));raw=grounded_response();raw["recommended_option"]="Choose this path if work and self"
     execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current);called=False
@@ -357,6 +431,24 @@ def test_problem_understanding_open_article_uses_safe_quality_failure(session,ca
     with pytest.raises(FinalBriefQualityError) as captured:analysis_report(current,execution)
     assert captured.value.required_field=="problem_understanding" and captured.value.quality_rule=="incomplete_article"
     assert raw["problem_summary"] not in caplog.text
+
+
+@pytest.mark.parametrize("rationale",["It’s reasonable to work first.","The user’s goal supports this reversible option."])
+def test_provider_shaped_curly_apostrophe_rationale_reaches_final_brief(session,rationale):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["rationale"]=rationale
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,_=analysis_report(current,execution)
+    assert execution.status=="READY" and brief["recommendation"]["rationale"]==rationale
+
+
+def test_provider_shaped_unmatched_quote_rationale_still_fails_safely(session,caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["rationale"]="He called it ‘practical."
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    with pytest.raises(FinalBriefQualityError) as captured:analysis_report(current,execution)
+    assert captured.value.required_field=="rationale" and captured.value.quality_rule=="unbalanced_quote"
+    assert raw["rationale"] not in caplog.text
 
 
 @pytest.mark.parametrize("boundary",["-","‑","–","—"])
