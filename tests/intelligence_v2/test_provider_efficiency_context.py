@@ -122,7 +122,7 @@ def test_multilingual_content_is_preserved_when_present_in_user_source(session):
     assert "学习进度可能不确定" in brief["risks"]
 
 
-@pytest.mark.parametrize(("recommendation","quality_rule"),[("Study independently, then doing a second,","incomplete_coordination"),("Study independently while keeping open the later","dangling_english"),("Choose the reversible path without committing to another long, expensive degree right","subordinate_modifier"),("Focus more tightly on income-generating","trailing_modifier")])
+@pytest.mark.parametrize(("recommendation","quality_rule"),[("Study independently, then doing a second,","incomplete_coordination"),("Choose a","incomplete_article"),("Choose the reversible path without committing to another long, expensive degree right","subordinate_modifier"),("Focus more tightly on income-generating","trailing_modifier")])
 def test_dangling_required_recommendation_fails_closed(session, caplog, recommendation, quality_rule):
     current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
     raw=grounded_response();raw["recommended_option"]=recommendation
@@ -258,7 +258,7 @@ def test_malformed_requested_change_condition_fails_closed(session, caplog):
 def test_terminal_article_fragment_is_rejected_case_insensitively(article):
     text=f"A complete thought. {article}"
     clean,rule=_clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)
-    assert clean=="" and rule in {"sentence_fragment","dangling_english"}
+    assert clean=="" and rule=="sentence_fragment"
 
 
 @pytest.mark.parametrize("text",["Compare Route A","Choose Program A","Evaluate Track A","Review Scenario A","Use Degree A"])
@@ -268,7 +268,64 @@ def test_terminal_uppercase_label_is_preserved_contextually(text):
 
 @pytest.mark.parametrize("text",["Choose a","Compare an","Evaluate the"])
 def test_lowercase_terminal_articles_remain_rejected(text):
-    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==("","dangling_english")
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==("","incomplete_article")
+
+
+@pytest.mark.parametrize("text",["Choose a","Choose a.","Compare an","Compare an.","Evaluate the","Evaluate the."])
+def test_contextual_open_articles_are_punctuation_neutral(text):
+    assert analyze_semantic_completeness(text)=={"complete":False,"rule":"incomplete_article"}
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==("","incomplete_article")
+
+
+@pytest.mark.parametrize("text",["A complete thought. A","A complete thought. A."])
+def test_isolated_terminal_letter_is_punctuation_neutral(text):
+    assert analyze_semantic_completeness(text)=={"complete":False,"rule":"sentence_fragment"}
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==("","sentence_fragment")
+
+
+@pytest.mark.parametrize("text",["I prefer the former","I prefer the former.","Choose the later","Choose the later."])
+def test_complete_nominal_constructions_are_preserved(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==(text,None)
+
+
+@pytest.mark.parametrize("text",["Use variable a","Let the coefficient be a","The selected name is An","The category is AN"])
+def test_terminal_designators_are_preserved_without_a_noun_allowlist(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==(text,None)
+
+
+@pytest.mark.parametrize("text",["Compare Offer A","Compare Option A"])
+def test_additional_uppercase_labels_remain_valid(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==(text,None)
+
+
+@pytest.mark.parametrize(("text","expected"),[
+    ('Choose "a"','Choose "a"'),("Choose (a)","Choose (a)"),
+    ('Use variable "a"','Use variable "a"'),("Use variable (a)","Use variable (a)"),
+])
+def test_balanced_designators_are_preserved(text,expected):
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==(expected,None)
+
+
+@pytest.mark.parametrize(("text","expected","rule"),[
+    ("Choose a [user-query]","", "incomplete_article"),
+    ("Choose a. [user-query]","", "incomplete_article"),
+    ("Use variable a [user-query]","Use variable a",None),
+    ("I prefer the former [user-query]","I prefer the former",None),
+])
+def test_article_verdict_is_stable_after_evidence_marker_removal(text,expected,rule):
+    assert _clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)==(expected,rule)
+
+
+@pytest.mark.parametrize(("text","expected"),[("Choose a",False),("Choose a.",False),("Use variable a",True),("I prefer the former.",True)])
+def test_stage_one_and_recursive_structural_contract_agree(text,expected):
+    structural=analyze_semantic_completeness(text)
+    cleaned,rule=_clean_with_rule(text,"An English decision request.",optional=False,reject_instructions=False)
+    assert structural["complete"] is expected
+    assert bool(cleaned) is expected
+    assert rule==structural["rule"]
 
 
 @pytest.mark.parametrize(("text","expected"),[("Compare Route A [user-query]","Compare Route A"),("Compare Route A.","Compare Route A."),("Compare Route A","Compare Route A")])
@@ -282,6 +339,24 @@ def test_problem_understanding_terminal_label_passes_final_quality(session):
     execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
     brief,_=analysis_report(current,execution)
     assert execution.status=="READY" and brief["problem_understanding"]=="Compare Route A"
+
+
+@pytest.mark.parametrize("summary",["I prefer the former","Use variable a"])
+def test_problem_understanding_contextual_article_control_passes_final_quality(session,summary):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["problem_summary"]=summary
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,_=analysis_report(current,execution)
+    assert execution.status=="READY" and brief["problem_understanding"]==summary
+
+
+def test_problem_understanding_open_article_uses_safe_quality_failure(session,caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["problem_summary"]="Choose a."
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    with pytest.raises(FinalBriefQualityError) as captured:analysis_report(current,execution)
+    assert captured.value.required_field=="problem_understanding" and captured.value.quality_rule=="incomplete_article"
+    assert raw["problem_summary"] not in caplog.text
 
 
 @pytest.mark.parametrize("boundary",["-","‑","–","—"])

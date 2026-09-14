@@ -23,13 +23,10 @@ _SENTENCE_TERMINATOR=r"[.!?\u3002\uff01\uff1f]?"
 _DANGLING=re.compile(rf"(?:[,;:]|\b(?:and|or|but|because)){_SENTENCE_TERMINATOR}\s*$",re.I)
 _AMBIGUOUS_DANGLING=re.compile(rf"(?:\b(?:and|or|but)\s+(?:then|doing|with|to)|\bthen\s+(?:doing|with|to)|\b(?:want|need|intend|plan|aim|try|attempt|expect|hope|decide|choose|going|able|ready)\s+to|\b(?:start|begin|continue|keep)\s+doing|\b(?:a|an|the|this|that|each|any)\s+[\w'-]+\s+with){_SENTENCE_TERMINATOR}\s*$",re.I)
 _REQUEST_INSTRUCTION=re.compile(r"^\s*(?:please\s+)?(?:give|provide|show|tell|explain|include|write|create|describe|outline|list)\b",re.I)
-_DANGLING_ENGLISH=re.compile(r"(?:\b(?:a|an|the)|\bthe\s+(?:later|former))\s*$",re.I)
 _GENERIC_PLAN=re.compile(r"\b(?:terms and constraints that differ across the options|smallest reversible test supported by the available resources|update the decision using confirmed evidence)\b",re.I)
 _TRAILING_MODIFIER=re.compile(r"\b[a-z]+-[a-z]*(?:ing|ed|ive|al|ic|ous|able|ible|ary|ory|ful|less)$",re.I)
 _TERMINAL_DEGREE_MODIFIER=re.compile(r"\b(?:right|more|less|very|too|quite|rather|almost|nearly)$",re.I)
 _TRAILING_BOUNDARY=re.compile(r"[-\u2011\u2013\u2014]\s*$")
-_TERMINAL_SENTENCE_FRAGMENT=re.compile(r"(?:^|[.!?]\s+)[A-Za-z]\s*$")
-_TERMINAL_UPPERCASE_LABEL=re.compile(r"\S\s+A$")
 _SCRIPT=re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]")
 _MOJIBAKE=re.compile(r"(?:Ã.|Â.|â[\x80-\xbf]|å.{0,5}ä)")
 
@@ -66,6 +63,7 @@ def analyze_semantic_completeness(text):
     text=text.strip();pair_rule=_unbalanced_pair_rule(text)
     if pair_rule:return {"complete":False,"rule":pair_rule}
     core=re.sub(r"[.!?\u3002\uff01\uff1f]+$","",text).strip()
+    if re.search(r"(?:^|[.!?]\s+)(?:[A-Za-z]|a|an|the)\s*$",core,re.I):return {"complete":False,"rule":"sentence_fragment"}
     if re.search(r"(?:[,;:]|\b(?:and|or|but|because))$",core,re.I):return {"complete":False,"rule":"incomplete_coordination"}
     matches=list(_SUBORDINATOR.finditer(core))
     if matches:
@@ -81,6 +79,14 @@ def analyze_semantic_completeness(text):
     if re.search(r"\b(?:through|via)\s+self$",core,re.I):return {"complete":False,"rule":"incomplete_complement"}
     if re.search(r"\b(?:and|or|but)\s+(?:then|doing|with|to)$",core,re.I) or re.search(r"\b(?:want|need|intend|plan|aim|try|attempt|expect|hope|decide|choose|going|able|ready)\s+to$",core,re.I):return {"complete":False,"rule":"incomplete_complement"}
     if re.search(r"\b(?:start|begin|continue|keep)\s+doing$",core,re.I) or re.search(r"\b(?:a|an|the|this|that|each|any)\s+[\w'-]+\s+with$",core,re.I):return {"complete":False,"rule":"incomplete_complement"}
+    article_match=re.search(r"\b(a|an|the)$",core)
+    if article_match:
+        prefix=core[:article_match.start()].rstrip()
+        # A bare lower-case article after an object-taking predicate opens a
+        # missing noun phrase. Case-significant and delimited forms remain
+        # available for names, labels, grades, variables, and other designators.
+        predicate=r"(?:choose|compare|evaluate|select|use|consider|pick|review|assess|prefer|take|pursue|adopt|recommend|is|are|was|were|become|becomes|became)"
+        if re.search(rf"(?:^|\s){predicate}$",prefix,re.I):return {"complete":False,"rule":"incomplete_article"}
     words=re.findall(r"[A-Za-z][A-Za-z'-]*",core)
     first=next((word for word in words if word.lower() not in {"a","an","the"}),"")
     if words and words[-1].lower().endswith("ly") and _ADJECTIVE_FORM.fullmatch(first) and not re.search(r"\b(?:is|are|was|were|be|become|becomes|became|remain|remains|stays?|seems?|appears?)\b",core,re.I):return {"complete":False,"rule":"incomplete_noun_phrase"}
@@ -107,10 +113,8 @@ def _clean_with_rule(value,source,*,optional=True,reject_instructions=True):
     structure=analyze_semantic_completeness(text)
     if english and not structure["complete"]:return "", structure["rule"]
     if _TRAILING_BOUNDARY.search(text):return "", "trailing_boundary"
-    if english and _TERMINAL_SENTENCE_FRAGMENT.search(text):return "", "sentence_fragment"
     if _DANGLING.search(text):return "", "dangling"
     if english and _AMBIGUOUS_DANGLING.search(text):return "", "dangling"
-    if english and _DANGLING_ENGLISH.search(text) and not _TERMINAL_UPPERCASE_LABEL.search(text):return "", "dangling_english"
     if english and unfinished_modifier:return "", "trailing_modifier"
     if english and unfinished_degree:return "", "subordinate_modifier"
     return text, None
