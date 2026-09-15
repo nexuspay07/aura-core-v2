@@ -8,6 +8,18 @@ from enum import Enum
 
 logger=logging.getLogger("uvicorn.error")
 
+# Semantic roots in the canonical Personal Ask display DTO. Transport metadata
+# is intentionally outside this contract. Nested dictionaries/lists below
+# these roots are traversed recursively by the terminal quality gate.
+DISPLAY_DTO_SEMANTIC_ROOTS=(
+    "problem_understanding","analysis","key_facts","derived_facts","alternatives",
+    "risks","goals","goal_tensions","resources","constraints","resource_risks",
+    "trends","decision_drivers","uncertainties","causal_effects",
+    "prioritized_actions","unresolved_questions","limitations","assumptions",
+    "confidence_rationale","what_would_change_recommendation","recommendation",
+    "evidence_quality","decision_plan","next_move","what_changed",
+)
+
 
 class QualitySeverity(str,Enum):
     HARD_FAILURE="hard_failure"
@@ -182,19 +194,7 @@ def _semantic_structure(value,source):
     return value
 
 def _final_semantic_failure(response,source):
-    fields={
-        "problem_understanding":response.get("problem_understanding"),"analysis":response.get("analysis"),
-        "key_facts":response.get("key_facts"),"derived_facts":response.get("derived_facts"),"alternatives":response.get("alternatives"),
-        "risks":response.get("risks"),"goals":response.get("goals"),"goal_tensions":response.get("goal_tensions"),
-        "resources":response.get("resources"),"constraints":response.get("constraints"),"resource_risks":response.get("resource_risks"),
-        "trends":response.get("trends"),"decision_drivers":response.get("decision_drivers"),"uncertainties":response.get("uncertainties"),
-        "causal_effects":response.get("causal_effects"),"prioritized_actions":response.get("prioritized_actions"),
-        "unresolved_questions":response.get("unresolved_questions"),"limitations":response.get("limitations"),
-        "assumptions":response.get("assumptions"),"confidence_rationale":response.get("confidence_rationale"),
-        "what_would_change_recommendation":response.get("what_would_change_recommendation"),
-        "recommendation":response.get("recommendation"),"evidence_quality":response.get("evidence_quality"),
-        "decision_plan":response.get("decision_plan"),"next_move":response.get("next_move"),"what_changed":response.get("what_changed"),
-    }
+    fields={field:response.get(field) for field in DISPLAY_DTO_SEMANTIC_ROOTS}
     def visit(value):
         if isinstance(value,str):
             if not value.strip():return None
@@ -267,7 +267,7 @@ def finalize_decision_brief(response,state):
     started=time.perf_counter();source=state.request.user_query;failures=[]
     logger.warning("final_quality_stage=started")
     response["key_facts"]=normalized_public_facts(state)
-    for key in ("derived_facts","risks","goals","decision_drivers","uncertainties","prioritized_actions","what_would_change_recommendation","limitations"):
+    for key in ("derived_facts","risks","goals","decision_drivers","uncertainties","prioritized_actions","limitations"):
         response[key]=_list(response.get(key),source,key,reject_source_copy=True)
     internal_fields={gap.field.lower() for gap in state.information_gaps}
     response["limitations"]=[item for item in response["limitations"] if not any(re.search(rf"\b{re.escape(field)}\b",item,re.I) for field in internal_fields)]
@@ -281,8 +281,16 @@ def finalize_decision_brief(response,state):
     recommendation=response.get("recommendation",{})
     recommendation["recommended_option"],option_rule=_clean_with_rule(recommendation.get("recommended_option"),source,optional=False,reject_instructions=False,reject_source_copy=True,field="recommended_option")
     recommendation["rationale"],rationale_rule=_clean_with_rule(recommendation.get("rationale"),source,optional=False,reject_instructions=False,reject_source_copy=True,field="rationale")
-    recommendation["prerequisites"]=_list(recommendation.get("prerequisites"),source,"prerequisites",True);recommendation["what_would_change_the_recommendation"]=_list(recommendation.get("what_would_change_the_recommendation"),source,"recommendation_change_conditions",True)
-    response["analysis"],analysis_rule=_clean_with_rule(response.get("analysis"),source,optional=False,reject_source_copy=True,field="analysis")
+    recommendation["prerequisites"]=_list(recommendation.get("prerequisites"),source,"prerequisites",True)
+    # One normalization authority: the nested recommendation collection is
+    # canonical. The top-level compatibility field is projected only after
+    # degradation, so removed items cannot survive through an alias.
+    canonical_change_conditions=_list(recommendation.get("what_would_change_the_recommendation"),source,"recommendation_change_conditions",True)
+    recommendation["what_would_change_the_recommendation"]=canonical_change_conditions
+    response["what_would_change_recommendation"]=list(canonical_change_conditions)
+    # recommendation.rationale is the display authority. `analysis` remains a
+    # compatibility projection and is never independently cleaned or repaired.
+    response["analysis"]=recommendation["rationale"]
     response["problem_understanding"],problem_rule=_clean_with_rule(response.get("problem_understanding"),source,optional=False,reject_source_copy=True,field="problem_understanding")
     unresolved=_list(response.get("unresolved_questions"),source,"unresolved_questions",True)
     unresolved,uncertainty_keys=_dedupe_uncertainties(unresolved,state)
@@ -297,7 +305,7 @@ def finalize_decision_brief(response,state):
     response["goal_tensions"]=tensions
     for key in ("resources","constraints","resource_risks","trends","causal_effects","confidence_rationale","what_changed"):
         response[key]=_semantic_structure(response.get(key,[]),source)
-    required_failure=("recommended_option",option_rule) if not recommendation.get("recommended_option") else (("rationale",rationale_rule) if not recommendation.get("rationale") else (("analysis",analysis_rule) if not response.get("analysis") else (("problem_understanding",problem_rule) if not response.get("problem_understanding") else None)))
+    required_failure=("recommended_option",option_rule) if not recommendation.get("recommended_option") else (("rationale",rationale_rule) if not recommendation.get("rationale") else (("problem_understanding",problem_rule) if not response.get("problem_understanding") else None))
     if required_failure:
         required_field,quality_rule=required_failure
         logger.warning("final_quality_stage=failed failure_category=malformed_required_section required_field=%s quality_rule=%s quality_action=hard_failure",required_field,quality_rule or "unknown")

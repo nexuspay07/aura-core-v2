@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.intelligence_v2.model_provider import InvalidModelResponseError, MockModelProvider, analysis_max_output_tokens, model_analysis_schema
-from app.intelligence_v2.final_quality import FinalBriefQualityError, QualitySeverity, _clean_with_rule, _final_semantic_failure, _quality_severity, analyze_semantic_completeness, normalized_public_facts
+from app.intelligence_v2.final_quality import DISPLAY_DTO_SEMANTIC_ROOTS, FinalBriefQualityError, QualitySeverity, _clean_with_rule, _final_semantic_failure, _quality_severity, analyze_semantic_completeness, normalized_public_facts
 from app.intelligence_v2.fact_extraction import extract_fact_ledger
 from app.intelligence_v2.quality import requested_deliverables
 from app.intelligence_v2.orchestrator import DecisionAnalysisOrchestrator, RETRY_COMPACTION_PROMPT
@@ -607,6 +607,39 @@ def test_production_shaped_education_brief_has_integrity_without_provider_networ
     assert prompt not in known and not leaks,leaks
     assert rendered.count("Cost and financial runway affect feasibility")==0
     assert brief["next_move"] and not brief["next_move"].startswith("Check whether")
+
+
+def test_display_dto_has_one_rationale_and_change_condition_authority(session,caplog):
+    current=decision_v2_service.proceed_with_assumptions(state(session,EDUCATION))
+    raw=grounded_response();raw["rationale"]="This preserves flexibility while evidence develops—"
+    malformed="Choose another path or"
+    retained="Verified outcomes make another path materially stronger"
+    raw["recommendation_change_conditions"]=[malformed,retained]
+    execution=DecisionAnalysisOrchestrator(MockModelProvider(raw)).analyze(current)
+    brief,report=analysis_report(current,execution)
+    canonical=brief["recommendation"]
+    assert canonical["rationale"]=="This preserves flexibility while evidence develops"
+    assert brief["analysis"]==canonical["rationale"]
+    assert canonical["what_would_change_the_recommendation"]==[retained]
+    assert brief["what_would_change_recommendation"]==canonical["what_would_change_the_recommendation"]
+    assert json.dumps(report["executive_report"],sort_keys=True)==json.dumps(brief,sort_keys=True)
+    assert caplog.text.count("required_field=recommendation_change_conditions quality_rule=incomplete_coordination")==1
+    serialized=json.dumps(brief,ensure_ascii=False)
+    assert malformed not in serialized
+    assert malformed not in json.dumps(brief["decision_plan"],ensure_ascii=False)
+    assert brief["next_move"]!=malformed
+
+
+def test_terminal_display_contract_covers_every_personal_ask_semantic_root():
+    rendered_roots={
+        "problem_understanding","analysis","key_facts","derived_facts","alternatives",
+        "risks","goals","goal_tensions","resources","constraints","trends",
+        "decision_drivers","uncertainties","causal_effects","prioritized_actions",
+        "unresolved_questions","assumptions","confidence_rationale",
+        "what_would_change_recommendation","recommendation","evidence_quality",
+        "decision_plan","next_move",
+    }
+    assert rendered_roots <= set(DISPLAY_DTO_SEMANTIC_ROOTS)
 
 
 def test_evidence_ids_are_derived_from_option_grounding(session):
