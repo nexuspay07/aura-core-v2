@@ -225,7 +225,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
             db.rollback()
             _failure(execution.status, execution.usage)
         try:
-            response, report = analysis_report(state, execution)
+            response, report = analysis_report(state,execution,semantic_classifier=decision_analysis_orchestrator.classify_semantic_quality)
         except FinalBriefQualityError:
             return _save_partial(db,state=state,session_id=session_id,message=message,answers=answers,usage=execution.usage)
         log_provider_stage(execution.usage.get("provider_attempt","initial"),"brief_constructed")

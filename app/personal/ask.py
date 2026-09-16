@@ -157,7 +157,7 @@ def clarification_response(state: DecisionState, *, session_id: int) -> dict[str
     }
 
 
-def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], dict[str, Any]]:
+def analysis_report(state: DecisionState, execution, *, semantic_classifier=None) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build the user-safe response and save-compatible report projection."""
 
     result = execution.result
@@ -236,5 +236,5 @@ def analysis_report(state: DecisionState, execution) -> tuple[dict[str, Any], di
         },
     }
     from app.intelligence_v2.final_quality import finalize_decision_brief
-    response = finalize_decision_brief(response, state)
+    response = finalize_decision_brief(response,state,semantic_classifier=semantic_classifier,generation_usage=execution.usage)
     return response, {"executive_report": response}

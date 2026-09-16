@@ -116,6 +116,10 @@ class DecisionAnalysisOrchestrator:
             return AnalysisExecution("ANALYSIS_FAILED",None,None,["Grounding validation failed."],findings,{**usage,"failure_stage":"grounding_validation","validation_categories":categories,"validation_finding_count":len(rejected),"rejected_numeric_values":rejected_numbers})
         confidence,rationale=self._recommendation_confidence(state,result)
         return AnalysisExecution("READY",result,confidence,rationale,findings,usage)
+    def classify_semantic_quality(self,candidates):
+        method=getattr(self.provider,"generate_semantic_quality",None)
+        if not callable(method):raise ProviderUnavailableError("Semantic classifier is unavailable","provider_unavailable")
+        return method(candidates=candidates,timeout_seconds=analysis_timeout_seconds())
     @staticmethod
     def _repair_numeric_claims(value,numbers):
         def repair_text(text):

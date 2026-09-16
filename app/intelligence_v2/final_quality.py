@@ -6,6 +6,8 @@ import re
 import time
 from enum import Enum
 
+from app.intelligence_v2.model_provider import InvalidModelResponseError, ProviderTimeoutError, ProviderUnavailableError, SEMANTIC_QUALITY_FIELD_IDS, SEMANTIC_QUALITY_REASONS, SEMANTIC_QUALITY_RESULTS, analysis_max_output_tokens
+
 logger=logging.getLogger("uvicorn.error")
 
 # Semantic roots in the canonical Personal Ask display DTO. Transport metadata
@@ -25,6 +27,11 @@ class QualitySeverity(str,Enum):
     HARD_FAILURE="hard_failure"
     RECOVERABLE="recoverable"
     FIELD_DEGRADATION="field_degradation"
+
+class SemanticRouting(str,Enum):
+    COMPLETE="complete"
+    INCOMPLETE="incomplete"
+    AMBIGUOUS="ambiguous"
 
 
 class FinalBriefQualityError(RuntimeError):
@@ -134,10 +141,19 @@ def _quality_severity(*,optional=False,recoverable=False):
     if recoverable:return QualitySeverity.RECOVERABLE
     return QualitySeverity.FIELD_DEGRADATION if optional else QualitySeverity.HARD_FAILURE
 
-def _quality_event(action,field,rule):
+def _quality_event(action,field,rule,trace=None):
     logger.warning("final_quality_stage=recovered quality_action=%s required_field=%s quality_rule=%s",action,field,rule)
+    if trace is not None:trace.append({"action":action,"field":field,"rule":rule})
 
-def _clean_with_rule(value,source,*,optional=True,reject_instructions=True,reject_source_copy=False,field="unknown",allow_recovery=True):
+def _semantic_event(stage,**values):
+    safe={"stage":stage}
+    allow={"trigger":{"boundary_recovery","recovery_cluster","output_headroom","field_length_proximity","call_budget_exhausted","none"},"field":set(SEMANTIC_QUALITY_FIELD_IDS),"result":set(SEMANTIC_QUALITY_RESULTS),"action":{"retained","degraded","safe_failure","skipped_call_budget","none"},"failure":{"timeout","unavailable","invalid_schema","none"}}
+    for key,allowed in allow.items():
+        value=values.get(key)
+        if value in allowed:safe[key]=value
+    logger.warning(" ".join([f"semantic_quality_stage={safe.pop('stage')}",*[f"semantic_quality_{key}={value}" for key,value in safe.items()]]))
+
+def _clean_with_rule(value,source,*,optional=True,reject_instructions=True,reject_source_copy=False,field="unknown",allow_recovery=True,trace=None):
     if not isinstance(value,str): return "", "empty_after_normalization"
     text=re.sub(r"Monthly budget appears able to absorb ownership costs better given a (\$[\d,]+) surplus\.?",r"You currently have a \1 monthly surplus before any additional car-related costs.",value,flags=re.I)
     text=_MACHINE_PREFIX.sub("",_INTERNAL_ID.sub("",text)).strip(" \t\r\n•")
@@ -145,7 +161,7 @@ def _clean_with_rule(value,source,*,optional=True,reject_instructions=True,rejec
     collapsed=re.sub(r"([.!?])\1+$",r"\1",text)
     if collapsed!=text:
         text=collapsed
-        if allow_recovery:_quality_event("repaired",field,"duplicate_punctuation")
+        if allow_recovery:_quality_event("repaired",field,"duplicate_punctuation",trace)
     normalized_source=re.sub(r"\s+"," ",str(source)).strip()
     if reject_source_copy and text==normalized_source:return "", "source_copy"
     if reject_instructions and (_INSTRUCTION.search(text) or _REQUEST_INSTRUCTION.search(text)): return "", "instruction"
@@ -162,9 +178,9 @@ def _clean_with_rule(value,source,*,optional=True,reject_instructions=True,rejec
     if _TRAILING_BOUNDARY.search(text):
         candidate=_TRAILING_BOUNDARY.sub("",text).rstrip()
         if _quality_severity(recoverable=allow_recovery) is QualitySeverity.RECOVERABLE and candidate:
-            repaired,_=_clean_with_rule(candidate,source,optional=optional,reject_instructions=reject_instructions,reject_source_copy=reject_source_copy,field=field,allow_recovery=False)
+            repaired,_=_clean_with_rule(candidate,source,optional=optional,reject_instructions=reject_instructions,reject_source_copy=reject_source_copy,field=field,allow_recovery=False,trace=trace)
             if repaired:
-                _quality_event("repaired",field,"trailing_boundary")
+                _quality_event("repaired",field,"trailing_boundary",trace)
                 return repaired,None
         return "", "trailing_boundary"
     if _DANGLING.search(text):return "", "dangling"
@@ -176,14 +192,71 @@ def _clean_with_rule(value,source,*,optional=True,reject_instructions=True,rejec
 def _clean(value,source,*,optional=True,reject_instructions=True,reject_source_copy=False,field="unknown"):
     return _clean_with_rule(value,source,optional=optional,reject_instructions=reject_instructions,reject_source_copy=reject_source_copy,field=field)[0]
 
-def _list(values,source,field="optional_item",reject_source_copy=False):
+def _list(values,source,field="optional_item",reject_source_copy=False,trace=None):
     result=[]
     for value in values or []:
-        clean,rule=_clean_with_rule(value,source,reject_source_copy=reject_source_copy,field=field)
+        clean,rule=_clean_with_rule(value,source,reject_source_copy=reject_source_copy,field=field,trace=trace)
         if clean and clean.lower() not in {item.lower() for item in result}:result.append(clean)
-        elif clean and _quality_severity(optional=True) is QualitySeverity.FIELD_DEGRADATION:_quality_event("degraded",field,"duplicate_item")
-        elif rule and _quality_severity(optional=True) is QualitySeverity.FIELD_DEGRADATION:_quality_event("degraded",field,rule)
+        elif clean and _quality_severity(optional=True) is QualitySeverity.FIELD_DEGRADATION:_quality_event("degraded",field,"duplicate_item",trace)
+        elif rule and _quality_severity(optional=True) is QualitySeverity.FIELD_DEGRADATION:_quality_event("degraded",field,rule,trace)
     return result
+
+_SEMANTIC_MAX_LENGTH={"problem_understanding":280,"recommended_option":200,"rationale":600,"alternative_option":160,"alternative_benefit":180,"alternative_downside":180,"condition_for_success":180,"risk":180,"unresolved_question":180,"recommendation_change_condition":180}
+
+def _semantic_candidates(response):
+    result=[]
+    def add(field_id,value,path,optional,index):
+        if isinstance(value,str) and value.strip():result.append({"field_id":field_id,"item_index":index,"text":value,"path":path,"optional":optional})
+    add("problem_understanding",response.get("problem_understanding"),("problem_understanding",),False,0)
+    recommendation=response.get("recommendation",{})
+    add("recommended_option",recommendation.get("recommended_option"),("recommendation","recommended_option"),False,0)
+    add("rationale",recommendation.get("rationale"),("recommendation","rationale"),False,0)
+    indexes={field:0 for field in SEMANTIC_QUALITY_FIELD_IDS}
+    for alternative_index,alternative in enumerate(response.get("alternatives",[])):
+        field="alternative_option";add(field,alternative.get("option"),("alternatives",alternative_index,"option"),False,indexes[field]);indexes[field]+=1
+        for key,field in (("benefits","alternative_benefit"),("downsides","alternative_downside"),("conditions_for_success","condition_for_success")):
+            for item_index,item in enumerate(alternative.get(key,[])):
+                add(field,item,("alternatives",alternative_index,key,item_index),True,indexes[field]);indexes[field]+=1
+    for key,field in (("risks","risk"),("unresolved_questions","unresolved_question")):
+        for item_index,item in enumerate(response.get(key,[])):
+            add(field,item,(key,item_index),True,indexes[field]);indexes[field]+=1
+    for item_index,item in enumerate(recommendation.get("what_would_change_the_recommendation",[])):
+        field="recommendation_change_condition";add(field,item,("recommendation","what_would_change_the_recommendation",item_index),True,indexes[field]);indexes[field]+=1
+    return result
+
+def route_semantic_ambiguity(response,trace,usage):
+    candidates=_semantic_candidates(response);triggers=[]
+    boundary_fields={event["field"] for event in trace if event["action"]=="repaired" and event["rule"]=="trailing_boundary"}
+    field_map={"problem_understanding":"problem_understanding","recommended_option":"recommended_option","rationale":"rationale","benefits":"alternative_benefit","downsides":"alternative_downside","conditions_for_success":"condition_for_success","risks":"risk","unresolved_questions":"unresolved_question","recommendation_change_conditions":"recommendation_change_condition"}
+    ambiguous=set()
+    for candidate_index,candidate in enumerate(candidates):
+        if candidate["field_id"] in {field_map.get(field) for field in boundary_fields}:ambiguous.add(candidate_index)
+        maximum=_SEMANTIC_MAX_LENGTH[candidate["field_id"]]
+        if len(candidate["text"])>=int(maximum*.9):ambiguous.add(candidate_index);triggers.append("field_length_proximity")
+    if boundary_fields:triggers.append("boundary_recovery")
+    independent={(event["field"],event["rule"]) for event in trace}
+    if len(independent)>=2:ambiguous.update(range(len(candidates)));triggers.append("recovery_cluster")
+    output_tokens=usage.get("output_tokens")
+    if isinstance(output_tokens,int) and output_tokens>=int(analysis_max_output_tokens()*.9):ambiguous.update(range(len(candidates)));triggers.append("output_headroom")
+    return SemanticRouting.AMBIGUOUS if ambiguous else SemanticRouting.COMPLETE,[candidates[index] for index in sorted(ambiguous)],list(dict.fromkeys(triggers))
+
+def _validate_semantic_results(raw,candidates):
+    if not isinstance(raw,dict) or not isinstance(raw.get("results"),list) or len(raw["results"])!=len(candidates):raise ValueError("invalid semantic classifier schema")
+    expected={(item["field_id"],item["item_index"]) for item in candidates};seen=set();result={}
+    for item in raw["results"]:
+        if not isinstance(item,dict) or set(item)!={"field_id","item_index","result","reason"}:raise ValueError("invalid semantic classifier schema")
+        key=(item["field_id"],item["item_index"])
+        if key not in expected or key in seen or item["result"] not in SEMANTIC_QUALITY_RESULTS or item["reason"] not in SEMANTIC_QUALITY_REASONS:raise ValueError("invalid semantic classifier schema")
+        seen.add(key);result[key]=item
+    return result
+
+def _remove_semantic_paths(response,paths):
+    for path in sorted(paths,key=lambda value:tuple(str(item) for item in value),reverse=True):
+        parent=response
+        for key in path[:-1]:parent=parent[key]
+        last=path[-1]
+        if isinstance(last,int):parent.pop(last)
+        else:parent.pop(last,None)
 
 def _semantic_structure(value,source):
     if isinstance(value,str):return _clean(value,source)
@@ -263,35 +336,31 @@ def _plan(plan,source):
     normalized["phases"]=phases
     return normalized
 
-def finalize_decision_brief(response,state):
-    started=time.perf_counter();source=state.request.user_query;failures=[]
+def finalize_decision_brief(response,state,*,semantic_classifier=None,generation_usage=None):
+    started=time.perf_counter();source=state.request.user_query;failures=[];quality_trace=[];generation_usage=generation_usage or {}
     logger.warning("final_quality_stage=started")
     response["key_facts"]=normalized_public_facts(state)
     for key in ("derived_facts","risks","goals","decision_drivers","uncertainties","prioritized_actions","limitations"):
-        response[key]=_list(response.get(key),source,key,reject_source_copy=True)
+        response[key]=_list(response.get(key),source,key,reject_source_copy=True,trace=quality_trace if key in {"risks","unresolved_questions"} else None)
     internal_fields={gap.field.lower() for gap in state.information_gaps}
     response["limitations"]=[item for item in response["limitations"] if not any(re.search(rf"\b{re.escape(field)}\b",item,re.I) for field in internal_fields)]
     alternatives=[]
     for item in response.get("alternatives",[]):
-        option=_clean(item.get("option"),source,optional=False,reject_source_copy=True,field="alternative_option")
+        option=_clean_with_rule(item.get("option"),source,optional=False,reject_source_copy=True,field="alternative_option",trace=quality_trace)[0]
         if not option:continue
-        normalized={**item,"option":option,"benefits":_list(item.get("benefits"),source,"benefits",True),"downsides":_list(item.get("downsides"),source,"downsides",True),"assumptions":_list(item.get("assumptions"),source,"assumptions",True),"conditions_for_success":_list(item.get("conditions_for_success"),source,"conditions_for_success",True),"evidence_ids":[]}
+        normalized={**item,"option":option,"benefits":_list(item.get("benefits"),source,"benefits",True,quality_trace),"downsides":_list(item.get("downsides"),source,"downsides",True,quality_trace),"assumptions":_list(item.get("assumptions"),source,"assumptions",True),"conditions_for_success":_list(item.get("conditions_for_success"),source,"conditions_for_success",True,quality_trace),"evidence_ids":[]}
         alternatives.append(normalized)
     response["alternatives"]=alternatives
     recommendation=response.get("recommendation",{})
-    recommendation["recommended_option"],option_rule=_clean_with_rule(recommendation.get("recommended_option"),source,optional=False,reject_instructions=False,reject_source_copy=True,field="recommended_option")
-    recommendation["rationale"],rationale_rule=_clean_with_rule(recommendation.get("rationale"),source,optional=False,reject_instructions=False,reject_source_copy=True,field="rationale")
+    recommendation["recommended_option"],option_rule=_clean_with_rule(recommendation.get("recommended_option"),source,optional=False,reject_instructions=False,reject_source_copy=True,field="recommended_option",trace=quality_trace)
+    recommendation["rationale"],rationale_rule=_clean_with_rule(recommendation.get("rationale"),source,optional=False,reject_instructions=False,reject_source_copy=True,field="rationale",trace=quality_trace)
     recommendation["prerequisites"]=_list(recommendation.get("prerequisites"),source,"prerequisites",True)
     # One normalization authority: the nested recommendation collection is
     # canonical. The top-level compatibility field is projected only after
     # degradation, so removed items cannot survive through an alias.
-    canonical_change_conditions=_list(recommendation.get("what_would_change_the_recommendation"),source,"recommendation_change_conditions",True)
+    canonical_change_conditions=_list(recommendation.get("what_would_change_the_recommendation"),source,"recommendation_change_conditions",True,quality_trace)
     recommendation["what_would_change_the_recommendation"]=canonical_change_conditions
-    response["what_would_change_recommendation"]=list(canonical_change_conditions)
-    # recommendation.rationale is the display authority. `analysis` remains a
-    # compatibility projection and is never independently cleaned or repaired.
-    response["analysis"]=recommendation["rationale"]
-    response["problem_understanding"],problem_rule=_clean_with_rule(response.get("problem_understanding"),source,optional=False,reject_source_copy=True,field="problem_understanding")
+    response["problem_understanding"],problem_rule=_clean_with_rule(response.get("problem_understanding"),source,optional=False,reject_source_copy=True,field="problem_understanding",trace=quality_trace)
     unresolved=_list(response.get("unresolved_questions"),source,"unresolved_questions",True)
     unresolved,uncertainty_keys=_dedupe_uncertainties(unresolved,state)
     unknown,all_uncertainty_keys=_dedupe_uncertainties(_list(response.get("evidence_quality",{}).get("unknown",[]),source,"unknown",True),state,set(uncertainty_keys))
@@ -310,6 +379,47 @@ def finalize_decision_brief(response,state):
         required_field,quality_rule=required_failure
         logger.warning("final_quality_stage=failed failure_category=malformed_required_section required_field=%s quality_rule=%s quality_action=hard_failure",required_field,quality_rule or "unknown")
         raise FinalBriefQualityError(["malformed_required_section"],required_field=required_field,quality_rule=quality_rule or "unknown")
+    semantic_routing,semantic_candidates,semantic_triggers=route_semantic_ambiguity(response,quality_trace,generation_usage)
+    semantic_usage={"invoked":False,"candidate_count":len(semantic_candidates),"triggers":semantic_triggers}
+    if semantic_routing is SemanticRouting.AMBIGUOUS:
+        trigger=semantic_triggers[0] if semantic_triggers else "none"
+        if int(generation_usage.get("retry_count",0)):
+            _semantic_event("skipped",trigger="call_budget_exhausted",action="skipped_call_budget")
+            semantic_usage["stage"]="skipped_call_budget"
+        elif callable(semantic_classifier):
+            _semantic_event("started",trigger=trigger)
+            payload=[{"field_id":item["field_id"],"item_index":item["item_index"],"text":item["text"]} for item in semantic_candidates]
+            semantic_usage["payload_chars"]=len(str(payload));semantic_usage["invoked"]=True
+            try:
+                raw_semantic,classifier_usage=semantic_classifier(payload)
+                results=_validate_semantic_results(raw_semantic,semantic_candidates);semantic_usage.update({key:classifier_usage.get(key) for key in ("latency_ms","input_tokens","output_tokens","total_tokens") if classifier_usage.get(key) is not None})
+                removals=[];result_counts={result:0 for result in SEMANTIC_QUALITY_RESULTS}
+                for candidate in semantic_candidates:
+                    item=results[(candidate["field_id"],candidate["item_index"])]
+                    result_counts[item["result"]]+=1
+                    action="retained"
+                    if item["result"]=="incomplete":
+                        if candidate["optional"]:removals.append(candidate["path"]);action="degraded"
+                        else:
+                            _semantic_event("failed",field=candidate["field_id"],result="incomplete",action="safe_failure")
+                            raise FinalBriefQualityError(["semantic_incomplete_required"],required_field=candidate["field_id"],quality_rule=item["reason"])
+                    _semantic_event("passed",field=candidate["field_id"],result=item["result"],action=action)
+                _remove_semantic_paths(response,removals);semantic_usage.update({"degraded_count":len(removals),"result_counts":result_counts,"stage":"passed"})
+            except FinalBriefQualityError:raise
+            except ProviderTimeoutError:
+                _semantic_event("failed",failure="timeout",action="retained");semantic_usage["stage"]="timeout"
+            except ProviderUnavailableError:
+                _semantic_event("failed",failure="unavailable",action="retained");semantic_usage["stage"]="unavailable"
+            except (InvalidModelResponseError,ValueError,TypeError,KeyError):
+                _semantic_event("failed",failure="invalid_schema",action="retained");semantic_usage["stage"]="invalid_schema"
+        else:
+            semantic_usage["stage"]="unavailable"
+    else:
+        _semantic_event("skipped",trigger="none",action="none");semantic_usage["stage"]="skipped_complete"
+    # Project compatibility aliases only after semantic decisions.
+    canonical_change_conditions=recommendation.get("what_would_change_the_recommendation",[])
+    response["what_would_change_recommendation"]=list(canonical_change_conditions)
+    response["analysis"]=recommendation["rationale"]
     deliverables=response.get("requested_deliverables",{})
     horizon=deliverables.get("plan_horizon")
     if horizon:
@@ -338,7 +448,7 @@ def finalize_decision_brief(response,state):
     final_semantic_failure=_final_semantic_failure(response,source)
     if final_semantic_failure:
         required_failure=required_failure or final_semantic_failure;failures.append("malformed_final_response")
-    elapsed=round((time.perf_counter()-started)*1000,3);response.setdefault("telemetry",{})["final_quality_ms"]=elapsed
+    elapsed=round((time.perf_counter()-started)*1000,3);response.setdefault("telemetry",{}).update({"final_quality_ms":elapsed,"semantic_quality":semantic_usage,"provider_calls":1+int(generation_usage.get("retry_count",0))+int(semantic_usage["invoked"])})
     response["completeness"].update({"recommendation":bool(recommendation.get("recommended_option") and recommendation.get("rationale")),"tradeoffs":not deliverables.get("tradeoffs") or bool(alternatives),"assumptions":not deliverables.get("assumptions") or bool(response["assumptions"]),"uncertainty":not deliverables.get("uncertainty") or bool(unknown or unresolved),"risks":not deliverables.get("risks") or bool(response["risks"]),"ranking":not deliverables.get("ranking") or len(alternatives)>=2,"next_steps":not deliverables.get("next_steps") or bool(response["prioritized_actions"]),"change_triggers":not deliverables.get("change_triggers") or bool(recommendation.get("what_would_change_the_recommendation")),"plan":not horizon or bool(plan.get("phases"))})
     if failures:
         required_field,quality_rule=required_failure or ("unknown","unknown")

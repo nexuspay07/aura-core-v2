@@ -44,6 +44,20 @@ def model_analysis_schema() -> dict[str, Any]:
     properties={"problem_summary":string(280),"alternatives":{"type":"array","items":alternative,"minItems":1,"maxItems":3},"recommended_option":string(200),"rationale":string(600),"risks":strings(4),"assumptions_used":strings(3),"unresolved_questions":strings(4),"recommendation_change_conditions":strings(4)}
     return {"type":"object","additionalProperties":False,"properties":properties,"required":list(properties)}
 
+SEMANTIC_QUALITY_OUTPUT_TOKENS=900
+SEMANTIC_QUALITY_FIELD_IDS=("problem_understanding","recommended_option","rationale","alternative_option","alternative_benefit","alternative_downside","condition_for_success","risk","unresolved_question","recommendation_change_condition")
+SEMANTIC_QUALITY_RESULTS=("complete","incomplete","uncertain")
+SEMANTIC_QUALITY_REASONS=("truncated_phrase","missing_complement","incomplete_constituent","context_insufficient")
+
+def semantic_quality_schema() -> dict[str,Any]:
+    item={"type":"object","additionalProperties":False,"properties":{
+        "field_id":{"type":"string","enum":list(SEMANTIC_QUALITY_FIELD_IDS)},
+        "item_index":{"type":"integer","minimum":0},
+        "result":{"type":"string","enum":list(SEMANTIC_QUALITY_RESULTS)},
+        "reason":{"type":"string","enum":list(SEMANTIC_QUALITY_REASONS)},
+    },"required":["field_id","item_index","result","reason"]}
+    return {"type":"object","additionalProperties":False,"properties":{"results":{"type":"array","items":item,"maxItems":48}},"required":["results"]}
+
 # Compatibility alias for callers that previously imported this helper.
 def analysis_result_schema() -> dict[str, Any]:
     return model_analysis_schema()
@@ -78,6 +92,21 @@ class OpenAIModelProvider:
         except ModelProviderError: raise
         except Exception as error:
             raise self._map_request_exception(error) from error
+    def generate_semantic_quality(self, *, candidates, timeout_seconds):
+        instructions=("Classify only whether each supplied display string is complete enough to present or appears truncated. "
+                      "Return one result for every candidate. Do not rewrite, improve, fact-check, reason about the decision, or return prose. "
+                      "Use uncertain when completeness cannot be determined from the supplied text and field type.")
+        request={"model":self.model_name,"instructions":instructions,"input":json.dumps({"candidates":candidates},separators=(",",":")),"text":{"format":{"type":"json_schema","name":"semantic_quality_results","strict":True,"schema":semantic_quality_schema()},"verbosity":"low"},"max_output_tokens":SEMANTIC_QUALITY_OUTPUT_TOKENS,"store":False}
+        if self.model_name.lower().startswith("gpt-5"):request["reasoning"]={"effort":"low"}
+        try:
+            from openai import OpenAI
+            started=time.monotonic();client=OpenAI(api_key=self._api_key,timeout=timeout_seconds,max_retries=0)
+            response=client.responses.create(**request)
+            return self._parse_response(response,started)
+        except TimeoutError as error:raise ProviderTimeoutError("Semantic classifier timed out","timeout",self._exception_diagnostics(error,"timeout")) from error
+        except json.JSONDecodeError as error:raise InvalidModelResponseError("Semantic classifier returned invalid output","structured_output_error") from error
+        except ModelProviderError:raise
+        except Exception as error:raise self._map_request_exception(error) from error
     def health_check(self): return bool(self._api_key)
     def request_kwargs(self, *, system, payload, reasoning_effort=None):
         request={"model":self.model_name,"instructions":system,"input":json.dumps(payload,separators=(",",":")),"text":{"format":{"type":"json_schema","name":"model_analysis_result","strict":True,"schema":model_analysis_schema()},"verbosity":analysis_verbosity()},"max_output_tokens":self.max_output_tokens,"store":False}
