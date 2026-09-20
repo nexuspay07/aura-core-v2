@@ -165,6 +165,84 @@ Compare the trade-offs and risks, provide a recommendation with uncertainty and 
     assert brief["decision_plan"]["horizon_value"]==12
 
 
+@pytest.mark.parametrize("result",["complete","uncertain"])
+def test_required_ambiguous_conditional_complete_or_uncertain_is_retained(session,result):
+    raw=grounded_response();raw["recommended_option"]="Pursue the reversible path if appropriate."
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result=result)
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert brief["recommendation"]["recommended_option"]==raw["recommended_option"]
+    assert len(classifier.calls)==1
+
+
+def test_required_ambiguous_conditional_incomplete_fails_safely(session):
+    raw=grounded_response();raw["recommended_option"]="Pursue the reversible path if appropriate."
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="incomplete")
+    with pytest.raises(FinalBriefQualityError) as captured:analysis_report(current,execution,semantic_classifier=classifier)
+    assert captured.value.required_field=="recommended_option"
+
+
+def test_ambiguous_conditional_classifier_failure_retains_content(session):
+    raw=grounded_response();raw["recommended_option"]="Pursue the reversible path if appropriate."
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(error=ProviderUnavailableError("private","provider_unavailable"))
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert brief["recommendation"]["recommended_option"]==raw["recommended_option"]
+
+
+def test_optional_ambiguous_conditional_incomplete_is_removed_before_plan(session):
+    target="Change course if appropriate."
+    raw=grounded_response();raw["recommendation_change_conditions"]=[target]
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="incomplete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier);serialized=json.dumps(brief)
+    assert target not in serialized
+
+
+def test_generation_retry_skips_ambiguous_conditional_classifier_and_call_three(session):
+    raw=grounded_response();raw["recommended_option"]="Pursue the reversible path if appropriate."
+    provider=SequenceProvider([InvalidModelResponseError("private","incomplete_max_tokens",{}),raw])
+    current,provider,execution=execution_and_state(session,provider=provider);classifier=RecordingClassifier(result="incomplete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert brief["recommendation"]["recommended_option"]==raw["recommended_option"]
+    assert len(provider.calls)==2 and classifier.calls==[] and brief["telemetry"]["provider_calls"]==2
+
+
+def test_provably_malformed_conditional_never_reaches_classifier(session):
+    raw=grounded_response();raw["recommended_option"]="If the user secures sufficient funding"
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier()
+    with pytest.raises(FinalBriefQualityError):analysis_report(current,execution,semantic_classifier=classifier)
+    assert classifier.calls==[]
+
+
+def test_conditional_normalization_preserves_ambiguity_and_minimal_payload(session):
+    raw=grounded_response();raw["recommended_option"]="  Pursue   the reversible path if appropriate. [user-query]  "
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="complete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert brief["recommendation"]["recommended_option"]=="Pursue the reversible path if appropriate."
+    assert all(set(item)=={"field_id","item_index","text"} for item in classifier.calls[0])
+
+
+def test_conditional_boundary_recovery_remains_semantically_adjudicated(session):
+    raw=grounded_response();raw["recommended_option"]="Pursue the reversible path if appropriate-"
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="complete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert brief["recommendation"]["recommended_option"]=="Pursue the reversible path if appropriate"
+    assert len(classifier.calls)==1
+
+
+def test_production_shaped_education_conditional_recommendation_preserves_three_options(session):
+    prompt="""I'm currently studying Information Technology and education matters to me. My three options are:
+1. Enter the workforce after this program.
+2. Continue into another degree.
+3. Build practical projects while testing a business.
+Compare the trade-offs and risks, provide a recommendation with uncertainty and what could change it, and give me a 12-month plan."""
+    raw=grounded_response();raw["recommended_option"]="Enter the workforce first if appropriate."
+    raw["alternatives"].append({"option":"Build practical projects","benefits":["Tests practical fit"],"downsides":["Income remains uncertain"],"evidence_ids":["user-query"],"assumptions":[],"conditions_for_success":["Define a bounded project"]})
+    current,_,execution=execution_and_state(session,raw,prompt=prompt);classifier=RecordingClassifier(result="complete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert len(current.request.source_metadata["fact_ledger"]["options"])==3
+    assert len(brief["alternatives"])==3 and brief["recommendation"]["recommended_option"]==raw["recommended_option"]
+    assert brief["decision_plan"]["horizon_value"]==12
+
+
 def test_one_optional_degradation_alone_does_not_trigger_cluster():
     response={"problem_understanding":"P","alternatives":[],"risks":[],"unresolved_questions":[],"recommendation":{"recommended_option":"R","rationale":"Complete rationale","what_would_change_the_recommendation":[]}}
     routing,candidates,triggers=route_semantic_ambiguity(response,[{"action":"degraded","field":"risk","rule":"dangling"}],{})

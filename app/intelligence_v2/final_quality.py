@@ -60,7 +60,8 @@ _MOJIBAKE=re.compile(r"(?:Ã.|Â.|â[\x80-\xbf]|å.{0,5}ä)")
 _OPENING_QUOTES={"\u2018":"\u2019","\u201c":"\u201d"}
 _BRACKETS={"(":")","[":"]","{":"}"}
 _SYMMETRIC_QUOTES={'"',"'"}
-_SUBORDINATOR=re.compile(r"\b(if|when|because|although|while|unless)\b",re.I)
+_SUBORDINATOR=re.compile(r"\b(if|when|because|although|while|unless|provided\s+that|as\s+long\s+as)\b",re.I)
+_INCOMPLETE_PREDICATE_END=re.compile(r"\b(?:is|are|was|were|be|been|being|become|becomes|became|remain|remains|seem|seems|appear|appears|can|could|will|would|should|may|might|must|do|does|did|has|have|had)$",re.I)
 _ADJECTIVE_FORM=re.compile(r"^(?:full|(?![a-z'-]*(?:ment|tion|sion|ness|ity|ship|ance|ence|er|or)$)[a-z][a-z'-]*(?:al|ial|ic|ive|ous|ary|ory|able|ible|ent|ant|less|ful))$",re.I)
 
 def _is_apostrophe(text,index):
@@ -97,6 +98,23 @@ def _clause_has_predicate(clause,subordinator):
     if words[0].lower() in {"the","a","an","this","that","these","those","my","your","our","their","its"} and len(words)<3:return False
     return bool(re.search(r"\b(?:is|are|was|were|be|been|being|has|have|had|can|could|will|would|should|may|might|must|do|does|did)\b",clause,re.I) or any(re.search(r"(?:ed|ing|s)$",word,re.I) for word in words[1:]) or words[0].lower() not in {"the","a","an","this","that","these","those"})
 
+def _conditional_structure(core):
+    matches=list(_SUBORDINATOR.finditer(core))
+    if not matches:return None
+    for marker in matches:
+        tail=core[marker.end():].strip()
+        if marker.start()==0:
+            comma=core.find(",",marker.end())
+            if comma<0 or not core[comma+1:].strip() or not _clause_has_predicate(core[comma+1:],marker.group(1)):
+                return "open_conditional"
+            continue
+        if not tail or _INCOMPLETE_PREDICATE_END.search(tail):return "open_conditional"
+        words=re.findall(r"[A-Za-z][A-Za-z'-]*",tail)
+        if re.fullmatch(r"[A-Za-z'-]+\s+(?:and|or)\s+[A-Za-z'-]+",tail,re.I):return "open_conditional"
+        if words and words[0].lower() in {"the","a","an","this","that","these","those","my","your","our","their","its"} and len(words)<3:return "open_conditional"
+        if not _clause_has_predicate(tail,marker.group(1)):return "ambiguous_conditional"
+    return None
+
 def analyze_semantic_completeness(text,*,english=True):
     """Return bounded, content-free structural completeness diagnostics."""
     if not isinstance(text,str) or not text.strip():return {"complete":False,"rule":"empty_after_normalization"}
@@ -106,14 +124,9 @@ def analyze_semantic_completeness(text,*,english=True):
     core=re.sub(r"[.!?\u3002\uff01\uff1f]+$","",text).strip()
     if re.search(r"(?:^|[.!?]\s+)(?:[A-Za-z]|a|an|the)\s*$",core,re.I):return {"complete":False,"rule":"sentence_fragment"}
     if re.search(r"(?:[,;:]|\b(?:and|or|but|because))$",core,re.I):return {"complete":False,"rule":"incomplete_coordination"}
-    matches=list(_SUBORDINATOR.finditer(core))
-    if matches:
-        marker=matches[-1];tail=core[marker.end():].strip()
-        if marker.start()==0:
-            comma=core.find(",",marker.end())
-            if comma<0 or not _clause_has_predicate(core[comma+1:],marker.group(1)):return {"complete":False,"rule":"open_conditional"}
-        elif not _clause_has_predicate(tail,marker.group(1)):
-            return {"complete":False,"rule":"open_conditional"}
+    conditional_rule=_conditional_structure(core)
+    if conditional_rule=="open_conditional":return {"complete":False,"rule":conditional_rule}
+    if conditional_rule=="ambiguous_conditional":return {"complete":True,"rule":conditional_rule}
     if re.search(r"(?:^|[,;:])\s*then$",core,re.I):return {"complete":False,"rule":"open_conditional"}
     noun_match=re.search(r"\b(a|an|the)\s+([A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*)*)$",core,re.I)
     if noun_match and all(_ADJECTIVE_FORM.fullmatch(word) for word in noun_match.group(2).split()):return {"complete":False,"rule":"incomplete_noun_phrase"}
@@ -147,7 +160,7 @@ def _quality_event(action,field,rule,trace=None):
 
 def _semantic_event(stage,**values):
     safe={"stage":stage}
-    allow={"trigger":{"boundary_recovery","recovery_cluster","output_headroom","field_length_proximity","call_budget_exhausted","none"},"corroboration":{"boundary_recovery","quality_cluster","output_headroom","none"},"field":set(SEMANTIC_QUALITY_FIELD_IDS),"result":set(SEMANTIC_QUALITY_RESULTS),"action":{"retained","degraded","safe_failure","skipped_call_budget","none"},"failure":{"timeout","unavailable","invalid_schema","none"}}
+    allow={"trigger":{"boundary_recovery","recovery_cluster","output_headroom","field_length_proximity","conditional_ambiguity","call_budget_exhausted","none"},"corroboration":{"boundary_recovery","quality_cluster","output_headroom","structural_ambiguity","none"},"field":set(SEMANTIC_QUALITY_FIELD_IDS),"result":set(SEMANTIC_QUALITY_RESULTS),"action":{"retained","degraded","safe_failure","skipped_call_budget","none"},"failure":{"timeout","unavailable","invalid_schema","none"}}
     for key,allowed in allow.items():
         value=values.get(key)
         if value in allowed:safe[key]=value
@@ -175,6 +188,7 @@ def _clean_with_rule(value,source,*,optional=True,reject_instructions=True,rejec
     if not text:return "", "unexpected_language" if unexpected_language else "empty_after_normalization"
     structure=analyze_semantic_completeness(text,english=english)
     if not structure["complete"]:return "", structure["rule"]
+    if structure["rule"]=="ambiguous_conditional" and allow_recovery:_quality_event("ambiguous",field,"ambiguous_conditional",trace)
     if _TRAILING_BOUNDARY.search(text):
         candidate=_TRAILING_BOUNDARY.sub("",text).rstrip()
         if _quality_severity(recoverable=allow_recovery) is QualitySeverity.RECOVERABLE and candidate:
@@ -227,15 +241,19 @@ def _semantic_candidates(response):
 def route_semantic_ambiguity(response,trace,usage):
     candidates=_semantic_candidates(response);triggers=[]
     boundary_fields={event["field"] for event in trace if event["action"]=="repaired" and event["rule"]=="trailing_boundary"}
+    conditional_fields={event["field"] for event in trace if event["action"]=="ambiguous" and event["rule"]=="ambiguous_conditional"}
     field_map={"problem_understanding":"problem_understanding","recommended_option":"recommended_option","rationale":"rationale","benefits":"alternative_benefit","downsides":"alternative_downside","conditions_for_success":"condition_for_success","risks":"risk","unresolved_questions":"unresolved_question","recommendation_change_conditions":"recommendation_change_condition"}
     ambiguous=set();corroboration={}
     for candidate_index,candidate in enumerate(candidates):
         if candidate["field_id"] in {field_map.get(field) for field in boundary_fields}:
             ambiguous.add(candidate_index);corroboration[candidate_index]="boundary_recovery"
+        if candidate["field_id"] in {field_map.get(field) for field in conditional_fields}:
+            ambiguous.add(candidate_index);corroboration[candidate_index]="structural_ambiguity"
         maximum=_SEMANTIC_MAX_LENGTH[candidate["field_id"]]
         if len(candidate["text"])>=int(maximum*.9):ambiguous.add(candidate_index);triggers.append("field_length_proximity")
     if boundary_fields:triggers.append("boundary_recovery")
-    independent={(event["field"],event["rule"]) for event in trace}
+    if conditional_fields:triggers.append("conditional_ambiguity")
+    independent={(event["field"],event["rule"]) for event in trace if event["action"]!="ambiguous"}
     if len(independent)>=2:
         ambiguous.update(range(len(candidates)));triggers.append("recovery_cluster")
         for index in range(len(candidates)):corroboration.setdefault(index,"quality_cluster")

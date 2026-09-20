@@ -184,7 +184,6 @@ def test_provider_shaped_incomplete_rationale_fails_final_quality(session):
 
 @pytest.mark.parametrize(("text","rule"),[
     ("Choose this path if work and self","open_conditional"),("Choose this path if the user","open_conditional"),
-    ("Proceed when financial","open_conditional"),("Do this because formal","open_conditional"),
     ("If X happens, then","open_conditional"),("Relevant subjects can be explored through self","incomplete_complement"),
     ("This affects how valuable a formal","incomplete_noun_phrase"),("An additional financial","incomplete_noun_phrase"),
     ("The strategic","incomplete_noun_phrase"),("Additional degree planning financially","incomplete_noun_phrase"),
@@ -192,6 +191,57 @@ def test_provider_shaped_incomplete_rationale_fails_final_quality(session):
 ])
 def test_structural_semantic_fragments_are_rejected(text,rule):
     assert analyze_semantic_completeness(text)=={"complete":False,"rule":rule}
+
+
+@pytest.mark.parametrize("text",[
+    "Pursue the degree if affordable.", "Enter the workforce first when ready.",
+    "If funding arrives, choose the path that works when ready.",
+    "Proceed when financial", "Do this because formal",
+    "Continue although difficult.", "Keep working while uncertain.",
+    "Proceed provided that affordable.", "Continue as long as practical.",
+])
+def test_structurally_ambiguous_conditionals_are_preserved_for_adjudication(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":"ambiguous_conditional"}
+
+
+@pytest.mark.parametrize("text",[
+    "If the user secures sufficient funding", "If funding becomes available,", "Unless", "When",
+    "Choose this path if the user", "Choose this path if work and self", "Pursue the degree if funding becomes",
+    "If X happens, then",
+])
+def test_provably_malformed_conditionals_remain_deterministic_failures(text):
+    assert analyze_semantic_completeness(text)["complete"] is False
+
+
+@pytest.mark.parametrize("text",[
+    "If the user secures sufficient funding, pursue the degree.",
+    "Pursue the degree if funding becomes available.",
+    "Unless circumstances materially change, continue with the current plan.",
+    "Continue with the current plan unless circumstances materially change.",
+    "When funding becomes available, reassess the degree option.",
+    "Reassess the degree option when funding becomes available.",
+    "Choose the path because it preserves flexibility.",
+    "Although the path is difficult, continue with the plan.",
+    "Continue while the evidence develops.",
+    "Provided that funding is secured, pursue the degree.",
+    "Pursue the degree provided that funding is secured.",
+    "As long as the constraints remain stable, continue with the plan.",
+    "Continue with the plan as long as the constraints remain stable.",
+])
+def test_conditional_forms_with_complete_clauses_remain_complete(text):
+    assert analyze_semantic_completeness(text)=={"complete":True,"rule":None}
+
+
+@pytest.mark.parametrize("text",[
+    "If constraints remain stable, continue with the plan",
+    "Continue with the plan if constraints remain stable",
+    "Continue with the plan if appropriate", "Continue with the plan if appropriate?",
+    "Continue with the plan if appropriate!",
+])
+def test_conditional_punctuation_and_no_terminal_punctuation_controls(text):
+    result=analyze_semantic_completeness(text)
+    assert result["complete"] is True
+    assert result["rule"] in {None,"ambiguous_conditional"}
 
 
 @pytest.mark.parametrize("text",[
