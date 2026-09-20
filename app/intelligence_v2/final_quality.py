@@ -147,7 +147,7 @@ def _quality_event(action,field,rule,trace=None):
 
 def _semantic_event(stage,**values):
     safe={"stage":stage}
-    allow={"trigger":{"boundary_recovery","recovery_cluster","output_headroom","field_length_proximity","call_budget_exhausted","none"},"field":set(SEMANTIC_QUALITY_FIELD_IDS),"result":set(SEMANTIC_QUALITY_RESULTS),"action":{"retained","degraded","safe_failure","skipped_call_budget","none"},"failure":{"timeout","unavailable","invalid_schema","none"}}
+    allow={"trigger":{"boundary_recovery","recovery_cluster","output_headroom","field_length_proximity","call_budget_exhausted","none"},"corroboration":{"boundary_recovery","quality_cluster","output_headroom","none"},"field":set(SEMANTIC_QUALITY_FIELD_IDS),"result":set(SEMANTIC_QUALITY_RESULTS),"action":{"retained","degraded","safe_failure","skipped_call_budget","none"},"failure":{"timeout","unavailable","invalid_schema","none"}}
     for key,allowed in allow.items():
         value=values.get(key)
         if value in allowed:safe[key]=value
@@ -228,17 +228,24 @@ def route_semantic_ambiguity(response,trace,usage):
     candidates=_semantic_candidates(response);triggers=[]
     boundary_fields={event["field"] for event in trace if event["action"]=="repaired" and event["rule"]=="trailing_boundary"}
     field_map={"problem_understanding":"problem_understanding","recommended_option":"recommended_option","rationale":"rationale","benefits":"alternative_benefit","downsides":"alternative_downside","conditions_for_success":"condition_for_success","risks":"risk","unresolved_questions":"unresolved_question","recommendation_change_conditions":"recommendation_change_condition"}
-    ambiguous=set()
+    ambiguous=set();corroboration={}
     for candidate_index,candidate in enumerate(candidates):
-        if candidate["field_id"] in {field_map.get(field) for field in boundary_fields}:ambiguous.add(candidate_index)
+        if candidate["field_id"] in {field_map.get(field) for field in boundary_fields}:
+            ambiguous.add(candidate_index);corroboration[candidate_index]="boundary_recovery"
         maximum=_SEMANTIC_MAX_LENGTH[candidate["field_id"]]
         if len(candidate["text"])>=int(maximum*.9):ambiguous.add(candidate_index);triggers.append("field_length_proximity")
     if boundary_fields:triggers.append("boundary_recovery")
     independent={(event["field"],event["rule"]) for event in trace}
-    if len(independent)>=2:ambiguous.update(range(len(candidates)));triggers.append("recovery_cluster")
+    if len(independent)>=2:
+        ambiguous.update(range(len(candidates)));triggers.append("recovery_cluster")
+        for index in range(len(candidates)):corroboration.setdefault(index,"quality_cluster")
     output_tokens=usage.get("output_tokens")
-    if isinstance(output_tokens,int) and output_tokens>=int(analysis_max_output_tokens()*.9):ambiguous.update(range(len(candidates)));triggers.append("output_headroom")
-    return SemanticRouting.AMBIGUOUS if ambiguous else SemanticRouting.COMPLETE,[candidates[index] for index in sorted(ambiguous)],list(dict.fromkeys(triggers))
+    if isinstance(output_tokens,int) and output_tokens>=int(analysis_max_output_tokens()*.9):
+        ambiguous.update(range(len(candidates)));triggers.append("output_headroom")
+        for index in range(len(candidates)):corroboration.setdefault(index,"output_headroom")
+    selected=[]
+    for index in sorted(ambiguous):selected.append({**candidates[index],"corroboration":corroboration.get(index,"none")})
+    return SemanticRouting.AMBIGUOUS if ambiguous else SemanticRouting.COMPLETE,selected,list(dict.fromkeys(triggers))
 
 def _validate_semantic_results(raw,candidates):
     if not isinstance(raw,dict) or not isinstance(raw.get("results"),list) or len(raw["results"])!=len(candidates):raise ValueError("invalid semantic classifier schema")
@@ -398,12 +405,13 @@ def finalize_decision_brief(response,state,*,semantic_classifier=None,generation
                     item=results[(candidate["field_id"],candidate["item_index"])]
                     result_counts[item["result"]]+=1
                     action="retained"
-                    if item["result"]=="incomplete":
+                    corroborated=candidate.get("corroboration","none")!="none"
+                    if item["result"]=="incomplete" and corroborated:
                         if candidate["optional"]:removals.append(candidate["path"]);action="degraded"
                         else:
-                            _semantic_event("failed",field=candidate["field_id"],result="incomplete",action="safe_failure")
+                            _semantic_event("failed",field=candidate["field_id"],result="incomplete",action="safe_failure",corroboration=candidate["corroboration"])
                             raise FinalBriefQualityError(["semantic_incomplete_required"],required_field=candidate["field_id"],quality_rule=item["reason"])
-                    _semantic_event("passed",field=candidate["field_id"],result=item["result"],action=action)
+                    _semantic_event("passed",field=candidate["field_id"],result=item["result"],action=action,corroboration=candidate.get("corroboration","none"))
                 _remove_semantic_paths(response,removals);semantic_usage.update({"degraded_count":len(removals),"result_counts":result_counts,"stage":"passed"})
             except FinalBriefQualityError:raise
             except ProviderTimeoutError:

@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from app.intelligence_v2.final_quality import FinalBriefQualityError, SemanticRouting, route_semantic_ambiguity
+from app.intelligence_v2.final_quality import FinalBriefQualityError, SemanticRouting, _clean_with_rule, route_semantic_ambiguity
 from app.intelligence_v2.model_provider import InvalidModelResponseError, MockModelProvider, ProviderTimeoutError, ProviderUnavailableError, SEMANTIC_QUALITY_OUTPUT_TOKENS, semantic_quality_schema
 from app.intelligence_v2.orchestrator import DecisionAnalysisOrchestrator
 from app.intelligence_v2.service import decision_v2_service
@@ -45,6 +45,14 @@ def clustered_raw():
     return raw
 
 
+def complete_text(length, punctuation="."):
+    prefix="Compare the supplied options using the stated goals and constraints"
+    suffix=f" paths{punctuation}"
+    middle_length=length-len(prefix)-len(suffix)-1
+    assert middle_length>0
+    return f"{prefix} {'x' * middle_length}{suffix}"
+
+
 def test_normal_complete_brief_does_not_escalate_and_uses_one_call(session):
     current,provider,execution=execution_and_state(session)
     classifier=RecordingClassifier();brief,_=analysis_report(current,execution,semantic_classifier=classifier)
@@ -73,6 +81,88 @@ def test_output_headroom_and_length_proximity_are_objective_router_signals():
     assert routing is SemanticRouting.AMBIGUOUS
     assert {"output_headroom","field_length_proximity"}<=set(triggers)
     assert any(item["field_id"]=="rationale" for item in candidates)
+    assert all(item["corroboration"]=="output_headroom" for item in candidates)
+
+
+@pytest.mark.parametrize("length",[252,253,280])
+def test_length_only_incomplete_required_problem_is_retained(session,length):
+    raw=grounded_response();raw["problem_summary"]=complete_text(length)
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="incomplete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert brief["problem_understanding"]==raw["problem_summary"]
+    assert len(classifier.calls)==1
+    assert classifier.calls[0][0]["field_id"]=="problem_understanding"
+
+
+def test_below_proximity_boundary_does_not_classify(session):
+    raw=grounded_response();raw["problem_summary"]=complete_text(251)
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="incomplete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert brief["problem_understanding"]==raw["problem_summary"] and classifier.calls==[]
+
+
+@pytest.mark.parametrize("punctuation",[".","?","!",""])
+def test_length_only_policy_is_punctuation_independent(session,punctuation):
+    raw=grounded_response();raw["problem_summary"]=complete_text(253,punctuation)
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="incomplete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert brief["problem_understanding"]==raw["problem_summary"]
+
+
+def test_equal_length_complete_and_truncated_are_both_advisory_without_corroboration(session):
+    values=[complete_text(253),("Compare the supplied options because the decisive consideration remains "+("material "*30))[:253]]
+    for value in values:
+        raw=grounded_response();raw["problem_summary"]=value
+        current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="incomplete")
+        brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+        assert brief["problem_understanding"]==value
+
+
+def test_boundary_recovery_corroborates_required_incomplete(session):
+    raw=grounded_response();raw["problem_summary"]=complete_text(253)+"â€”"
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="incomplete")
+    with pytest.raises(FinalBriefQualityError) as captured:analysis_report(current,execution,semantic_classifier=classifier)
+    assert captured.value.required_field=="problem_understanding"
+
+
+def test_length_only_policy_is_general_for_required_and_optional_fields(session):
+    raw=grounded_response();raw["rationale"]=complete_text(540);raw["risks"]=[complete_text(162)]
+    current,_,execution=execution_and_state(session,raw);classifier=RecordingClassifier(result="incomplete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert brief["recommendation"]["rationale"]==raw["rationale"]
+    assert raw["risks"][0] in brief["risks"]
+
+
+def test_proximity_uses_normalized_length_after_evidence_marker_removal():
+    raw=complete_text(251)[:-1]+" [user-query]"
+    clean,rule=_clean_with_rule(raw,"Synthetic source context",optional=False,reject_source_copy=True,field="problem_understanding")
+    response={"problem_understanding":clean,"alternatives":[],"risks":[],"unresolved_questions":[],"recommendation":{"recommended_option":"R","rationale":"Complete rationale","what_would_change_the_recommendation":[]}}
+    routing,candidates,triggers=route_semantic_ambiguity(response,[],{})
+    assert rule is None and len(raw)>=252 and len(clean)<252
+    assert routing is SemanticRouting.COMPLETE and candidates==[] and triggers==[]
+
+
+def test_multilingual_length_only_candidate_is_advisory():
+    text=("選択肢を比較する"*36)[:252]
+    response={"problem_understanding":text,"alternatives":[],"risks":[],"unresolved_questions":[],"recommendation":{"recommended_option":"選択","rationale":"根拠は完全です","what_would_change_the_recommendation":[]}}
+    routing,candidates,triggers=route_semantic_ambiguity(response,[],{})
+    assert routing is SemanticRouting.AMBIGUOUS and triggers==["field_length_proximity"]
+    assert candidates[0]["corroboration"]=="none"
+
+
+def test_production_shaped_education_length_only_incomplete_continues_canonically(session):
+    prompt="""I'm currently studying Information Technology and education matters to me. My three options are:
+1. Enter the workforce after this program.
+2. Continue into another degree.
+3. Build practical projects while testing a business.
+Compare the trade-offs and risks, provide a recommendation with uncertainty and what could change it, and give me a 12-month plan."""
+    raw=grounded_response();raw["problem_summary"]=complete_text(280)
+    raw["alternatives"].append({"option":"Build practical projects","benefits":["Tests practical fit"],"downsides":["Income remains uncertain"],"evidence_ids":["user-query"],"assumptions":[],"conditions_for_success":["Define a bounded project"]})
+    current,_,execution=execution_and_state(session,raw,prompt=prompt);classifier=RecordingClassifier(result="incomplete")
+    brief,_=analysis_report(current,execution,semantic_classifier=classifier)
+    assert len(current.request.source_metadata["fact_ledger"]["options"])==3
+    assert len(brief["alternatives"])==3 and brief["problem_understanding"]==raw["problem_summary"]
+    assert brief["decision_plan"]["horizon_value"]==12
 
 
 def test_one_optional_degradation_alone_does_not_trigger_cluster():
