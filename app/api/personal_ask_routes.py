@@ -167,6 +167,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
             db.commit()
             return {"mode": safety.mode, "session_id": session_id, "message": safety.message, "turns": turns}
         route = unified_aura_orchestrator.prepare(message, prior_user_turns=prior_user_turns)
+        logger.info("routing_event=%s freshness_source=%s", route.routing_event, route.freshness_source or "none")
         if not route.requires_decision_analysis:
             documents = document_evidence_retriever.retrieve(
                 db=db, organization_id=organization_id, workspace_id=workspace_id, query=message,
@@ -194,6 +195,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
             workspace_id=workspace_id, user_query=message, session_id=session_id,
             decision_scope="auto",
             conversation_turns=session_turns[:-1],
+            unresolved_current_information=route.requires_current_information,
         )
         for answer in answers:
             state = decision_v2_service.apply_clarification_answer(state=state, **answer)

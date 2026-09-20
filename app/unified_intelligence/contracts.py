@@ -22,6 +22,8 @@ class CapabilityRoute:
     requires_language_model: bool = True
     confidence: str = "high"
     routing_reason: str = ""
+    routing_event: str = "route_other"
+    freshness_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -36,4 +38,3 @@ class ModelRequest:
 class ModelResult:
     content: str
     usage: dict[str, Any] = field(default_factory=dict)
-

@@ -9,7 +9,7 @@ import time
 
 from app.intelligence_v2.classifier import DecisionClassifier, classify_personal, decision_classifier
 from app.intelligence_v2.context import EnterpriseContextAssembler
-from app.intelligence_v2.contracts import ClarificationState, DecisionRequest, DecisionState, EvidenceItem, EvidenceSourceType, GapImportance
+from app.intelligence_v2.contracts import ClarificationState, DecisionRequest, DecisionState, EvidenceItem, EvidenceSourceType, GapImportance, InformationGap
 from app.intelligence_v2.gaps import InformationGapDetector, information_gap_detector
 from app.intelligence_v2.retrieval import MemoryEvidenceRetriever, memory_evidence_retriever
 from app.intelligence_v2.knowledge import KnowledgeEvidenceAdapter, knowledge_evidence_adapter
@@ -84,7 +84,7 @@ class DecisionV2Service:
         self.knowledge_adapter = knowledge_adapter
         self.document_retriever = document_retriever
 
-    def analyze_request(self, *, db, user_id: int, organization_id: int, workspace_id: int, user_query: str, session_id: int | None = None, decision_scope: str = "business", conversation_turns: list[dict] | None = None) -> DecisionState:
+    def analyze_request(self, *, db, user_id: int, organization_id: int, workspace_id: int, user_query: str, session_id: int | None = None, decision_scope: str = "business", conversation_turns: list[dict] | None = None, unresolved_current_information: bool = False) -> DecisionState:
         timings={}
         def measured(name,call):
             started=time.monotonic();result=call();timings[name]=round((time.monotonic()-started)*1000);return result
@@ -123,10 +123,17 @@ class DecisionV2Service:
         request.known_facts = deduplicate_evidence([*base_evidence, *derived_evidence_items(derived_evidence, organization_id=organization_id, workspace_id=workspace_id)])
         request.quantitative_context = delivery_cost_reduction_target(request.known_facts, request.target)
         gaps = personal_gaps(decision_context, classification.decision_type) if effective_scope == "personal" else self.gap_detector.detect(request, classification)
+        if unresolved_current_information:
+            gaps.append(InformationGap(
+                "current_external_fact", "A requested current-world fact requires verified retrieval.",
+                GapImportance.HIGH, "The recommendation may change when that current fact is verified.",
+                True, "Verify the requested current external fact before relying on it.",
+            ))
         request.source_metadata["decision_scope"] = effective_scope
         request.source_metadata["fact_ledger"] = fact_ledger
         request.source_metadata["timings_ms"] = timings
         request.source_metadata["authoritative_user_constraints"] = authoritative_facts
+        request.source_metadata["freshness_dependency"] = "external_dependency" if unresolved_current_information else "none"
         request.missing_information = gaps
         sufficiency = information_sufficiency_service.assess(request=request, gaps=gaps, conflicts=conflicts)
         clarification_state = ClarificationState()
