@@ -1,14 +1,13 @@
-import os
 import sys
 from pathlib import Path
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from app.core.runtime_configuration import database_url_for_environment
 from app.db.schema import target_metadata
 
 config = context.config
-if os.getenv("DATABASE_URL"):
-    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+config.set_main_option("sqlalchemy.url", database_url_for_environment())
 def run_migrations_offline():
     context.configure(url=config.get_main_option("sqlalchemy.url"), target_metadata=target_metadata, literal_binds=True, compare_type=True)
     with context.begin_transaction(): context.run_migrations()

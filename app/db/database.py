@@ -1,10 +1,10 @@
-import os
-
 from dotenv import load_dotenv
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
+
+from app.core.runtime_configuration import database_url_for_environment
 
 # ==========================================================
 # LOAD ENVIRONMENT VARIABLES
@@ -16,7 +16,7 @@ load_dotenv()
 # DATABASE URL
 # ==========================================================
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./aura.db")
+DATABASE_URL = database_url_for_environment()
 
 # ==========================================================
 # ENGINE

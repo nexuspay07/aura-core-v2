@@ -6,17 +6,14 @@ from typing import Optional
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
+from app.core.runtime_configuration import jwt_secret_for_environment
+
 
 class AuthEngine:
 
     def __init__(self):
 
-        self.secret_key = os.getenv(
-            "JWT_SECRET_KEY",
-            "CHANGE_THIS_SECRET_KEY"
-        )
-        if self.secret_key.startswith("CHANGE_THIS") and os.getenv("ENVIRONMENT", "development") == "production":
-            raise RuntimeError("JWT_SECRET_KEY must be configured in production.")
+        self.secret_key = jwt_secret_for_environment()
         self.logger = logging.getLogger("aura.auth")
 
         self.algorithm = os.getenv(
