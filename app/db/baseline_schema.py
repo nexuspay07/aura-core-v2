@@ -37,10 +37,31 @@ BASELINE_TABLE_NAMES = frozenset(
     }
 )
 
-# These objects belong to 20260807_0017, not the frozen baseline.
+# These objects belong to later revisions, not the frozen baseline.
 _POST_BASELINE_COLUMNS = {
     "users": frozenset({"active_workspace_id"}),
     "organizations": frozenset({"account_type"}),
+    "usage_logs": frozenset(
+        {
+            "request_id",
+            "route",
+            "request_mode",
+            "outcome",
+            "error_category",
+            "provider",
+            "session_id",
+            "input_tokens",
+            "output_tokens",
+            "reasoning_tokens",
+            "provider_latency_ms",
+            "retry_count",
+            "provider_call_count",
+        }
+    ),
+}
+
+_POST_BASELINE_INDEXES = {
+    "usage_logs": frozenset({"ix_usage_logs_created_at"}),
 }
 
 
@@ -139,7 +160,11 @@ class _BaselineMetadata:
 
             for index in source.indexes:
                 names = [column.name for column in index.columns]
-                if set(names) & removed or any(name not in target.c for name in names):
+                if (
+                    index.name in _POST_BASELINE_INDEXES.get(source.name, frozenset())
+                    or set(names) & removed
+                    or any(name not in target.c for name in names)
+                ):
                     continue
                 Index(
                     index.name,

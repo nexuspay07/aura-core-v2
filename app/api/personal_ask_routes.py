@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -29,6 +31,7 @@ from app.personal.safety import personal_safety_boundary
 from app.unified_intelligence.orchestrator import unified_aura_orchestrator
 from app.intelligence_v2.model_provider import ProviderTimeoutError, ProviderUnavailableError
 from app.intelligence_v2.final_quality import FinalBriefQualityError, normalized_public_facts, normalized_public_items
+from app.services.telemetry_service import IntelligenceExecutionTelemetry, telemetry_service
 
 
 router = APIRouter(prefix="/personal", tags=["Personal Ask"])
@@ -36,6 +39,17 @@ security = HTTPBearer()
 logger = logging.getLogger(__name__)
 personal_ask_rate_limiter = FixedWindowRateLimiter()
 personal_ask_rate_policy = RateLimitPolicy(limit=20, window_seconds=60)
+
+
+def _record_terminal_execution(event: IntelligenceExecutionTelemetry) -> None:
+    db = SessionLocal()
+    try:
+        telemetry_service.record_intelligence_execution(db, event)
+    except Exception:
+        db.rollback()
+        logger.warning("personal_ask_telemetry_failure")
+    finally:
+        db.close()
 
 
 class PersonalAskRequest(BaseModel):
@@ -119,6 +133,29 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
             detail="Too many requests. Please wait a moment and try again.",
             headers={"Retry-After": str(personal_ask_rate_policy.window_seconds)},
         )
+    request_id = str(uuid4())
+    request_started = time.monotonic()
+    terminal_recorded = False
+
+    def terminal(outcome: str, *, mode: str | None = None, usage: dict | None = None,
+                 error_category: str | None = None, session_id: int | None = None) -> None:
+        nonlocal terminal_recorded
+        if terminal_recorded:
+            return
+        terminal_recorded = True
+        usage = usage or {}
+        _record_terminal_execution(IntelligenceExecutionTelemetry(
+            request_id=request_id, user_id=user_id, organization_id=organization_id,
+            workspace_id=workspace_id, route="/personal/ask", request_mode=mode,
+            outcome=outcome, error_category=error_category, provider=usage.get("provider"),
+            model=usage.get("model"), input_tokens=usage.get("input_tokens"),
+            output_tokens=usage.get("output_tokens"), reasoning_tokens=usage.get("reasoning_tokens"),
+            total_tokens=usage.get("total_tokens"),
+            latency_ms=max(0, round((time.monotonic() - request_started) * 1000)),
+            provider_latency_ms=usage.get("latency_ms"), retry_count=usage.get("retry_count"),
+            provider_call_count=usage.get("provider_calls") or (1 + int(usage.get("retry_count", 0)) if usage.get("provider") else None),
+            session_id=session_id,
+        ))
     db = SessionLocal()
     try:
         is_new_session = body.session_id is None
@@ -165,6 +202,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
                 mode=safety.mode, payload={"category": safety.category},
             )
             db.commit()
+            terminal("safety", mode=safety.mode, session_id=session_id)
             return {"mode": safety.mode, "session_id": session_id, "message": safety.message, "turns": turns}
         route = unified_aura_orchestrator.prepare(message, prior_user_turns=prior_user_turns)
         logger.info("routing_event=%s freshness_source=%s", route.routing_event, route.freshness_source or "none")
@@ -185,6 +223,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
             public_payload = {"sources": result.get("sources", [])} if result["mode"] in {"CURRENT_COMPLETE", "CURRENT_INFORMATION_UNAVAILABLE"} else None
             turns = append_turn(db, session_id=session_id, role="assistant", content=reply, mode=result["mode"], payload=public_payload)
             db.commit()
+            terminal("success", mode=result["mode"], usage=result.get("usage"), session_id=session_id)
             return {"mode": result["mode"], "session_id": session_id, "message": reply, "turns": turns, **({"sources": result.get("sources", [])} if public_payload else {})}
 
         stored = owned_session(db, session_id=session_id, user_id=user_id,
@@ -215,6 +254,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
             questions = list(state.clarification.questions if state.clarification else [])
             turns = append_turn(db, session_id=session_id, role="assistant", content=questions[0] if questions else "I need a little more information.", mode="CLARIFICATION_REQUIRED", payload={"questions": questions})
             db.commit()
+            terminal("clarification", mode="CLARIFICATION_REQUIRED", session_id=session_id)
             response = clarification_response(state, session_id=session_id)
             response["turns"] = turns
             return response
@@ -222,14 +262,18 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
         execution = decision_analysis_orchestrator.analyze(state)
         if execution.status == "PARTIAL":
             _log_provider_failure("ANALYSIS_PARTIAL", execution.usage)
-            return _save_partial(db,state=state,session_id=session_id,message=message,answers=answers,usage=execution.usage)
+            response = _save_partial(db,state=state,session_id=session_id,message=message,answers=answers,usage=execution.usage)
+            terminal("partial", mode="ANALYSIS_PARTIAL", usage=execution.usage, session_id=session_id)
+            return response
         if execution.status != "READY":
             db.rollback()
             _failure(execution.status, execution.usage)
         try:
             response, report = analysis_report(state,execution,semantic_classifier=decision_analysis_orchestrator.classify_semantic_quality)
         except FinalBriefQualityError:
-            return _save_partial(db,state=state,session_id=session_id,message=message,answers=answers,usage=execution.usage)
+            response = _save_partial(db,state=state,session_id=session_id,message=message,answers=answers,usage=execution.usage)
+            terminal("partial", mode="ANALYSIS_PARTIAL", usage=execution.usage, session_id=session_id)
+            return response
         log_provider_stage(execution.usage.get("provider_attempt","initial"),"brief_constructed")
         report["personal_ask"] = {"message": message, "clarification_answers": answers}
         save_session(
@@ -242,21 +286,27 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
         log_provider_stage(execution.usage.get("provider_attempt","initial"),"persistence_succeeded")
         response["session_id"] = session_id
         response["turns"] = turns
+        terminal("success", mode="ANALYSIS_COMPLETE", usage=execution.usage, session_id=session_id)
         return response
     except ProviderTimeoutError:
         db.rollback()
+        terminal("failure", error_category="timeout")
         _failure("RETRYABLE_FAILURE", {"failure_stage": "general_generation"})
     except ProviderUnavailableError as error:
         db.rollback()
+        terminal("failure", error_category="provider_unavailable")
         _failure("ANALYSIS_PROVIDER_UNAVAILABLE", error.diagnostics)
     except PersonalAskNotFoundError:
         db.rollback()
+        terminal("failure", error_category="not_found")
         raise HTTPException(status_code=404, detail="Ask session not found")
     except HTTPException:
         db.rollback()
+        terminal("failure", error_category="request_rejected")
         raise
     except Exception:
         db.rollback()
+        terminal("failure", error_category="internal_error")
         raise
     finally:
         db.close()

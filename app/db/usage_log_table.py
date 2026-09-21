@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     func,
+    Index,
 )
 
 from app.db.database import metadata
@@ -26,6 +27,12 @@ usage_log_table = Table(
         Integer,
         primary_key=True,
     ),
+    Column("request_id", String(36), nullable=True, unique=True, index=True),
+    Column("route", String(100), nullable=True, index=True),
+    Column("request_mode", String(64), nullable=True),
+    Column("outcome", String(32), nullable=True, index=True),
+    Column("error_category", String(64), nullable=True),
+    Column("provider", String(64), nullable=True),
 
     # ==========================================================
     # RELATIONSHIPS
@@ -54,6 +61,7 @@ usage_log_table = Table(
         nullable=True,
         index=True,
     ),
+    Column("session_id", Integer, ForeignKey("intelligence_sessions.id"), nullable=True, index=True),
 
     # ==========================================================
     # TENANT
@@ -117,6 +125,12 @@ usage_log_table = Table(
         Integer,
         nullable=True,
     ),
+    Column("input_tokens", Integer, nullable=True),
+    Column("output_tokens", Integer, nullable=True),
+    Column("reasoning_tokens", Integer, nullable=True),
+    Column("provider_latency_ms", Integer, nullable=True),
+    Column("retry_count", Integer, nullable=True),
+    Column("provider_call_count", Integer, nullable=True),
 
     # ==========================================================
     # AUDIT
@@ -129,3 +143,5 @@ usage_log_table = Table(
         server_default=func.now(),
     ),
 )
+
+Index("ix_usage_logs_created_at", usage_log_table.c.created_at)
