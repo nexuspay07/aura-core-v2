@@ -94,6 +94,6 @@ def test_telemetry_failure_never_breaks_success(monkeypatch):
     client,_,_,engine=_client(monkeypatch)
     try:
         monkeypatch.setattr(ask_routes.telemetry_service,"record_intelligence_execution",lambda *_: (_ for _ in ()).throw(RuntimeError("down")))
-        response=client.post("/personal/ask",headers={"Authorization":"Bearer token"},json={"message":"Explain compound interest."})
+        response=client.post("/personal/ask",headers={"Authorization":"Bearer token"},json={"message":"I have two job offers. Offer A is remote. Offer B has a commute."})
         assert response.status_code==200
     finally: engine.dispose()

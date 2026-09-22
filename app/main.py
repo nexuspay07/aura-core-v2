@@ -99,6 +99,7 @@ from app.api.payment_routes import router as commercial_payment_router
 from app.api.document_routes import router as document_router
 from app.api.personal_decision_routes import router as personal_decision_router
 from app.api.personal_ask_routes import router as personal_ask_router
+from app.api.control_center_routes import router as control_center_router
 
 from app.core.simulation.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
@@ -125,6 +126,7 @@ app.include_router(commercial_payment_router)
 app.include_router(document_router)
 app.include_router(personal_decision_router)
 app.include_router(personal_ask_router)
+app.include_router(control_center_router)
 
 
 # =========================
