@@ -1,6 +1,6 @@
 """Provider-neutral, bounded model-generation seam for Intelligence V2."""
 from __future__ import annotations
-import json, os, time
+import json, os, re, time
 from enum import Enum
 from typing import Any, Protocol
 
@@ -66,12 +66,17 @@ class ModelProvider(Protocol):
     provider_name: str
     model_name: str
     capabilities: set[str]
-    def generate_structured(self, *, system: str, payload: dict[str, Any], timeout_seconds: float) -> tuple[dict[str, Any],dict[str,Any]]: ...
+    def generate_structured(self, *, system: str, payload: dict[str, Any], timeout_seconds: float,
+                            reasoning_effort: str | None = None,
+                            output_schema: dict[str, Any] | None = None,
+                            schema_name: str | None = None) -> tuple[dict[str, Any],dict[str,Any]]: ...
     def health_check(self) -> bool: ...
 
 class UnconfiguredModelProvider:
     provider_name="unconfigured"; model_name="none"; capabilities=set()
-    def generate_structured(self, **_): raise ProviderUnavailableError("No V2 model provider is configured")
+    def generate_structured(self, *, system, payload, timeout_seconds, reasoning_effort=None,
+                            output_schema=None, schema_name=None):
+        raise ProviderUnavailableError("No V2 model provider is configured")
     def health_check(self): return False
 
 class OpenAIModelProvider:
@@ -81,11 +86,15 @@ class OpenAIModelProvider:
         self.max_output_tokens=max_output_tokens or analysis_max_output_tokens()
         self.reasoning_effort=reasoning_effort or analysis_reasoning_effort()
         if not self._api_key: raise ProviderUnavailableError("OpenAI provider is not configured")
-    def generate_structured(self, *, system, payload, timeout_seconds, reasoning_effort=None):
+    def generate_structured(self, *, system, payload, timeout_seconds, reasoning_effort=None,
+                            output_schema=None, schema_name=None):
         try:
             from openai import OpenAI
             started=time.monotonic(); client=OpenAI(api_key=self._api_key,timeout=timeout_seconds,max_retries=0)
-            response=client.responses.create(**self.request_kwargs(system=system,payload=payload,reasoning_effort=reasoning_effort))
+            response=client.responses.create(**self.request_kwargs(
+                system=system, payload=payload, reasoning_effort=reasoning_effort,
+                output_schema=output_schema, schema_name=schema_name,
+            ))
             return self._parse_response(response, started)
         except TimeoutError as error: raise ProviderTimeoutError("Provider timed out", "timeout", self._exception_diagnostics(error, "timeout")) from error
         except json.JSONDecodeError as error: raise InvalidModelResponseError("Provider returned invalid structured output", "structured_output_error") from error
@@ -108,8 +117,15 @@ class OpenAIModelProvider:
         except ModelProviderError:raise
         except Exception as error:raise self._map_request_exception(error) from error
     def health_check(self): return bool(self._api_key)
-    def request_kwargs(self, *, system, payload, reasoning_effort=None):
-        request={"model":self.model_name,"instructions":system,"input":json.dumps(payload,separators=(",",":")),"text":{"format":{"type":"json_schema","name":"model_analysis_result","strict":True,"schema":model_analysis_schema()},"verbosity":analysis_verbosity()},"max_output_tokens":self.max_output_tokens,"store":False}
+    def request_kwargs(self, *, system, payload, reasoning_effort=None,
+                       output_schema=None, schema_name=None):
+        resolved_schema = model_analysis_schema() if output_schema is None else output_schema
+        resolved_name = schema_name if schema_name is not None else ("model_analysis_result" if output_schema is None else "structured_result")
+        if not isinstance(resolved_schema, dict):
+            raise ValueError("output_schema must be a JSON-schema dictionary")
+        if not isinstance(resolved_name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", resolved_name):
+            raise ValueError("schema_name must contain 1-64 letters, numbers, underscores, or hyphens")
+        request={"model":self.model_name,"instructions":system,"input":json.dumps(payload,separators=(",",":")),"text":{"format":{"type":"json_schema","name":resolved_name,"strict":True,"schema":resolved_schema},"verbosity":analysis_verbosity()},"max_output_tokens":self.max_output_tokens,"store":False}
         if self.model_name.lower().startswith("gpt-5"): request["reasoning"]={"effort":reasoning_effort or self.reasoning_effort}
         return request
     def _exception_diagnostics(self, error, category):
@@ -169,7 +185,8 @@ class OpenAIModelProvider:
 class MockModelProvider:
     provider_name="mock"; model_name="deterministic-test"; capabilities={"structured_output"}
     def __init__(self,response:dict[str,Any] | Exception): self.response=response;self.calls=0
-    def generate_structured(self, **_):
+    def generate_structured(self, *, system, payload, timeout_seconds, reasoning_effort=None,
+                            output_schema=None, schema_name=None):
         self.calls+=1
         if isinstance(self.response,Exception): raise self.response
         return self.response,{"provider":self.provider_name,"model":self.model_name,"input_tokens":1,"output_tokens":1,"latency_ms":0}
