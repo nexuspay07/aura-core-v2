@@ -1,6 +1,7 @@
 """Canonical, side-effect-free Strategy domain contracts."""
 
 from app.strategy.adapters import build_strategy_input
+from app.strategy.capability import StrategyCapability, strategy_capability
 from app.strategy.orchestrator import StrategyGenerationError, StrategyOrchestrator, strategy_orchestrator
 from app.strategy.quality import StrategyQualityError, StrategyQualityIssue, validate_strategy_quality
 from app.strategy.contracts import (
@@ -30,6 +31,7 @@ __all__ = [
     "EvidenceReference",
     "StrategyAlternative",
     "StrategyAssumption",
+    "StrategyCapability",
     "StrategyConstraint",
     "StrategyInput",
     "StrategyGenerationError",
@@ -43,6 +45,7 @@ __all__ = [
     "StrategyQualityIssue",
     "StrategyValidationError",
     "strategy_orchestrator",
+    "strategy_capability",
     "SuccessMeasure",
     "validate_constraint_preservation",
     "validate_strategy_input",
