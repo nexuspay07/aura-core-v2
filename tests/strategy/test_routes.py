@@ -19,9 +19,11 @@ from app.strategy.contracts import (
     StrategyRisk,
     SuccessMeasure,
 )
+from app.strategy.capability import StrategyCapability
+from app.strategy.orchestrator import StrategyOrchestrator
 from app.strategy.presentation import to_strategy_presentation
 from app.strategy.quality import StrategyQualityError, StrategyQualityIssue
-from app.strategy.validation import StrategyValidationError
+from app.strategy.validation import StrategyValidationError, validate_strategy_input
 
 
 class RecordingCapability:
@@ -124,9 +126,69 @@ def test_authenticated_request_maps_scope_and_content_and_invokes_capability_onc
     assert value.time_horizon == "Next planning horizon"
     assert value.change_conditions == ("Reliability does not improve.",)
     assert value.confidence is ConfidenceLevel.LOW
-    assert value.confidence_rationale == ()
+    assert value.confidence_rationale == (routes.DIRECT_STRATEGY_CONFIDENCE_RATIONALE,)
     assert value.evidence_refs == ()
     assert value.source_decision_id is None and value.source_reference is None
+
+
+def test_direct_mapper_produces_deterministic_valid_low_confidence_input():
+    body = routes.DirectStrategyRequest.model_validate(request_payload())
+    scope = routes.StrategyScope(user_id=11, organization_id=22, workspace_id=33)
+
+    first = routes.to_strategy_input(body, scope)
+    second = routes.to_strategy_input(body, scope)
+
+    validate_strategy_input(first)
+    assert first.confidence is ConfidenceLevel.LOW
+    assert first.confidence_rationale == second.confidence_rationale
+    assert first.confidence_rationale == (routes.DIRECT_STRATEGY_CONFIDENCE_RATIONALE,)
+    rationale = first.confidence_rationale[0].casefold()
+    assert "directly" in rationale and "user-supplied" in rationale
+    assert "without a completed decision intelligence evaluation" in rationale
+    assert "evidence" not in rationale
+
+
+def test_http_path_crosses_real_canonical_validation_before_offline_provider(monkeypatch):
+    class OfflineProvider:
+        provider_name = "offline"
+        model_name = "offline"
+        capabilities = {"structured_output"}
+
+        def __init__(self):
+            self.calls = []
+
+        def generate_structured(self, **kwargs):
+            self.calls.append(kwargs)
+            return {
+                "approach": "Stabilize critical dependencies before expanding.",
+                "phases": [{
+                    "order": 1,
+                    "name": "Stabilize",
+                    "purpose": "Reduce reliability risk.",
+                    "focus_areas": [],
+                    "milestone_intent": None,
+                }],
+                "risk_mitigations": [],
+                "success_measures": ["Reliability improves."],
+                "assumptions": [],
+                "uncertainties": [],
+                "change_conditions": [],
+            }, {}
+
+    provider = OfflineProvider()
+    capability = StrategyCapability(StrategyOrchestrator(provider))
+    test_client, _ = client(monkeypatch, capability)
+
+    response = test_client.post(
+        "/strategies", headers={"Authorization": "Bearer token"}, json=request_payload()
+    )
+
+    assert response.status_code == 200, response.text
+    assert len(provider.calls) == 1
+    assert provider.calls[0]["payload"]["confidence"] == "LOW"
+    assert provider.calls[0]["payload"]["confidence_rationale"] == [
+        routes.DIRECT_STRATEGY_CONFIDENCE_RATIONALE
+    ]
 
 
 def test_response_uses_presentation_mapper_and_excludes_internal_fields(monkeypatch):
@@ -165,7 +227,10 @@ def test_response_uses_presentation_mapper_and_excludes_internal_fields(monkeypa
 def test_request_cannot_supply_tenant_or_source_identity(monkeypatch):
     test_client, _ = client(monkeypatch, RecordingCapability())
     headers = {"Authorization": "Bearer token"}
-    for field in ("user_id", "organization_id", "workspace_id", "source_decision_id", "evidence_refs"):
+    for field in (
+        "user_id", "organization_id", "workspace_id", "source_decision_id", "evidence_refs",
+        "confidence", "confidence_rationale",
+    ):
         payload = {**request_payload(), field: 999}
         assert test_client.post("/strategies", headers=headers, json=payload).status_code == 422
 

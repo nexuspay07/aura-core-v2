@@ -80,7 +80,7 @@ def result_for(strategy_input):
         uncertainties=strategy_input.uncertainties,
         change_conditions=strategy_input.change_conditions,
         confidence=ConfidenceLevel.LOW,
-        confidence_rationale=(),
+        confidence_rationale=strategy_input.confidence_rationale,
     )
 
 
@@ -133,6 +133,7 @@ def test_success_emits_one_content_free_operational_event(monkeypatch):
     assert event.reasoning_tokens is None and event.total_tokens is None
     assert event.retry_count is None and event.provider_call_count is None
     rendered = str(event.model_dump())
+    assert routes.DIRECT_STRATEGY_CONFIDENCE_RATIONALE not in rendered
     for private in (*PRIVATE_VALUES, "PRIVATE RESOURCE DESCRIPTION", "PRIVATE TIME HORIZON", "PRIVATE APPROACH"):
         assert private not in rendered
 

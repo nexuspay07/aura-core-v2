@@ -38,6 +38,11 @@ router = APIRouter(prefix="/strategies", tags=["Strategy"])
 security = HTTPBearer()
 logger = logging.getLogger(__name__)
 
+DIRECT_STRATEGY_CONFIDENCE_RATIONALE = (
+    "Confidence is low because this strategy was generated directly from "
+    "user-supplied direction without a completed Decision Intelligence evaluation."
+)
+
 
 def _record_terminal_execution(event: IntelligenceExecutionTelemetry) -> None:
     """Persist content-free telemetry without affecting the Strategy response."""
@@ -130,6 +135,7 @@ def to_strategy_input(body: DirectStrategyRequest, scope: StrategyScope) -> Stra
         time_horizon=body.time_horizon,
         change_conditions=tuple(body.change_conditions),
         confidence=ConfidenceLevel.LOW,
+        confidence_rationale=(DIRECT_STRATEGY_CONFIDENCE_RATIONALE,),
     )
 
 
