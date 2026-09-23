@@ -10,8 +10,8 @@ class IntelligenceExecutionTelemetry(BaseModel):
     model_config = ConfigDict(extra="forbid")
     request_id: str
     user_id: int
-    organization_id: int
-    workspace_id: int
+    organization_id: int | None
+    workspace_id: int | None
     route: str
     request_mode: str | None = None
     outcome: Literal["success", "partial", "failure", "clarification", "safety"]

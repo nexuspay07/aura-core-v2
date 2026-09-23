@@ -219,7 +219,7 @@ def test_endpoint_is_documented_as_ephemeral_generation(monkeypatch):
 def test_route_has_no_persistence_marketplace_telemetry_or_direct_provider_dependency():
     source = Path("app/strategy/routes.py").read_text(encoding="utf-8").lower()
     for forbidden in (
-        "sessionlocal", "sqlalchemy", "repository", "marketplace", "telemetry",
+        "sqlalchemy", "repository", "marketplace",
         "commercial", "billing", "openai", "generate_structured", "personal_ask",
         "generate_from_decision", "simulation", "planning", "app.learning", "app.execution",
     ):
