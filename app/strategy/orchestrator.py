@@ -24,6 +24,7 @@ from app.strategy.contracts import (
 )
 from app.strategy.model_schema import STRATEGY_SCHEMA_NAME, strategy_model_schema
 from app.strategy.prompts import STRATEGY_RETRY_PROMPT, STRATEGY_SYSTEM_PROMPT
+from app.strategy.quality import validate_strategy_quality
 from app.strategy.validation import StrategyValidationError, validate_strategy_input, validate_strategy_result
 
 
@@ -93,6 +94,7 @@ class StrategyOrchestrator:
                 )
                 result = self._result(strategy_input, raw)
                 validate_strategy_result(result, strategy_input)
+                validate_strategy_quality(strategy_input, result)
                 return result
             except (InvalidModelResponseError, StrategyGenerationError, StrategyValidationError) as error:
                 last_error = error

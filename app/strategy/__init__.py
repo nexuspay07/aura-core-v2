@@ -2,6 +2,7 @@
 
 from app.strategy.adapters import build_strategy_input
 from app.strategy.orchestrator import StrategyGenerationError, StrategyOrchestrator, strategy_orchestrator
+from app.strategy.quality import StrategyQualityError, StrategyQualityIssue, validate_strategy_quality
 from app.strategy.contracts import (
     ConfidenceLevel,
     EvidenceReference,
@@ -38,10 +39,13 @@ __all__ = [
     "StrategyResult",
     "StrategyRisk",
     "StrategyScope",
+    "StrategyQualityError",
+    "StrategyQualityIssue",
     "StrategyValidationError",
     "strategy_orchestrator",
     "SuccessMeasure",
     "validate_constraint_preservation",
     "validate_strategy_input",
+    "validate_strategy_quality",
     "validate_strategy_result",
 ]
