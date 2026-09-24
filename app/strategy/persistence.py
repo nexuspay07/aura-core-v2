@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db.personal_decision_table import personal_decision_table
 from app.db.strategy_resource_table import strategy_resource_table, strategy_revision_table
@@ -44,6 +44,10 @@ class StrategyPersistenceError(ValueError):
 
 class StrategyPersistenceNotFoundError(StrategyPersistenceError):
     """No Strategy exists in the authorized tenant scope."""
+
+
+class StrategyPersistenceConflictError(StrategyPersistenceError):
+    """A Strategy metadata mutation used a stale optimistic lock."""
 
 
 @dataclass(frozen=True)
@@ -118,6 +122,15 @@ def serialize_strategy_result(result: StrategyResult) -> dict[str, Any]:
         ],
         "time_horizon": result.time_horizon,
     }
+
+
+def normalize_strategy_title(value: object) -> str:
+    """Normalize trusted product metadata without invoking intelligence."""
+
+    title = " ".join(value.split()) if isinstance(value, str) else ""
+    if not title or len(title) > 255:
+        raise StrategyPersistenceError("Strategy title must contain 1 to 255 characters")
+    return title
 
 
 def _object(value: object, name: str, fields: set[str]) -> Mapping[str, Any]:
@@ -230,10 +243,7 @@ class StrategyRepository:
 
     @staticmethod
     def _title(value: str) -> str:
-        title = value.strip() if isinstance(value, str) else ""
-        if not title or len(title) > 255:
-            raise StrategyPersistenceError("Strategy title must contain 1 to 255 characters")
-        return title
+        return normalize_strategy_title(value)
 
     @staticmethod
     def _validate_scope(db, scope: StrategyScope) -> dict[str, int | None]:
@@ -344,6 +354,104 @@ class StrategyRepository:
         if not resource:
             raise StrategyPersistenceNotFoundError("Strategy not found")
         return self._hydrate(db, resource)
+
+    def list_personal_strategies(
+        self, db, *, owner_user_id: int, limit: int = 50
+    ) -> list[PersistedStrategy]:
+        return self._list(db, (
+            strategy_resource_table.c.owner_user_id == owner_user_id,
+            strategy_resource_table.c.organization_id.is_(None),
+            strategy_resource_table.c.workspace_id.is_(None),
+        ), limit)
+
+    def list_workspace_strategies(
+        self, db, *, organization_id: int, workspace_id: int, limit: int = 50
+    ) -> list[PersistedStrategy]:
+        return self._list(db, (
+            strategy_resource_table.c.owner_user_id.is_(None),
+            strategy_resource_table.c.organization_id == organization_id,
+            strategy_resource_table.c.workspace_id == workspace_id,
+        ), limit)
+
+    def archive_personal_strategy(
+        self,
+        db,
+        *,
+        public_id: str,
+        owner_user_id: int,
+        expected_lock_version: int,
+    ) -> PersistedStrategy:
+        return self._archive(db, (
+            strategy_resource_table.c.public_id == public_id,
+            strategy_resource_table.c.owner_user_id == owner_user_id,
+            strategy_resource_table.c.organization_id.is_(None),
+            strategy_resource_table.c.workspace_id.is_(None),
+        ), expected_lock_version)
+
+    def archive_workspace_strategy(
+        self,
+        db,
+        *,
+        public_id: str,
+        organization_id: int,
+        workspace_id: int,
+        expected_lock_version: int,
+    ) -> PersistedStrategy:
+        return self._archive(db, (
+            strategy_resource_table.c.public_id == public_id,
+            strategy_resource_table.c.owner_user_id.is_(None),
+            strategy_resource_table.c.organization_id == organization_id,
+            strategy_resource_table.c.workspace_id == workspace_id,
+        ), expected_lock_version)
+
+    def _list(self, db, conditions: tuple[Any, ...], limit: int) -> list[PersistedStrategy]:
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+            raise StrategyPersistenceError("Strategy list limit must be between 1 and 100")
+        resources = db.execute(
+            select(strategy_resource_table)
+            .where(*conditions, strategy_resource_table.c.archived_at.is_(None))
+            .order_by(strategy_resource_table.c.updated_at.desc(), strategy_resource_table.c.id.desc())
+            .limit(limit)
+        ).mappings().all()
+        return [self._hydrate(db, resource) for resource in resources]
+
+    def _archive(
+        self, db, conditions: tuple[Any, ...], expected_lock_version: int
+    ) -> PersistedStrategy:
+        if (
+            not isinstance(expected_lock_version, int)
+            or isinstance(expected_lock_version, bool)
+            or expected_lock_version <= 0
+        ):
+            raise StrategyPersistenceError("Expected lock version must be a positive integer")
+        resource = db.execute(select(strategy_resource_table).where(*conditions)).mappings().first()
+        if not resource:
+            raise StrategyPersistenceNotFoundError("Strategy not found")
+        if resource["archived_at"] is not None:
+            return self._hydrate(db, resource)
+
+        now = datetime.now(timezone.utc)
+        changed = db.execute(
+            update(strategy_resource_table)
+            .where(
+                strategy_resource_table.c.id == resource["id"],
+                strategy_resource_table.c.archived_at.is_(None),
+                strategy_resource_table.c.lock_version == expected_lock_version,
+            )
+            .values(
+                archived_at=now,
+                updated_at=now,
+                lock_version=strategy_resource_table.c.lock_version + 1,
+            )
+        )
+        if changed.rowcount != 1:
+            current = db.execute(
+                select(strategy_resource_table).where(strategy_resource_table.c.id == resource["id"])
+            ).mappings().one()
+            if current["archived_at"] is not None:
+                return self._hydrate(db, current)
+            raise StrategyPersistenceConflictError("Strategy lock version is stale")
+        return self._get_by_internal_id(db, resource["id"])
 
     def _get_by_internal_id(self, db, strategy_id: int) -> PersistedStrategy:
         resource = db.execute(
