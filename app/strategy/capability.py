@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from app.intelligence_v2.contracts import AnalysisExecution, DecisionState
 from app.strategy.adapters import build_strategy_input
 from app.strategy.contracts import StrategyInput, StrategyResult
@@ -18,10 +20,17 @@ class StrategyCapability:
     def __init__(self, orchestrator: StrategyOrchestrator | None = None) -> None:
         self._orchestrator = orchestrator or strategy_orchestrator
 
-    def generate(self, strategy_input: StrategyInput) -> StrategyResult:
+    def generate(
+        self,
+        strategy_input: StrategyInput,
+        *,
+        before_provider_attempt: Callable[[], None] | None = None,
+    ) -> StrategyResult:
         """Generate a strategy through the canonical orchestrator."""
 
-        return self._orchestrator.generate(strategy_input)
+        if before_provider_attempt is None:
+            return self._orchestrator.generate(strategy_input)
+        return self._orchestrator.generate(strategy_input, before_provider_attempt=before_provider_attempt)
 
     def generate_from_decision(
         self,

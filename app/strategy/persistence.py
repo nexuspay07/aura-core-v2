@@ -355,6 +355,37 @@ class StrategyRepository:
             raise StrategyPersistenceNotFoundError("Strategy not found")
         return self._hydrate(db, resource)
 
+    def get_personal_strategy_by_internal_id(
+        self, db, *, strategy_id: int, owner_user_id: int
+    ) -> PersistedStrategy:
+        resource = db.execute(select(strategy_resource_table).where(
+            strategy_resource_table.c.id == strategy_id,
+            strategy_resource_table.c.owner_user_id == owner_user_id,
+            strategy_resource_table.c.organization_id.is_(None),
+            strategy_resource_table.c.workspace_id.is_(None),
+        )).mappings().first()
+        if not resource:
+            raise StrategyPersistenceNotFoundError("Strategy not found")
+        return self._hydrate(db, resource)
+
+    def get_workspace_strategy_by_internal_id(
+        self,
+        db,
+        *,
+        strategy_id: int,
+        organization_id: int,
+        workspace_id: int,
+    ) -> PersistedStrategy:
+        resource = db.execute(select(strategy_resource_table).where(
+            strategy_resource_table.c.id == strategy_id,
+            strategy_resource_table.c.owner_user_id.is_(None),
+            strategy_resource_table.c.organization_id == organization_id,
+            strategy_resource_table.c.workspace_id == workspace_id,
+        )).mappings().first()
+        if not resource:
+            raise StrategyPersistenceNotFoundError("Strategy not found")
+        return self._hydrate(db, resource)
+
     def list_personal_strategies(
         self, db, *, owner_user_id: int, limit: int = 50
     ) -> list[PersistedStrategy]:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from app.intelligence_v2.model_provider import (
@@ -78,11 +79,18 @@ class StrategyOrchestrator:
             "confidence_rationale": list(strategy_input.confidence_rationale),
         }
 
-    def generate(self, strategy_input: StrategyInput) -> StrategyResult:
+    def generate(
+        self,
+        strategy_input: StrategyInput,
+        *,
+        before_provider_attempt: Callable[[], None] | None = None,
+    ) -> StrategyResult:
         validate_strategy_input(strategy_input)
         payload = self.payload(strategy_input)
         last_error: Exception | None = None
         for attempt in range(self.max_provider_calls):
+            if before_provider_attempt is not None:
+                before_provider_attempt()
             try:
                 raw, _usage = self.provider.generate_structured(
                     system=STRATEGY_SYSTEM_PROMPT + (STRATEGY_RETRY_PROMPT if attempt else ""),

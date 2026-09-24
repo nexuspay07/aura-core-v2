@@ -15,6 +15,14 @@ from app.strategy.persistence import (
     normalize_strategy_title,
     strategy_repository,
 )
+from app.strategy.idempotency import (
+    StrategyCreateClaimState,
+    StrategyCreateIdempotencyRepository,
+    StrategyIdempotencyCompletionError,
+    StrategyIdempotencyError,
+    strategy_create_idempotency_repository,
+    strategy_create_request_fingerprint,
+)
 from app.strategy.validation import (
     StrategyValidationError,
     validate_strategy_input,
@@ -42,6 +50,10 @@ class StrategyApplicationConflictError(StrategyApplicationError):
     pass
 
 
+class StrategyApplicationInProgressError(StrategyApplicationConflictError):
+    pass
+
+
 class StrategyApplicationService:
     """Coordinate canonical intelligence and persistence without HTTP concerns."""
 
@@ -49,9 +61,119 @@ class StrategyApplicationService:
         self,
         capability: StrategyCapability | None = None,
         repository: StrategyRepository | None = None,
+        idempotency_repository: StrategyCreateIdempotencyRepository | None = None,
     ) -> None:
         self.capability = capability or strategy_capability
         self.repository = repository or strategy_repository
+        self.idempotency_repository = idempotency_repository or strategy_create_idempotency_repository
+
+    def generate_and_persist_idempotent_direct_strategy(
+        self,
+        db,
+        *,
+        strategy_input: StrategyInput,
+        title: str,
+        created_by_user_id: int,
+        idempotency_key: str,
+    ) -> PersistedStrategy:
+        """Claim, generate without an open transaction, then commit atomically."""
+
+        normalized_title = self._title(title)
+        self._creator(created_by_user_id)
+        try:
+            validate_strategy_input(strategy_input)
+            fingerprint = strategy_create_request_fingerprint(
+                title=normalized_title,
+                strategy_input=strategy_input,
+            )
+            claim = self.idempotency_repository.claim(
+                db,
+                idempotency_key=idempotency_key,
+                request_fingerprint=fingerprint,
+                actor_user_id=created_by_user_id,
+                scope=strategy_input.scope,
+            )
+            db.commit()
+        except (StrategyValidationError, StrategyIdempotencyError) as error:
+            db.rollback()
+            raise StrategyApplicationValidationError("Invalid persistent Strategy request") from error
+        except SQLAlchemyError as error:
+            db.rollback()
+            raise StrategyApplicationPersistenceError("Unable to coordinate Strategy creation") from error
+
+        if claim.state is StrategyCreateClaimState.CONFLICT:
+            raise StrategyApplicationConflictError("Idempotency key conflicts with another request")
+        if claim.state is StrategyCreateClaimState.IN_PROGRESS:
+            raise StrategyApplicationInProgressError("Strategy creation is already in progress")
+        if claim.state is StrategyCreateClaimState.COMPLETED:
+            return self._get_completed_strategy(
+                db,
+                strategy_id=claim.strategy_resource_id,
+                scope=strategy_input.scope,
+            )
+
+        claim_token = claim.claim_token
+
+        def renew_claim() -> None:
+            try:
+                renewed = self.idempotency_repository.renew_claim(
+                    db,
+                    idempotency_key=idempotency_key,
+                    actor_user_id=created_by_user_id,
+                    scope=strategy_input.scope,
+                    claim_token=claim_token,
+                )
+                if not renewed:
+                    db.rollback()
+                    raise StrategyApplicationConflictError("Strategy creation claim was lost")
+                db.commit()
+            except StrategyApplicationConflictError:
+                raise
+            except (StrategyIdempotencyError, SQLAlchemyError) as error:
+                db.rollback()
+                raise StrategyApplicationPersistenceError("Unable to renew Strategy creation claim") from error
+
+        try:
+            result = self.capability.generate(
+                strategy_input,
+                before_provider_attempt=renew_claim,
+            )
+            validate_strategy_result(result, strategy_input)
+        except Exception:
+            db.rollback()
+            try:
+                self.idempotency_repository.abandon_claim(
+                    db,
+                    idempotency_key=idempotency_key,
+                    actor_user_id=created_by_user_id,
+                    scope=strategy_input.scope,
+                    claim_token=claim_token,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+            raise
+
+        try:
+            persisted = self.idempotency_repository.complete_with_strategy(
+                db,
+                idempotency_key=idempotency_key,
+                request_fingerprint=fingerprint,
+                actor_user_id=created_by_user_id,
+                scope=strategy_input.scope,
+                claim_token=claim_token,
+                result=result,
+                title=normalized_title,
+                repository=self.repository,
+            )
+            db.commit()
+            return persisted
+        except StrategyIdempotencyCompletionError as error:
+            db.rollback()
+            raise StrategyApplicationConflictError("Strategy creation claim could not be completed") from error
+        except (StrategyIdempotencyError, StrategyPersistenceError, SQLAlchemyError) as error:
+            db.rollback()
+            raise StrategyApplicationPersistenceError("Unable to persist Strategy") from error
 
     def generate_and_persist_direct_strategy(
         self,
@@ -188,6 +310,28 @@ class StrategyApplicationService:
 
     def _persist(self, db, **values) -> PersistedStrategy:
         return self._repository_call(self.repository.create_strategy, db, **values)
+
+    def _get_completed_strategy(
+        self, db, *, strategy_id: int | None, scope: StrategyScope
+    ) -> PersistedStrategy:
+        if not isinstance(strategy_id, int):
+            raise StrategyApplicationPersistenceError("Completed Strategy linkage is invalid")
+        if scope.organization_id is None:
+            operation = self.repository.get_personal_strategy_by_internal_id
+            values = {"owner_user_id": scope.user_id}
+        else:
+            self._workspace_scope(scope)
+            operation = self.repository.get_workspace_strategy_by_internal_id
+            values = {
+                "organization_id": scope.organization_id,
+                "workspace_id": scope.workspace_id,
+            }
+        return self._repository_call(
+            operation,
+            db,
+            strategy_id=strategy_id,
+            **values,
+        )
 
     @staticmethod
     def _title(value: object) -> str:
