@@ -70,16 +70,18 @@ strategy_revision_table = Table(
     Column("created_by_user_id", Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False),
     Column("origin_type", String(32), nullable=False),
     Column("source_decision_id", Integer, ForeignKey("personal_decisions.id", ondelete="SET NULL"), nullable=True),
+    Column("source_decision_snapshot_id", Integer, ForeignKey("decision_execution_snapshots.id", ondelete="RESTRICT"), nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     UniqueConstraint("strategy_id", "revision_number", name="uq_strategy_revisions_strategy_revision"),
     CheckConstraint("revision_number > 0", name="ck_strategy_revisions_revision_positive"),
     CheckConstraint("snapshot_schema_version > 0", name="ck_strategy_revisions_snapshot_schema_version_positive"),
     CheckConstraint("origin_type IN ('direct', 'decision_derived')", name="ck_strategy_revisions_origin_type"),
     CheckConstraint(
-        "origin_type = 'decision_derived' OR source_decision_id IS NULL",
+        "origin_type = 'decision_derived' OR (source_decision_id IS NULL AND source_decision_snapshot_id IS NULL)",
         name="ck_strategy_revisions_direct_source_decision",
     ),
 )
 
 Index("ix_strategy_revisions_strategy_created", strategy_revision_table.c.strategy_id, strategy_revision_table.c.created_at)
 Index("ix_strategy_revisions_source_decision", strategy_revision_table.c.source_decision_id)
+Index("ix_strategy_revisions_source_decision_snapshot", strategy_revision_table.c.source_decision_snapshot_id)

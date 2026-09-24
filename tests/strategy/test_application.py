@@ -102,6 +102,7 @@ def db():
     ])
     session.execute(insert(personal_decision_table), {
         "id": 41,
+        "public_id": "00000000-0000-4000-8000-000000000041",
         "user_id": 1,
         "organization_id": 10,
         "workspace_id": 11,

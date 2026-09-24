@@ -14,7 +14,7 @@ def test_fresh_database_upgrades_to_head(tmp_path):
     upgrade(database)
     inspector = inspect(create_engine(f"sqlite:///{database}"))
     assert _expected_tables() <= set(inspector.get_table_names())
-    assert "20260924_0025" in current(database)
+    assert "20260924_0026" in current(database)
 
 def test_schema_columns_and_indexes_match_metadata(tmp_path):
     database = tmp_path / "schema.db"
@@ -33,7 +33,8 @@ def test_revision_chain_has_one_head():
     from alembic.config import Config
     from alembic.script import ScriptDirectory
     script = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert script.get_heads() == ["20260924_0025"]
+    assert script.get_heads() == ["20260924_0026"]
+    assert script.get_revision("20260924_0026").down_revision == "20260924_0025"
     assert script.get_revision("20260924_0025").down_revision == "20260923_0024"
     assert script.get_revision("20260923_0024").down_revision == "20260921_0023"
     assert script.get_revision("20260921_0023").down_revision == "20260815_0022"

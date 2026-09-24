@@ -24,7 +24,7 @@ strategy_create_idempotency_table = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()),
     CheckConstraint("length(trim(idempotency_key)) > 0", name="ck_strategy_create_idempotency_key_nonempty"),
     CheckConstraint("length(request_fingerprint) = 64", name="ck_strategy_create_idempotency_fingerprint"),
-    CheckConstraint("operation = 'strategy_create_direct'", name="ck_strategy_create_idempotency_operation"),
+    CheckConstraint("operation IN ('strategy_create_direct', 'strategy_create_from_decision')", name="ck_strategy_create_idempotency_operation"),
     CheckConstraint("status IN ('in_progress', 'completed')", name="ck_strategy_create_idempotency_status"),
     CheckConstraint(
         "(owner_user_id IS NOT NULL AND organization_id IS NULL AND workspace_id IS NULL) OR "

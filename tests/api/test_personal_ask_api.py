@@ -13,6 +13,7 @@ from app.db.intelligence_session_table import intelligence_session_table
 from app.db.organization_member_table import organization_member_table
 from app.db.organization_table import organization_table
 from app.db.personal_decision_table import personal_decision_table
+from app.db.decision_execution_snapshot_table import decision_execution_snapshot_table
 from app.db.user_table import user_table
 from app.db.workspace_member_table import workspace_member_table
 from app.db.workspace_table import workspace_table
@@ -103,6 +104,8 @@ def test_personal_ask_auth_capability_complete_and_save_decision(monkeypatch, ca
         db = factory(); session = db.execute(select(intelligence_session_table).where(intelligence_session_table.c.id == result["session_id"])).mappings().one()
         assert (session["created_by_user_id"], session["organization_id"], session["workspace_id"]) == (1, 1, 1)
         assert session["session_type"] == "personal_ask_v2" and session["report_json"]["executive_report"]["recommendation"]
+        snapshot = db.execute(select(decision_execution_snapshot_table)).mappings().one()
+        assert snapshot["intelligence_session_id"] == result["session_id"] and snapshot["snapshot_version"] == 1
         stage_logs="\n".join(record.message for record in caplog.records if "provider_stage=" in record.message)
         assert "provider_attempt=initial provider_stage=brief_constructed" in stage_logs
         assert "provider_attempt=initial provider_stage=persistence_succeeded" in stage_logs

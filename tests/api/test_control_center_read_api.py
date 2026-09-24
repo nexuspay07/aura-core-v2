@@ -50,7 +50,7 @@ def _setup(monkeypatch, *, populated=True):
                 {**base, "request_id": "failure", "user_id": 2, "outcome": "failure", "error_category": "timeout", "success": False, "latency_ms": 300, "created_at": now-timedelta(hours=1)},
                 {**base, "request_id": "clarify", "user_id": 2, "outcome": "clarification", "request_mode": "CLARIFICATION_REQUIRED", "latency_ms": 200, "created_at": now-timedelta(minutes=30)},
             ])
-            db.execute(insert(personal_decision_table), {"id": 1, "user_id": 1, "organization_id": 1, "workspace_id": 1, "title": "PRIVATE TITLE", "original_question": "PRIVATE QUESTION", "decision_type": "choice", "analysis_snapshot_json": {"private": "content"}, "recommendation": "PRIVATE RECOMMENDATION", "created_at": now-timedelta(hours=3)})
+            db.execute(insert(personal_decision_table), {"id": 1, "public_id": "00000000-0000-4000-8000-000000000001", "user_id": 1, "organization_id": 1, "workspace_id": 1, "title": "PRIVATE TITLE", "original_question": "PRIVATE QUESTION", "decision_type": "choice", "analysis_snapshot_json": {"private": "content"}, "recommendation": "PRIVATE RECOMMENDATION", "created_at": now-timedelta(hours=3)})
     app = FastAPI(); app.include_router(routes.router)
     return TestClient(app), identity, engine
 

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.db.intelligence_session_table import intelligence_session_table
 from app.db.personal_decision_table import personal_decision_table
+from app.intelligence_v2.decision_snapshot_repository import decision_execution_snapshot_repository
 
 
 DECISION_STATUSES = frozenset({"open", "decided", "awaiting_outcome", "completed"})
@@ -175,12 +177,18 @@ class PersonalDecisionService:
         if db.execute(select(personal_decision_table.c.id).where(personal_decision_table.c.source_session_id == source_session_id)).first():
             raise PersonalDecisionAlreadySavedError("A decision has already been saved from this Ask session")
         snapshot = curate_session_snapshot(source)
+        canonical = decision_execution_snapshot_repository.latest_for_session_owned(
+            db, intelligence_session_id=source_session_id, user_id=user_id,
+            organization_id=organization_id, workspace_id=workspace_id,
+        )
         try:
             result = db.execute(personal_decision_table.insert().values(
+                public_id=str(uuid4()),
                 user_id=user_id,
                 organization_id=organization_id,
                 workspace_id=workspace_id,
                 source_session_id=source_session_id,
+                canonical_snapshot_id=canonical.id if canonical else None,
                 title=_text(title) or display_title(source["goal"], decision_type, snapshot.get("problem_understanding")),
                 original_question=source["goal"],
                 decision_type=decision_type,

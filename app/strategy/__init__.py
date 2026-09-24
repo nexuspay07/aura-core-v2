@@ -1,6 +1,6 @@
 """Canonical, side-effect-free Strategy domain contracts."""
 
-from app.strategy.adapters import build_strategy_input
+from app.strategy.adapters import build_strategy_input, build_strategy_input_from_snapshot
 from app.strategy.capability import StrategyCapability, strategy_capability
 from app.strategy.orchestrator import StrategyGenerationError, StrategyOrchestrator, strategy_orchestrator
 from app.strategy.presentation import (
@@ -39,6 +39,7 @@ from app.strategy.validation import (
 __all__ = [
     "ConfidenceLevel",
     "build_strategy_input",
+    "build_strategy_input_from_snapshot",
     "EvidenceReference",
     "StrategyAlternative",
     "StrategyAssumption",

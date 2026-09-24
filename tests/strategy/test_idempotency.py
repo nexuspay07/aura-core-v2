@@ -16,8 +16,11 @@ from app.strategy.contracts import ConfidenceLevel, StrategyInput, StrategyPhase
 from app.strategy.idempotency import (
     CLAIM_LEASE_DURATION,
     StrategyCreateClaimState,
+    StrategyCreateOperation,
     StrategyCreateIdempotencyRepository,
+    StrategyIdempotencyError,
     StrategyIdempotencyCompletionError,
+    strategy_create_from_decision_fingerprint,
     strategy_create_request_fingerprint,
 )
 from app.intelligence_v2.model_provider import analysis_timeout_seconds
@@ -317,4 +320,16 @@ def test_state_constraint_and_privacy_safe_columns(database):
                 actor_user_id=1, owner_user_id=1, status="completed", claim_token=None,
                 lease_expires_at=None, strategy_resource_id=None, created_at=now, updated_at=now,
             ))
+    db.close()
+
+def test_bounded_decision_operation_and_canonical_fingerprint(database):
+    factory, _ = database
+    db=factory(); repository=StrategyCreateIdempotencyRepository(); scope=StrategyScope(1); canonical=direct_input(scope, source_decision_id=9, source_reference="decision:public")
+    digest=strategy_create_from_decision_fingerprint(title=" Plan ", strategy_input=canonical, personal_decision_public_id="decision-public", snapshot_public_id="snapshot-public", snapshot_version=2)
+    assert digest == strategy_create_from_decision_fingerprint(title="Plan", strategy_input=canonical, personal_decision_public_id="decision-public", snapshot_public_id="snapshot-public", snapshot_version=2)
+    claim=repository.claim(db,idempotency_key="decision-key",request_fingerprint=digest,actor_user_id=1,scope=scope,operation=StrategyCreateOperation.FROM_DECISION)
+    assert claim.state is StrategyCreateClaimState.CLAIMED
+    assert db.execute(select(strategy_create_idempotency_table.c.operation)).scalar_one()=="strategy_create_from_decision"
+    with pytest.raises(StrategyIdempotencyError,match="Unsupported"):
+        repository.claim(db,idempotency_key="bad",request_fingerprint="a"*64,actor_user_id=1,scope=scope,operation="arbitrary")
     db.close()

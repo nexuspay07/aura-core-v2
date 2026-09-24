@@ -8,6 +8,7 @@ from app.db.database import metadata
 from app.db.intelligence_session_table import intelligence_session_table
 from app.db.organization_table import organization_table
 from app.db.personal_decision_table import personal_decision_table
+from app.db.decision_execution_snapshot_table import decision_execution_snapshot_table
 from app.db.user_table import user_table
 from app.db.workspace_table import workspace_table
 from app.personal.decisions import PersonalDecisionNotFoundError, PersonalDecisionTransitionError, display_title, personal_decision_service
@@ -49,6 +50,15 @@ def test_model_schema_and_curated_snapshot_exclude_provider_internals(db):
     assert decision["recommendation"] == "Choose based on verified growth path."
     assert decision["analysis_snapshot_json"]["derived_facts"] == ["$8,000 difference"]
     assert "provider_request" not in decision["analysis_snapshot_json"]
+    assert len(decision["public_id"]) == 36
+
+def test_create_links_latest_owned_snapshot_and_choice_never_mutates_it(db):
+    canonical = {"decision_type":"career_decision","objective":"Choose","selected_option":"Offer A","constraints":[],"resources":[],"evidence_references":[],"assumptions":[],"alternatives":[],"risks":[],"uncertainties":[],"time_horizon":None,"change_conditions":[],"confidence":"MODERATE","confidence_rationale":[],"schema_version":1}
+    db.execute(insert(decision_execution_snapshot_table).values(id=10, public_id="00000000-0000-4000-8000-000000000010", intelligence_session_id=1, user_id=1, organization_id=1, workspace_id=1, snapshot_version=1, snapshot_schema_version=1, canonical_decision_json=canonical))
+    decision = _create(db)
+    assert decision["canonical_snapshot_id"] == 10
+    personal_decision_service.update(db, decision_id=decision["id"], user_id=1, organization_id=1, workspace_id=1, changes={"user_choice":"Offer B"})
+    assert db.execute(select(decision_execution_snapshot_table.c.canonical_decision_json).where(decision_execution_snapshot_table.c.id == 10)).scalar_one()["selected_option"] == "Offer A"
 
 
 def test_create_list_filters_get_and_tenant_hidden_source_scope(db):

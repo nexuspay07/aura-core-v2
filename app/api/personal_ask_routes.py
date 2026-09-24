@@ -31,6 +31,8 @@ from app.personal.safety import personal_safety_boundary
 from app.unified_intelligence.orchestrator import unified_aura_orchestrator
 from app.intelligence_v2.model_provider import ProviderTimeoutError, ProviderUnavailableError
 from app.intelligence_v2.final_quality import FinalBriefQualityError, normalized_public_facts, normalized_public_items
+from app.intelligence_v2.decision_snapshot import CanonicalDecisionSnapshotV1
+from app.intelligence_v2.decision_snapshot_repository import decision_execution_snapshot_repository
 from app.services.telemetry_service import IntelligenceExecutionTelemetry, telemetry_service
 
 
@@ -268,6 +270,7 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
         if execution.status != "READY":
             db.rollback()
             _failure(execution.status, execution.usage)
+        canonical_snapshot = CanonicalDecisionSnapshotV1.capture(state, execution)
         try:
             response, report = analysis_report(state,execution,semantic_classifier=decision_analysis_orchestrator.classify_semantic_quality)
         except FinalBriefQualityError:
@@ -275,6 +278,10 @@ async def ask(body: PersonalAskRequest, identity=Depends(current_identity)):
             terminal("partial", mode="ANALYSIS_PARTIAL", usage=execution.usage, session_id=session_id)
             return response
         log_provider_stage(execution.usage.get("provider_attempt","initial"),"brief_constructed")
+        decision_execution_snapshot_repository.create(
+            db, snapshot=canonical_snapshot, intelligence_session_id=session_id,
+            user_id=user_id, organization_id=organization_id, workspace_id=workspace_id,
+        )
         report["personal_ask"] = {"message": message, "clarification_answers": answers}
         save_session(
             db, session_id=session_id, report=report, status="completed",

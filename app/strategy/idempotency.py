@@ -21,6 +21,7 @@ from app.strategy.validation import StrategyValidationError, validate_strategy_i
 
 
 STRATEGY_CREATE_OPERATION = "strategy_create_direct"
+STRATEGY_CREATE_FROM_DECISION_OPERATION = "strategy_create_from_decision"
 IDEMPOTENCY_KEY_MAX_LENGTH = 255
 CLAIM_LEASE_DURATION = timedelta(minutes=5)
 
@@ -38,6 +39,10 @@ class StrategyCreateClaimState(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     CONFLICT = "CONFLICT"
+
+class StrategyCreateOperation(str, Enum):
+    DIRECT = STRATEGY_CREATE_OPERATION
+    FROM_DECISION = STRATEGY_CREATE_FROM_DECISION_OPERATION
 
 
 @dataclass(frozen=True)
@@ -75,9 +80,25 @@ def strategy_create_request_fingerprint(*, title: str, strategy_input: StrategyI
     canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return sha256(canonical.encode("utf-8")).hexdigest()
 
+def strategy_create_from_decision_fingerprint(*, title: str, strategy_input: StrategyInput, personal_decision_public_id: str, snapshot_public_id: str, snapshot_version: int) -> str:
+    normalized_title = normalize_strategy_title(title)
+    try: validate_strategy_input(strategy_input)
+    except StrategyValidationError as error: raise StrategyIdempotencyError("Invalid canonical Strategy input") from error
+    identifiers = (personal_decision_public_id, snapshot_public_id)
+    if any(not isinstance(item, str) or not item.strip() for item in identifiers) or not isinstance(snapshot_version, int) or snapshot_version <= 0:
+        raise StrategyIdempotencyError("Decision provenance must be complete")
+    payload = {"operation": STRATEGY_CREATE_FROM_DECISION_OPERATION, "scope": _json_value(asdict(strategy_input.scope)), "personal_decision_public_id": personal_decision_public_id.strip(), "snapshot_public_id": snapshot_public_id.strip(), "snapshot_version": snapshot_version, "title": normalized_title, "strategy_input": _json_value(asdict(strategy_input))}
+    return sha256(json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")).hexdigest()
+
 
 class StrategyCreateIdempotencyRepository:
     """Claim and complete direct Strategy creation across backend workers."""
+
+    @staticmethod
+    def _operation(value: object) -> StrategyCreateOperation:
+        if isinstance(value, StrategyCreateOperation): return value
+        try: return StrategyCreateOperation(value)
+        except (TypeError, ValueError) as error: raise StrategyIdempotencyError("Unsupported Strategy create operation") from error
 
     @staticmethod
     def _key(value: object) -> str:
@@ -97,10 +118,10 @@ class StrategyCreateIdempotencyRepository:
         return {"owner_user_id": None, "organization_id": scope.organization_id, "workspace_id": scope.workspace_id}
 
     @staticmethod
-    def _conditions(*, actor_user_id: int, scope: StrategyScope, key: str):
+    def _conditions(*, actor_user_id: int, scope: StrategyScope, key: str, operation: StrategyCreateOperation = StrategyCreateOperation.DIRECT):
         conditions = [
             strategy_create_idempotency_table.c.actor_user_id == actor_user_id,
-            strategy_create_idempotency_table.c.operation == STRATEGY_CREATE_OPERATION,
+            strategy_create_idempotency_table.c.operation == operation.value,
             strategy_create_idempotency_table.c.idempotency_key == key,
         ]
         if scope.organization_id is None:
@@ -126,7 +147,9 @@ class StrategyCreateIdempotencyRepository:
         actor_user_id: int,
         scope: StrategyScope,
         now: datetime | None = None,
+        operation: StrategyCreateOperation = StrategyCreateOperation.DIRECT,
     ) -> StrategyCreateClaim:
+        operation = self._operation(operation)
         key = self._key(idempotency_key)
         if not isinstance(request_fingerprint, str) or len(request_fingerprint) != 64:
             raise StrategyIdempotencyError("Request fingerprint must be a SHA-256 digest")
@@ -143,7 +166,7 @@ class StrategyCreateIdempotencyRepository:
             with db.begin_nested():
                 db.execute(strategy_create_idempotency_table.insert().values(
                     idempotency_key=key,
-                    operation=STRATEGY_CREATE_OPERATION,
+                    operation=operation.value,
                     request_fingerprint=request_fingerprint,
                     actor_user_id=actor_user_id,
                     status="in_progress",
@@ -156,7 +179,7 @@ class StrategyCreateIdempotencyRepository:
         except IntegrityError:
             pass
 
-        conditions = self._conditions(actor_user_id=actor_user_id, scope=scope, key=key)
+        conditions = self._conditions(actor_user_id=actor_user_id, scope=scope, key=key, operation=operation)
         row = db.execute(select(strategy_create_idempotency_table).where(*conditions)).mappings().one()
         if row["request_fingerprint"] != request_fingerprint:
             return StrategyCreateClaim(StrategyCreateClaimState.CONFLICT)
@@ -198,13 +221,15 @@ class StrategyCreateIdempotencyRepository:
         scope: StrategyScope,
         claim_token: str,
         now: datetime | None = None,
+        operation: StrategyCreateOperation = StrategyCreateOperation.DIRECT,
     ) -> bool:
+        operation = self._operation(operation)
         key = self._key(idempotency_key)
         abandoned_at = now or datetime.now(timezone.utc)
         changed = db.execute(
             update(strategy_create_idempotency_table)
             .where(
-                *self._conditions(actor_user_id=actor_user_id, scope=scope, key=key),
+                *self._conditions(actor_user_id=actor_user_id, scope=scope, key=key, operation=operation),
                 strategy_create_idempotency_table.c.status == "in_progress",
                 strategy_create_idempotency_table.c.claim_token == claim_token,
             )
@@ -221,7 +246,9 @@ class StrategyCreateIdempotencyRepository:
         scope: StrategyScope,
         claim_token: str,
         now: datetime | None = None,
+        operation: StrategyCreateOperation = StrategyCreateOperation.DIRECT,
     ) -> bool:
+        operation = self._operation(operation)
         """Extend only the current, still-live fenced claim.
 
         A caller performing a potentially long provider operation can invoke this
@@ -234,7 +261,7 @@ class StrategyCreateIdempotencyRepository:
         changed = db.execute(
             update(strategy_create_idempotency_table)
             .where(
-                *self._conditions(actor_user_id=actor_user_id, scope=scope, key=key),
+                *self._conditions(actor_user_id=actor_user_id, scope=scope, key=key, operation=operation),
                 strategy_create_idempotency_table.c.status == "in_progress",
                 strategy_create_idempotency_table.c.claim_token == claim_token,
                 strategy_create_idempotency_table.c.lease_expires_at > renewed_at,
@@ -260,13 +287,15 @@ class StrategyCreateIdempotencyRepository:
         origin_type: str = "direct",
         repository: StrategyRepository | None = None,
         now: datetime | None = None,
+        operation: StrategyCreateOperation = StrategyCreateOperation.DIRECT,
     ) -> PersistedStrategy:
+        operation = self._operation(operation)
         key = self._key(idempotency_key)
         completed_at = now or datetime.now(timezone.utc)
         if result.scope != scope:
             raise StrategyIdempotencyCompletionError("Strategy result scope does not match the idempotency claim")
         storage = repository or strategy_repository
-        conditions = self._conditions(actor_user_id=actor_user_id, scope=scope, key=key)
+        conditions = self._conditions(actor_user_id=actor_user_id, scope=scope, key=key, operation=operation)
         # Establish the caller-controlled outer write transaction before any
         # savepoint. This also locks/fences the claim on PostgreSQL and avoids
         # SQLite releasing a first savepoint as a durable transaction.

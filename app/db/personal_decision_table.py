@@ -9,12 +9,14 @@ personal_decision_table = Table(
     "personal_decisions",
     metadata,
     Column("id", Integer, primary_key=True),
+    Column("public_id", String(36), nullable=False),
     Column("user_id", Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False),
     Column("organization_id", Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False),
     Column("workspace_id", Integer, ForeignKey("workspaces.id", ondelete="RESTRICT"), nullable=False),
     # Legacy-session linkage is optional. The decision retains a curated copy
     # so session deletion never removes product decision history.
     Column("source_session_id", Integer, ForeignKey("intelligence_sessions.id", ondelete="SET NULL"), nullable=True),
+    Column("canonical_snapshot_id", Integer, ForeignKey("decision_execution_snapshots.id", ondelete="RESTRICT"), nullable=True),
     Column("title", String(255), nullable=False),
     Column("original_question", Text, nullable=False),
     Column("decision_type", String(64), nullable=False),
@@ -36,9 +38,13 @@ personal_decision_table = Table(
     # A completed Personal Ask analysis is one durable decision source.  A
     # future deliberate duplication feature can create a new source session.
     UniqueConstraint("source_session_id", name="uq_personal_decisions_source_session"),
+    UniqueConstraint("public_id", name="uq_personal_decisions_public_id"),
+    UniqueConstraint("canonical_snapshot_id", name="uq_personal_decisions_canonical_snapshot"),
+    CheckConstraint("length(trim(public_id)) > 0", name="ck_personal_decisions_public_id_nonempty"),
 )
 
 Index("ix_personal_decisions_scope_updated", personal_decision_table.c.organization_id, personal_decision_table.c.workspace_id, personal_decision_table.c.user_id, personal_decision_table.c.updated_at)
 Index("ix_personal_decisions_scope_status", personal_decision_table.c.organization_id, personal_decision_table.c.workspace_id, personal_decision_table.c.status)
 Index("ix_personal_decisions_review_date", personal_decision_table.c.review_date)
 Index("ix_personal_decisions_source_session", personal_decision_table.c.source_session_id)
+Index("ix_personal_decisions_canonical_snapshot", personal_decision_table.c.canonical_snapshot_id)
