@@ -22,6 +22,8 @@ from app.strategy.idempotency import (
     StrategyIdempotencyError,
     strategy_create_idempotency_repository,
     strategy_create_request_fingerprint,
+    strategy_create_from_decision_fingerprint,
+    StrategyCreateOperation,
 )
 from app.strategy.validation import (
     StrategyValidationError,
@@ -165,6 +167,91 @@ class StrategyApplicationService:
                 result=result,
                 title=normalized_title,
                 repository=self.repository,
+            )
+            db.commit()
+            return persisted
+        except StrategyIdempotencyCompletionError as error:
+            db.rollback()
+            raise StrategyApplicationConflictError("Strategy creation claim could not be completed") from error
+        except (StrategyIdempotencyError, StrategyPersistenceError, SQLAlchemyError) as error:
+            db.rollback()
+            raise StrategyApplicationPersistenceError("Unable to persist Strategy") from error
+
+    def generate_and_persist_idempotent_decision_strategy(
+        self, db, *, strategy_input: StrategyInput, title: str,
+        created_by_user_id: int, idempotency_key: str,
+        personal_decision_public_id: str, snapshot_public_id: str,
+        snapshot_version: int, source_decision_snapshot_id: int,
+    ) -> PersistedStrategy:
+        """Generate once from an authorized immutable Decision snapshot."""
+        normalized_title = self._title(title)
+        self._creator(created_by_user_id)
+        if strategy_input.source_decision_id is None or not isinstance(source_decision_snapshot_id, int):
+            raise StrategyApplicationValidationError("Decision Strategy provenance is incomplete")
+        operation = StrategyCreateOperation.FROM_DECISION
+        try:
+            validate_strategy_input(strategy_input)
+            fingerprint = strategy_create_from_decision_fingerprint(
+                title=normalized_title, strategy_input=strategy_input,
+                personal_decision_public_id=personal_decision_public_id,
+                snapshot_public_id=snapshot_public_id, snapshot_version=snapshot_version,
+            )
+            claim = self.idempotency_repository.claim(
+                db, idempotency_key=idempotency_key, request_fingerprint=fingerprint,
+                actor_user_id=created_by_user_id, scope=strategy_input.scope,
+                operation=operation,
+            )
+            db.commit()
+        except (StrategyValidationError, StrategyIdempotencyError) as error:
+            db.rollback()
+            raise StrategyApplicationValidationError("Invalid Decision-derived Strategy request") from error
+        except SQLAlchemyError as error:
+            db.rollback()
+            raise StrategyApplicationPersistenceError("Unable to coordinate Strategy creation") from error
+        if claim.state is StrategyCreateClaimState.CONFLICT:
+            raise StrategyApplicationConflictError("Idempotency key conflicts with another request")
+        if claim.state is StrategyCreateClaimState.IN_PROGRESS:
+            raise StrategyApplicationInProgressError("Strategy creation is already in progress")
+        if claim.state is StrategyCreateClaimState.COMPLETED:
+            return self._get_completed_strategy(db, strategy_id=claim.strategy_resource_id, scope=strategy_input.scope)
+        claim_token = claim.claim_token
+
+        def renew_claim() -> None:
+            try:
+                if not self.idempotency_repository.renew_claim(
+                    db, idempotency_key=idempotency_key, actor_user_id=created_by_user_id,
+                    scope=strategy_input.scope, claim_token=claim_token, operation=operation,
+                ):
+                    db.rollback()
+                    raise StrategyApplicationConflictError("Strategy creation claim was lost")
+                db.commit()
+            except StrategyApplicationConflictError:
+                raise
+            except (StrategyIdempotencyError, SQLAlchemyError) as error:
+                db.rollback()
+                raise StrategyApplicationPersistenceError("Unable to renew Strategy creation claim") from error
+
+        try:
+            result = self.capability.generate(strategy_input, before_provider_attempt=renew_claim)
+            validate_strategy_result(result, strategy_input)
+        except Exception:
+            db.rollback()
+            try:
+                self.idempotency_repository.abandon_claim(
+                    db, idempotency_key=idempotency_key, actor_user_id=created_by_user_id,
+                    scope=strategy_input.scope, claim_token=claim_token, operation=operation,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+            raise
+        try:
+            persisted = self.idempotency_repository.complete_with_strategy(
+                db, idempotency_key=idempotency_key, request_fingerprint=fingerprint,
+                actor_user_id=created_by_user_id, scope=strategy_input.scope,
+                claim_token=claim_token, result=result, title=normalized_title,
+                origin_type="decision_derived", repository=self.repository,
+                operation=operation, source_decision_snapshot_id=source_decision_snapshot_id,
             )
             db.commit()
             return persisted

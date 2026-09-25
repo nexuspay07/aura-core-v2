@@ -288,6 +288,7 @@ class StrategyCreateIdempotencyRepository:
         repository: StrategyRepository | None = None,
         now: datetime | None = None,
         operation: StrategyCreateOperation = StrategyCreateOperation.DIRECT,
+        source_decision_snapshot_id: int | None = None,
     ) -> PersistedStrategy:
         operation = self._operation(operation)
         key = self._key(idempotency_key)
@@ -328,6 +329,7 @@ class StrategyCreateIdempotencyRepository:
                 title=title,
                 created_by_user_id=actor_user_id,
                 origin_type=origin_type,
+                source_decision_snapshot_id=source_decision_snapshot_id,
             )
             strategy_id = db.execute(select(strategy_resource_table.c.id).where(
                 strategy_resource_table.c.public_id == persisted.public_id

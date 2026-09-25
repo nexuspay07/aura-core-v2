@@ -11,7 +11,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.intelligence_session_table import intelligence_session_table
 from app.db.personal_decision_table import personal_decision_table
-from app.intelligence_v2.decision_snapshot_repository import decision_execution_snapshot_repository
+from app.intelligence_v2.decision_snapshot import DecisionSnapshotValidationError
+from app.intelligence_v2.decision_snapshot_repository import DecisionSnapshotUnavailableError, decision_execution_snapshot_repository
 
 
 DECISION_STATUSES = frozenset({"open", "decided", "awaiting_outcome", "completed"})
@@ -46,6 +47,12 @@ class PersonalDecisionTransitionError(PersonalDecisionError):
 
 
 class PersonalDecisionAlreadySavedError(PersonalDecisionError):
+    pass
+
+class PersonalDecisionCanonicalSnapshotUnavailableError(PersonalDecisionError):
+    pass
+
+class PersonalDecisionChoiceRequiresReevaluationError(PersonalDecisionError):
     pass
 
 
@@ -125,6 +132,17 @@ def curate_session_snapshot(session: dict[str, Any]) -> dict[str, Any]:
 
 
 class PersonalDecisionRepository:
+    def get_owned_by_public_id(self, db, *, public_id: str, user_id: int, organization_id: int, workspace_id: int) -> dict[str, Any]:
+        row = db.execute(select(personal_decision_table).where(
+            personal_decision_table.c.public_id == public_id,
+            personal_decision_table.c.user_id == user_id,
+            personal_decision_table.c.organization_id == organization_id,
+            personal_decision_table.c.workspace_id == workspace_id,
+        )).mappings().first()
+        if not row:
+            raise PersonalDecisionNotFoundError("Decision not found")
+        return dict(row)
+
     def get_owned(self, db, *, decision_id: int, user_id: int, organization_id: int, workspace_id: int) -> dict[str, Any]:
         row = db.execute(
             select(personal_decision_table).where(
@@ -202,6 +220,27 @@ class PersonalDecisionService:
         except IntegrityError as error:
             raise PersonalDecisionAlreadySavedError("A decision has already been saved from this Ask session") from error
         return self.repository.get_owned(db, decision_id=result.inserted_primary_key[0], user_id=user_id, organization_id=organization_id, workspace_id=workspace_id)
+
+    def strategy_source(self, db, *, public_id: str, user_id: int, organization_id: int, workspace_id: int):
+        decision = self.repository.get_owned_by_public_id(
+            db, public_id=public_id, user_id=user_id,
+            organization_id=organization_id, workspace_id=workspace_id,
+        )
+        snapshot_id = decision.get("canonical_snapshot_id")
+        if not isinstance(snapshot_id, int):
+            raise PersonalDecisionCanonicalSnapshotUnavailableError("Canonical Decision snapshot unavailable")
+        try:
+            snapshot = decision_execution_snapshot_repository.get_owned(
+                db, snapshot_id=snapshot_id, user_id=user_id,
+                organization_id=organization_id, workspace_id=workspace_id,
+            )
+        except (DecisionSnapshotUnavailableError, DecisionSnapshotValidationError) as error:
+            raise PersonalDecisionCanonicalSnapshotUnavailableError("Canonical Decision snapshot unavailable") from error
+        choice = _text(decision.get("user_choice"))
+        normalize = lambda value: " ".join(value.split()).casefold()
+        if choice and normalize(choice) != normalize(snapshot.snapshot.selected_option):
+            raise PersonalDecisionChoiceRequiresReevaluationError("Decision choice requires re-evaluation")
+        return decision, snapshot
 
     def update(self, db, *, decision_id: int, user_id: int, organization_id: int, workspace_id: int, changes: dict[str, Any]) -> dict[str, Any]:
         decision = self.repository.get_owned(db, decision_id=decision_id, user_id=user_id, organization_id=organization_id, workspace_id=workspace_id)

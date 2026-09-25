@@ -1,13 +1,15 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.auth_routes import get_current_user_from_token
 from app.db.database import SessionLocal
+from app.db.organization_table import organization_table
+from sqlalchemy import select
 from app.personal.decisions import (
     DECISION_STATUSES,
     DECISION_TYPES,
@@ -16,8 +18,22 @@ from app.personal.decisions import (
     PersonalDecisionAlreadySavedError,
     PersonalDecisionNotFoundError,
     PersonalDecisionTransitionError,
+    PersonalDecisionCanonicalSnapshotUnavailableError,
+    PersonalDecisionChoiceRequiresReevaluationError,
     personal_decision_service,
 )
+from app.strategy.adapters import build_strategy_input_from_snapshot
+from app.strategy.application import (
+    StrategyApplicationConflictError, StrategyApplicationInProgressError,
+    StrategyApplicationNotFoundError, StrategyApplicationPersistenceError,
+    StrategyApplicationValidationError, strategy_application_service,
+)
+from app.strategy.contracts import StrategyScope
+from app.strategy.resource_routes import PersistentStrategyResourceResponse, _resource_response, _application_error, _generation_error
+from app.intelligence_v2.model_provider import InvalidModelResponseError, ProviderTimeoutError, ProviderUnavailableError
+from app.strategy.orchestrator import StrategyGenerationError
+from app.strategy.quality import StrategyQualityError
+from app.strategy.validation import StrategyValidationError
 
 
 router = APIRouter(prefix="/personal/decisions", tags=["Personal Decisions"])
@@ -37,6 +53,10 @@ class DecisionUpdateRequest(BaseModel):
     review_date: datetime | None = None
     status: Literal["open", "decided", "awaiting_outcome", "completed"] | None = None
     outcome_status: Literal["not_recorded", "pending", "recorded"] | None = None
+
+class DecisionStrategyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=255)
 
 
 async def current_identity(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -146,5 +166,61 @@ async def delete_decision(decision_id: int, identity=Depends(current_identity)):
     except Exception:
         db.rollback()
         raise
+    finally:
+        db.close()
+
+@router.post("/{decision_public_id}/strategy", status_code=status.HTTP_201_CREATED)
+async def develop_strategy_from_decision(
+    decision_public_id: str,
+    body: DecisionStrategyRequest,
+    idempotency_key: str = Header(min_length=1, max_length=255, alias="Idempotency-Key"),
+    identity=Depends(current_identity),
+) -> dict:
+    user_id, organization_id, workspace_id = scope(identity)
+    db = SessionLocal()
+    try:
+        decision, snapshot = personal_decision_service.strategy_source(
+            db, public_id=decision_public_id, user_id=user_id,
+            organization_id=organization_id, workspace_id=workspace_id,
+        )
+        account_type = db.execute(select(organization_table.c.account_type).where(
+            organization_table.c.id == organization_id
+        )).scalar_one_or_none()
+        strategy_scope = (
+            StrategyScope(user_id=user_id)
+            if account_type == "personal"
+            else StrategyScope(user_id=user_id, organization_id=organization_id, workspace_id=workspace_id)
+        )
+        strategy_input = build_strategy_input_from_snapshot(
+            snapshot.snapshot, scope=strategy_scope,
+            source_decision_id=decision["id"],
+            source_reference=f"personal-decision:{decision['public_id']}",
+        )
+        persisted = strategy_application_service.generate_and_persist_idempotent_decision_strategy(
+            db, strategy_input=strategy_input, title=body.title,
+            created_by_user_id=user_id, idempotency_key=idempotency_key,
+            personal_decision_public_id=decision["public_id"],
+            snapshot_public_id=snapshot.public_id,
+            snapshot_version=snapshot.snapshot_version,
+            source_decision_snapshot_id=snapshot.id,
+        )
+        response = _resource_response(persisted).model_dump()
+        response["strategy"].pop("source_decision_id", None)
+        return jsonable_encoder(response)
+    except PersonalDecisionCanonicalSnapshotUnavailableError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"code":"decision_canonical_snapshot_unavailable","message":"This Decision has no canonical snapshot available."}) from error
+    except PersonalDecisionChoiceRequiresReevaluationError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"code":"decision_choice_requires_reevaluation","message":"The recorded choice requires Decision re-evaluation before Strategy development."}) from error
+    except PersonalDecisionNotFoundError as error:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="Decision not found") from error
+    except (StrategyApplicationValidationError, StrategyApplicationPersistenceError, StrategyApplicationNotFoundError, StrategyApplicationConflictError) as error:
+        db.rollback()
+        _application_error(error)
+    except (ProviderTimeoutError, ProviderUnavailableError, InvalidModelResponseError, StrategyQualityError, StrategyValidationError, StrategyGenerationError) as error:
+        db.rollback()
+        _generation_error(error)
     finally:
         db.close()

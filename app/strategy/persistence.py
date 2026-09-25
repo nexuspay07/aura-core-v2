@@ -10,6 +10,7 @@ from uuid import uuid4
 from sqlalchemy import select, update
 
 from app.db.personal_decision_table import personal_decision_table
+from app.db.decision_execution_snapshot_table import decision_execution_snapshot_table
 from app.db.strategy_resource_table import strategy_resource_table, strategy_revision_table
 from app.db.workspace_table import workspace_table
 from app.strategy.contracts import (
@@ -63,6 +64,7 @@ class PersistedStrategy:
     updated_at: datetime
     origin_type: str
     source_decision_id: int | None
+    source_decision_snapshot_id: int | None
     result: StrategyResult
 
 
@@ -287,6 +289,39 @@ class StrategyRepository:
             raise StrategyPersistenceError("Source Decision is not authorized for this Strategy")
         return source_id
 
+    @staticmethod
+    def _validate_source_snapshot(db, *, source_decision_id: int | None, source_snapshot_id: int | None, result: StrategyResult, created_by_user_id: int, origin_type: str) -> int | None:
+        if origin_type == "direct":
+            if source_snapshot_id is not None:
+                raise StrategyPersistenceError("Direct Strategies cannot reference a Decision snapshot")
+            return None
+        if source_snapshot_id is None:
+            return None  # Historical decision-derived compatibility.
+        scope_conditions = [
+            personal_decision_table.c.id == source_decision_id,
+            personal_decision_table.c.user_id == created_by_user_id,
+            decision_execution_snapshot_table.c.id == source_snapshot_id,
+            decision_execution_snapshot_table.c.user_id == created_by_user_id,
+        ]
+        if result.scope.organization_id is not None:
+            scope_conditions.extend([
+                personal_decision_table.c.organization_id == result.scope.organization_id,
+                personal_decision_table.c.workspace_id == result.scope.workspace_id,
+                decision_execution_snapshot_table.c.organization_id == result.scope.organization_id,
+                decision_execution_snapshot_table.c.workspace_id == result.scope.workspace_id,
+            ])
+        row = db.execute(
+            select(decision_execution_snapshot_table.c.id)
+            .select_from(personal_decision_table.join(
+                decision_execution_snapshot_table,
+                personal_decision_table.c.canonical_snapshot_id == decision_execution_snapshot_table.c.id,
+            ))
+            .where(*scope_conditions)
+        ).first()
+        if not row:
+            raise StrategyPersistenceError("Decision snapshot provenance is not authorized")
+        return source_snapshot_id
+
     def create_strategy(
         self,
         db,
@@ -295,6 +330,7 @@ class StrategyRepository:
         title: str,
         created_by_user_id: int,
         origin_type: str,
+        source_decision_snapshot_id: int | None = None,
     ) -> PersistedStrategy:
         if origin_type not in ORIGIN_TYPES:
             raise StrategyPersistenceError("Unsupported Strategy origin type")
@@ -302,6 +338,11 @@ class StrategyRepository:
         snapshot = serialize_strategy_result(result)
         tenancy = self._validate_scope(db, result.scope)
         source_decision_id = self._validate_source_decision(db, result, created_by_user_id, origin_type)
+        source_decision_snapshot_id = self._validate_source_snapshot(
+            db, source_decision_id=source_decision_id,
+            source_snapshot_id=source_decision_snapshot_id, result=result,
+            created_by_user_id=created_by_user_id, origin_type=origin_type,
+        )
         public_id = str(uuid4())
         with db.begin_nested():
             resource_insert = db.execute(strategy_resource_table.insert().values(
@@ -321,6 +362,7 @@ class StrategyRepository:
                 created_by_user_id=created_by_user_id,
                 origin_type=origin_type,
                 source_decision_id=source_decision_id,
+                source_decision_snapshot_id=source_decision_snapshot_id,
             ))
         return self._get_by_internal_id(db, strategy_id)
 
@@ -523,6 +565,7 @@ class StrategyRepository:
             updated_at=resource["updated_at"],
             origin_type=revision["origin_type"],
             source_decision_id=revision["source_decision_id"],
+            source_decision_snapshot_id=revision["source_decision_snapshot_id"],
             result=result,
         )
 
