@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import json
+import logging
 import re
 from collections.abc import Callable
 from typing import Any
@@ -12,6 +13,7 @@ from app.intelligence_v2.model_provider import (
     InvalidModelResponseError,
     ModelProvider,
     ProviderTimeoutError,
+    ProviderUnavailableError,
     analysis_timeout_seconds,
     configured_model_provider,
 )
@@ -33,11 +35,49 @@ class StrategyGenerationError(ValueError):
     """The provider response could not form a valid canonical strategy."""
 
 
+logger = logging.getLogger("uvicorn.error")
+
+
 _OUTPUT_FIELDS = {
     "approach", "phases", "risk_mitigations", "success_measures",
     "assumptions", "uncertainties", "change_conditions",
 }
 _NUMBER_PATTERN = re.compile(r"\b\d[\d,]*(?:\.\d+)?%?")
+
+
+def _failure_diagnostics(error: Exception) -> tuple[str, str]:
+    if isinstance(error, StrategyQualityError):
+        codes = ",".join(sorted({issue.code for issue in error.issues})) or "none"
+        return "quality_validation", codes
+    if isinstance(error, StrategyValidationError):
+        return "structural_validation", "none"
+    if isinstance(error, StrategyGenerationError):
+        return "generation_validation", "none"
+    if isinstance(error, InvalidModelResponseError):
+        return "provider_response", "none"
+    if isinstance(error, ProviderTimeoutError):
+        return "provider_timeout", "none"
+    if isinstance(error, ProviderUnavailableError):
+        return "provider_unavailable", "none"
+    return "unknown", "none"
+
+
+def _log_attempt_failure(error: Exception, *, attempt: int, max_attempts: int, retryable: bool) -> None:
+    category, quality_codes = _failure_diagnostics(error)
+    repair_next = retryable and attempt < max_attempts
+    terminal = not repair_next
+    logger.warning(
+        "strategy_generation_stage=%s attempt=%s max_attempts=%s category=%s "
+        "quality_codes=%s repair_next=%s repair_exhausted=%s provider_calls=%s",
+        "terminal_failure" if terminal else "attempt_failed",
+        attempt,
+        max_attempts,
+        category,
+        quality_codes,
+        str(repair_next).lower(),
+        str(terminal and attempt == max_attempts).lower(),
+        attempt,
+    )
 
 
 def _text(value: object, name: str) -> str:
@@ -91,6 +131,15 @@ class StrategyOrchestrator:
         for attempt in range(self.max_provider_calls):
             if before_provider_attempt is not None:
                 before_provider_attempt()
+            attempt_number = attempt + 1
+            logger.warning(
+                "strategy_generation_stage=attempt_started attempt=%s max_attempts=%s "
+                "repair_attempt=%s provider_calls=%s",
+                attempt_number,
+                self.max_provider_calls,
+                str(attempt_number > 1).lower(),
+                attempt_number,
+            )
             try:
                 raw, _usage = self.provider.generate_structured(
                     system=STRATEGY_SYSTEM_PROMPT + (STRATEGY_RETRY_PROMPT if attempt else ""),
@@ -103,6 +152,14 @@ class StrategyOrchestrator:
                 result = self._result(strategy_input, raw)
                 validate_strategy_result(result, strategy_input)
                 validate_strategy_quality(strategy_input, result)
+                logger.warning(
+                    "strategy_generation_stage=attempt_succeeded attempt=%s max_attempts=%s "
+                    "repair_attempt=%s provider_calls=%s",
+                    attempt_number,
+                    self.max_provider_calls,
+                    str(attempt_number > 1).lower(),
+                    attempt_number,
+                )
                 return result
             except (
                 InvalidModelResponseError,
@@ -111,9 +168,21 @@ class StrategyOrchestrator:
                 StrategyValidationError,
             ) as error:
                 last_error = error
+                _log_attempt_failure(
+                    error,
+                    attempt=attempt_number,
+                    max_attempts=self.max_provider_calls,
+                    retryable=True,
+                )
                 if attempt + 1 == self.max_provider_calls:
                     raise
-            except ProviderTimeoutError:
+            except (ProviderTimeoutError, ProviderUnavailableError) as error:
+                _log_attempt_failure(
+                    error,
+                    attempt=attempt_number,
+                    max_attempts=self.max_provider_calls,
+                    retryable=False,
+                )
                 raise
         raise StrategyGenerationError("strategy generation failed") from last_error
 
