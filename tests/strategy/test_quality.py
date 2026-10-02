@@ -216,12 +216,32 @@ def test_orchestrator_runs_structural_then_quality_validation(monkeypatch):
     assert order == ["structural", "quality"]
 
 
-def test_quality_failure_prevents_return_without_additional_provider_call():
+def test_quality_failure_uses_one_bounded_repair_and_accepts_valid_strategy():
+    class SequenceProvider(Provider):
+        def __init__(self, *responses):
+            self.responses = responses
+            self.calls = 0
+
+        def generate_structured(self, **_):
+            response = self.responses[min(self.calls, len(self.responses) - 1)]
+            self.calls += 1
+            return response, {}
+
+    provider = SequenceProvider(
+        model_output(approach="Improve, service reliability!!!"),
+        model_output(approach="Stabilize reliability before controlled expansion."),
+    )
+    result = StrategyOrchestrator(provider).generate(strategy_input())
+    assert result.approach == "Stabilize reliability before controlled expansion."
+    assert provider.calls == 2
+    assert StrategyOrchestrator.max_provider_calls == 2
+
+
+def test_quality_failure_remains_rejected_after_one_bounded_repair():
     provider = Provider(model_output(approach="Improve, service reliability!!!"))
     with pytest.raises(StrategyQualityError):
         StrategyOrchestrator(provider).generate(strategy_input())
-    assert provider.calls == 1
-    assert StrategyOrchestrator.max_provider_calls == 2
+    assert provider.calls == 2
 
 
 def test_quality_validation_is_provider_free_and_platform_independent():
