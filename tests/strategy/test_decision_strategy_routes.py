@@ -1,5 +1,8 @@
+import logging
+
 import pytest
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, insert, select, update
 from sqlalchemy.orm import sessionmaker
@@ -13,17 +16,39 @@ from app.db.personal_decision_table import personal_decision_table
 from app.db.strategy_resource_table import strategy_resource_table, strategy_revision_table
 from app.db.strategy_idempotency_table import strategy_create_idempotency_table
 from app.api import personal_decision_routes
-from app.strategy.application import StrategyApplicationService
+from app.strategy.application import StrategyApplicationService, StrategyApplicationValidationError
 from app.strategy.contracts import StrategyPhase, StrategyResult, SuccessMeasure
 from app.strategy.idempotency import StrategyCreateIdempotencyRepository
 from app.strategy.idempotency import StrategyCreateOperation, strategy_create_from_decision_fingerprint
 from app.strategy.persistence import StrategyRepository
 from app.strategy.adapters import build_strategy_input_from_snapshot
 from app.strategy.contracts import StrategyScope
+from app.strategy.orchestrator import StrategyGenerationError
+from app.strategy.quality import StrategyQualityError, StrategyQualityIssue
+from app.strategy.validation import StrategyValidationError
 from app.personal.decisions import personal_decision_service
 
 def canonical(selected="Offer A"):
     return {"decision_type":"career_decision","objective":"Choose a role","selected_option":selected,"constraints":["Protect evenings"],"resources":[{"type":"time","value":"Evenings"}],"evidence_references":[{"evidence_id":"user-query","citation_label":"User statement"}],"assumptions":[{"statement":"Both offers remain open","source":"user"}],"alternatives":[{"option":"Offer A","benefits":[],"downsides":[],"evidence_ids":[],"assumptions":[],"conditions_for_success":[]}],"risks":["Growth may stall"],"uncertainties":["Promotion timing"],"time_horizon":"one year","change_conditions":["Offer B confirms promotion"],"confidence":"MODERATE","confidence_rationale":["Some uncertainty remains"],"schema_version":1}
+
+def laptop_canonical():
+    return {
+        "decision_type":"major_purchase",
+        "objective":"PRIVATE LAPTOP DECISION",
+        "selected_option":"PRIVATE PRESERVE SAVINGS RECOMMENDATION",
+        "constraints":["PRIVATE $1,500 PURCHASE CONSTRAINT"],
+        "resources":[{"type":"savings","value":"PRIVATE $5,000 SAVINGS"}],
+        "evidence_references":[],
+        "assumptions":[{"statement":"PRIVATE CURRENT LAPTOP ASSUMPTION","source":"user"}],
+        "alternatives":[{"option":"PRIVATE BUY OPTION","benefits":[],"downsides":[],"evidence_ids":[],"assumptions":[],"conditions_for_success":[]}],
+        "risks":["PRIVATE LAPTOP FAILURE RISK"],
+        "uncertainties":["PRIVATE INCOME IMPORTANCE UNCERTAINTY"],
+        "time_horizon":None,
+        "change_conditions":["PRIVATE WORK CRITICAL CHANGE CONDITION"],
+        "confidence":"MODERATE",
+        "confidence_rationale":["PRIVATE CONFIDENCE RATIONALE"],
+        "schema_version":1,
+    }
 
 class Capability:
     def __init__(self): self.calls=0; self.inputs=[]
@@ -45,7 +70,7 @@ def api(tmp_path,monkeypatch):
     async def current(_): return identity["value"]
     capability=Capability(); service=StrategyApplicationService(capability,StrategyRepository(),StrategyCreateIdempotencyRepository())
     monkeypatch.setattr(personal_decision_routes,"get_current_user_from_token",current); monkeypatch.setattr(personal_decision_routes,"SessionLocal",factory); monkeypatch.setattr(personal_decision_routes,"strategy_application_service",service)
-    app=FastAPI(); app.include_router(personal_decision_routes.router)
+    app=FastAPI(); app.include_router(personal_decision_routes.router); app.add_exception_handler(RequestValidationError, personal_decision_routes.strategy_request_validation_handler)
     yield TestClient(app,raise_server_exceptions=False),factory,capability,identity
     engine.dispose()
 
@@ -83,3 +108,119 @@ def test_historical_missing_header_conflict_and_in_progress(api):
     conflict=client.post("/personal/decisions/10000000-0000-4000-8000-000000000041/strategy",headers=HEADERS,json={"title":"Changed"}); assert conflict.status_code==409 and capability.calls==1
     db=factory(); decision,snapshot=personal_decision_service.strategy_source(db,public_id="10000000-0000-4000-8000-000000000041",user_id=1,organization_id=10,workspace_id=11); source=build_strategy_input_from_snapshot(snapshot.snapshot,scope=StrategyScope(1,10,11),source_decision_id=41,source_reference=f"personal-decision:{decision['public_id']}"); fingerprint=strategy_create_from_decision_fingerprint(title="Active",strategy_input=source,personal_decision_public_id=decision["public_id"],snapshot_public_id=snapshot.public_id,snapshot_version=snapshot.snapshot_version); StrategyCreateIdempotencyRepository().claim(db,idempotency_key="active-key",request_fingerprint=fingerprint,actor_user_id=1,scope=source.scope,operation=StrategyCreateOperation.FROM_DECISION); db.commit(); db.close()
     active=client.post("/personal/decisions/10000000-0000-4000-8000-000000000041/strategy",headers={**HEADERS,"Idempotency-Key":"active-key"},json={"title":"Active"}); assert active.status_code==409 and active.json()["detail"]["code"]=="strategy_creation_in_progress" and capability.calls==1
+
+
+def strategy_http_logs(caplog):
+    return [record.message for record in caplog.records if "strategy_http_stage=" in record.message]
+
+
+def test_representative_laptop_path_logs_boundaries_without_private_content(api, caplog):
+    client,factory,capability,_=api
+    db=factory(); db.execute(update(decision_execution_snapshot_table).where(
+        decision_execution_snapshot_table.c.id==101
+    ).values(canonical_decision_json=laptop_canonical())); db.commit(); db.close()
+    caplog.set_level(logging.WARNING,logger="uvicorn.error")
+
+    response=client.post(
+        "/personal/decisions/10000000-0000-4000-8000-000000000041/strategy",
+        headers=HEADERS,json={"title":"PRIVATE STRATEGY TITLE"},
+    )
+
+    logs=strategy_http_logs(caplog); rendered=" ".join(logs)
+    assert response.status_code==201 and capability.calls==1
+    for stage in ("request_entered","decision_resolved","snapshot_resolved","adapter_completed","input_validation_completed","generation_entered","orchestrator_entered","persistence_entered","request_succeeded"):
+        assert any(f"strategy_http_stage={stage}" in line for line in logs)
+    for private in ("PRIVATE", "1,500", "5,000", "10000000-0000-4000-8000-000000000041", "decision-key"):
+        assert private not in rendered
+
+
+def test_fastapi_request_validation_is_distinct_and_response_is_unchanged(api, caplog):
+    client,_,_,_=api
+    caplog.set_level(logging.WARNING,logger="uvicorn.error")
+
+    response=client.post(
+        "/personal/decisions/10000000-0000-4000-8000-000000000041/strategy",
+        headers={"Authorization":"Bearer token"},json={"title":"Plan"},
+    )
+
+    assert response.status_code==422 and isinstance(response.json()["detail"],list)
+    assert any("category=fastapi_request_validation status_code=422" in line for line in strategy_http_logs(caplog))
+
+
+@pytest.mark.parametrize("error,category",[
+    (StrategyValidationError(["PRIVATE STRUCTURAL DETAIL"]),"strategy_structural_validation"),
+    (StrategyGenerationError("PRIVATE GENERATION DETAIL"),"strategy_generation_validation"),
+    (StrategyQualityError([StrategyQualityIssue("strategy.approach_restates_direction","PRIVATE QUALITY DETAIL","approach")]),"strategy_quality_validation"),
+])
+def test_typed_generation_422_categories_are_safe(api,caplog,monkeypatch,error,category):
+    client,_,capability,_=api
+    caplog.set_level(logging.WARNING,logger="uvicorn.error")
+    monkeypatch.setattr(capability,"generate",lambda *_,**__: (_ for _ in ()).throw(error))
+
+    response=client.post(
+        "/personal/decisions/10000000-0000-4000-8000-000000000041/strategy",
+        headers=HEADERS,json={"title":"PRIVATE STRATEGY TITLE"},
+    )
+
+    logs=strategy_http_logs(caplog); rendered=" ".join(logs)
+    assert response.status_code==422
+    assert any(f"category={category} status_code=422" in line for line in logs)
+    assert any("strategy_http_stage=orchestrator_entered" in line for line in logs)
+    assert "PRIVATE" not in rendered
+
+
+def test_application_validation_422_is_pre_orchestrator_and_safe(api,caplog,monkeypatch):
+    client,_,_,_=api
+    caplog.set_level(logging.WARNING,logger="uvicorn.error")
+    def reject(*_,**__): raise StrategyApplicationValidationError("PRIVATE APPLICATION DETAIL")
+    monkeypatch.setattr(personal_decision_routes.strategy_application_service,"generate_and_persist_idempotent_decision_strategy",reject)
+
+    response=client.post(
+        "/personal/decisions/10000000-0000-4000-8000-000000000041/strategy",
+        headers=HEADERS,json={"title":"PRIVATE STRATEGY TITLE"},
+    )
+
+    logs=strategy_http_logs(caplog); rendered=" ".join(logs)
+    assert response.status_code==422
+    assert any("category=application_validation status_code=422" in line for line in logs)
+    assert not any("strategy_http_stage=orchestrator_entered" in line for line in logs)
+    assert "PRIVATE" not in rendered
+
+
+def test_adapter_validation_422_is_pre_orchestrator_and_safe(api,caplog,monkeypatch):
+    client,_,_,_=api
+    caplog.set_level(logging.WARNING,logger="uvicorn.error")
+    def reject(*_,**__): raise StrategyValidationError(["PRIVATE ADAPTER DETAIL"])
+    monkeypatch.setattr(personal_decision_routes,"build_strategy_input_from_snapshot",reject)
+
+    response=client.post(
+        "/personal/decisions/10000000-0000-4000-8000-000000000041/strategy",
+        headers=HEADERS,json={"title":"PRIVATE STRATEGY TITLE"},
+    )
+
+    logs=strategy_http_logs(caplog); rendered=" ".join(logs)
+    assert response.status_code==422
+    assert any("category=adapter_validation status_code=422" in line for line in logs)
+    assert not any("strategy_http_stage=generation_entered" in line for line in logs)
+    assert not any("strategy_http_stage=orchestrator_entered" in line for line in logs)
+    assert "PRIVATE" not in rendered
+
+
+def test_strategy_input_validation_cause_is_distinct_and_safe(api,caplog,monkeypatch):
+    client,_,_,_=api
+    caplog.set_level(logging.WARNING,logger="uvicorn.error")
+    def reject(*_,**__):
+        cause=StrategyValidationError(["PRIVATE INPUT DETAIL"])
+        raise StrategyApplicationValidationError("PRIVATE APPLICATION DETAIL") from cause
+    monkeypatch.setattr(personal_decision_routes.strategy_application_service,"generate_and_persist_idempotent_decision_strategy",reject)
+
+    response=client.post(
+        "/personal/decisions/10000000-0000-4000-8000-000000000041/strategy",
+        headers=HEADERS,json={"title":"PRIVATE STRATEGY TITLE"},
+    )
+
+    logs=strategy_http_logs(caplog); rendered=" ".join(logs)
+    assert response.status_code==422
+    assert any("category=strategy_input_validation status_code=422" in line for line in logs)
+    assert not any("strategy_http_stage=orchestrator_entered" in line for line in logs)
+    assert "PRIVATE" not in rendered

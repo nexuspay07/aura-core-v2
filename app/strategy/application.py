@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.strategy.capability import StrategyCapability, strategy_capability
@@ -30,6 +32,9 @@ from app.strategy.validation import (
     validate_strategy_input,
     validate_strategy_result,
 )
+
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class StrategyApplicationError(ValueError):
@@ -232,6 +237,7 @@ class StrategyApplicationService:
                 raise StrategyApplicationPersistenceError("Unable to renew Strategy creation claim") from error
 
         try:
+            logger.warning("strategy_http_stage=orchestrator_entered category=none status_code=none quality_codes=none")
             result = self.capability.generate(strategy_input, before_provider_attempt=renew_claim)
             validate_strategy_result(result, strategy_input)
         except Exception:
@@ -246,6 +252,7 @@ class StrategyApplicationService:
                 db.rollback()
             raise
         try:
+            logger.warning("strategy_http_stage=persistence_entered category=none status_code=none quality_codes=none")
             persisted = self.idempotency_repository.complete_with_strategy(
                 db, idempotency_key=idempotency_key, request_fingerprint=fingerprint,
                 actor_user_id=created_by_user_id, scope=strategy_input.scope,

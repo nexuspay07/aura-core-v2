@@ -1,8 +1,11 @@
 from datetime import datetime
+import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -38,6 +41,22 @@ from app.strategy.validation import StrategyValidationError
 
 router = APIRouter(prefix="/personal/decisions", tags=["Personal Decisions"])
 security = HTTPBearer()
+logger = logging.getLogger("uvicorn.error")
+_DECISION_STRATEGY_ROUTE = "/personal/decisions/{decision_public_id}/strategy"
+
+
+def _strategy_http_event(stage: str, *, category: str = "none", status_code: int | None = None, quality_codes: str = "none") -> None:
+    logger.warning(
+        "strategy_http_stage=%s category=%s status_code=%s quality_codes=%s",
+        stage, category, status_code if status_code is not None else "none", quality_codes,
+    )
+
+
+async def strategy_request_validation_handler(request: Request, error: RequestValidationError):
+    route = request.scope.get("route")
+    if getattr(route, "path", None) == _DECISION_STRATEGY_ROUTE:
+        _strategy_http_event("request_failed", category="fastapi_request_validation", status_code=422)
+    return await request_validation_exception_handler(request, error)
 
 
 class DecisionCreateRequest(BaseModel):
@@ -176,6 +195,7 @@ async def develop_strategy_from_decision(
     idempotency_key: str = Header(min_length=1, max_length=255, alias="Idempotency-Key"),
     identity=Depends(current_identity),
 ) -> dict:
+    _strategy_http_event("request_entered")
     user_id, organization_id, workspace_id = scope(identity)
     db = SessionLocal()
     try:
@@ -183,6 +203,8 @@ async def develop_strategy_from_decision(
             db, public_id=decision_public_id, user_id=user_id,
             organization_id=organization_id, workspace_id=workspace_id,
         )
+        _strategy_http_event("decision_resolved")
+        _strategy_http_event("snapshot_resolved")
         account_type = db.execute(select(organization_table.c.account_type).where(
             organization_table.c.id == organization_id
         )).scalar_one_or_none()
@@ -191,11 +213,19 @@ async def develop_strategy_from_decision(
             if account_type == "personal"
             else StrategyScope(user_id=user_id, organization_id=organization_id, workspace_id=workspace_id)
         )
-        strategy_input = build_strategy_input_from_snapshot(
-            snapshot.snapshot, scope=strategy_scope,
-            source_decision_id=decision["id"],
-            source_reference=f"personal-decision:{decision['public_id']}",
-        )
+        try:
+            strategy_input = build_strategy_input_from_snapshot(
+                snapshot.snapshot, scope=strategy_scope,
+                source_decision_id=decision["id"],
+                source_reference=f"personal-decision:{decision['public_id']}",
+            )
+        except StrategyValidationError as error:
+            db.rollback()
+            _strategy_http_event("request_failed", category="adapter_validation", status_code=422)
+            _generation_error(error)
+        _strategy_http_event("adapter_completed")
+        _strategy_http_event("input_validation_completed")
+        _strategy_http_event("generation_entered")
         persisted = strategy_application_service.generate_and_persist_idempotent_decision_strategy(
             db, strategy_input=strategy_input, title=body.title,
             created_by_user_id=user_id, idempotency_key=idempotency_key,
@@ -206,21 +236,47 @@ async def develop_strategy_from_decision(
         )
         response = _resource_response(persisted).model_dump()
         response["strategy"].pop("source_decision_id", None)
+        _strategy_http_event("request_succeeded", status_code=201)
         return jsonable_encoder(response)
     except PersonalDecisionCanonicalSnapshotUnavailableError as error:
         db.rollback()
+        _strategy_http_event("request_failed", category="snapshot_validation", status_code=409)
         raise HTTPException(status_code=409, detail={"code":"decision_canonical_snapshot_unavailable","message":"This Decision has no canonical snapshot available."}) from error
     except PersonalDecisionChoiceRequiresReevaluationError as error:
         db.rollback()
+        _strategy_http_event("request_failed", category="decision_choice_validation", status_code=409)
         raise HTTPException(status_code=409, detail={"code":"decision_choice_requires_reevaluation","message":"The recorded choice requires Decision re-evaluation before Strategy development."}) from error
     except PersonalDecisionNotFoundError as error:
         db.rollback()
+        _strategy_http_event("request_failed", category="decision_not_found", status_code=404)
         raise HTTPException(status_code=404, detail="Decision not found") from error
     except (StrategyApplicationValidationError, StrategyApplicationPersistenceError, StrategyApplicationNotFoundError, StrategyApplicationConflictError) as error:
         db.rollback()
+        if isinstance(error, StrategyApplicationValidationError):
+            category = "strategy_input_validation" if isinstance(error.__cause__, StrategyValidationError) else "application_validation"
+            _strategy_http_event("request_failed", category=category, status_code=422)
+        elif isinstance(error, StrategyApplicationPersistenceError):
+            _strategy_http_event("persistence_failed", category="persistence", status_code=500)
+        elif isinstance(error, StrategyApplicationNotFoundError):
+            _strategy_http_event("request_failed", category="application_not_found", status_code=404)
+        else:
+            _strategy_http_event("request_failed", category="application_conflict", status_code=409)
         _application_error(error)
     except (ProviderTimeoutError, ProviderUnavailableError, InvalidModelResponseError, StrategyQualityError, StrategyValidationError, StrategyGenerationError) as error:
         db.rollback()
+        if isinstance(error, StrategyQualityError):
+            codes = ",".join(sorted({issue.code for issue in error.issues})) or "none"
+            _strategy_http_event("generation_failed", category="strategy_quality_validation", status_code=422, quality_codes=codes)
+        elif isinstance(error, StrategyValidationError):
+            _strategy_http_event("generation_failed", category="strategy_structural_validation", status_code=422)
+        elif isinstance(error, StrategyGenerationError):
+            _strategy_http_event("generation_failed", category="strategy_generation_validation", status_code=422)
+        elif isinstance(error, InvalidModelResponseError):
+            _strategy_http_event("generation_failed", category="provider_response", status_code=502)
+        elif isinstance(error, ProviderUnavailableError):
+            _strategy_http_event("generation_failed", category="provider_unavailable", status_code=503)
+        else:
+            _strategy_http_event("generation_failed", category="provider_timeout", status_code=504)
         _generation_error(error)
     finally:
         db.close()

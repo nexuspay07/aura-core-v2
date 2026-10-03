@@ -97,7 +97,8 @@ from app.api.billing_account_routes import router as billing_account_router
 from app.api.usage_meter_routes import router as usage_meter_router
 from app.api.payment_routes import router as commercial_payment_router
 from app.api.document_routes import router as document_router
-from app.api.personal_decision_routes import router as personal_decision_router
+from app.api.personal_decision_routes import router as personal_decision_router, strategy_request_validation_handler
+from fastapi.exceptions import RequestValidationError
 from app.api.personal_ask_routes import router as personal_ask_router
 from app.api.control_center_routes import router as control_center_router
 from app.strategy.routes import router as strategy_router
@@ -131,6 +132,7 @@ app.include_router(personal_ask_router)
 app.include_router(control_center_router)
 app.include_router(strategy_router)
 app.include_router(strategy_resource_router)
+app.add_exception_handler(RequestValidationError, strategy_request_validation_handler)
 
 
 # =========================
