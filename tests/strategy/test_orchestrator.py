@@ -5,12 +5,15 @@ import pytest
 
 from app.intelligence_v2.contracts import DecisionType
 from app.intelligence_v2.model_provider import ProviderTimeoutError, ProviderUnavailableError
+from app.intelligence_v2.model_provider import InvalidModelResponseError
 from app.strategy.contracts import (
     ConfidenceLevel, EvidenceReference, StrategyAlternative, StrategyAssumption,
     StrategyConstraint, StrategyInput, StrategyResource, StrategyRisk, StrategyScope,
 )
 from app.strategy.model_schema import STRATEGY_SCHEMA_NAME, strategy_model_schema
 from app.strategy.orchestrator import StrategyGenerationError, StrategyOrchestrator
+from app.strategy.prompts import STRATEGY_RETRY_PROMPT, STRATEGY_SYSTEM_PROMPT
+from app.strategy.quality import StrategyQualityError
 from app.strategy.validation import StrategyValidationError
 
 
@@ -253,6 +256,50 @@ def test_model_cannot_merely_repeat_chosen_direction():
     output = valid_model_output(approach="Improve service reliability")
     with pytest.raises(StrategyGenerationError, match="develop rather than repeat"):
         StrategyOrchestrator(RecordingProvider(output)).generate(minimal_input())
+
+
+def test_change_condition_contract_marks_provider_output_as_new_optional_enrichment():
+    schema = strategy_model_schema()
+    change_conditions = schema["properties"]["change_conditions"]
+    assert "change_conditions" in schema["required"]
+    assert "minItems" not in change_conditions
+    assert "preserved automatically" in STRATEGY_SYSTEM_PROMPT
+    assert "never repeat or paraphrase" in STRATEGY_SYSTEM_PROMPT
+    assert "empty array" in STRATEGY_SYSTEM_PROMPT
+    assert "already preserved automatically" in STRATEGY_RETRY_PROMPT
+    assert "never repeat or paraphrase" in STRATEGY_RETRY_PROMPT
+    assert "empty array" in STRATEGY_RETRY_PROMPT
+    assert "do not repeat or paraphrase" in change_conditions["description"]
+
+
+def test_provider_response_failure_then_nonduplicate_change_condition_repair_succeeds():
+    source = rich_input(change_conditions=("The laptop becomes unreliable.",))
+    repaired = valid_model_output(change_conditions=["Savings no longer cover the planned buffer."])
+    provider = RecordingProvider(
+        InvalidModelResponseError("safe fixture", "structured_output_error"),
+        repaired,
+    )
+
+    result = StrategyOrchestrator(provider).generate(source)
+
+    assert result.change_conditions == source.change_conditions + ("Savings no longer cover the planned buffer.",)
+    assert len(provider.calls) == 2
+    assert provider.calls[1]["reasoning_effort"] == "low"
+
+
+def test_provider_response_failure_then_duplicate_change_condition_remains_rejected():
+    source = rich_input(change_conditions=("The laptop becomes unreliable.",))
+    duplicate = valid_model_output(change_conditions=["The laptop becomes unreliable."])
+    provider = RecordingProvider(
+        InvalidModelResponseError("safe fixture", "structured_output_error"),
+        duplicate,
+    )
+
+    with pytest.raises(StrategyQualityError) as error:
+        StrategyOrchestrator(provider).generate(source)
+
+    assert {issue.code for issue in error.value.issues} == {"strategy.duplicate_change_condition"}
+    assert len(provider.calls) == 2
 
 
 def test_orchestrator_is_platform_independent_and_has_no_forbidden_dependencies():

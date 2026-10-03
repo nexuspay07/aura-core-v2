@@ -41,7 +41,14 @@ def strategy_model_schema() -> dict[str, Any]:
         "success_measures": strings(6, 300),
         "assumptions": strings(4, 260),
         "uncertainties": strings(6, 260),
-        "change_conditions": strings(6, 300),
+        "change_conditions": {
+            **strings(6, 300),
+            "description": (
+                "Optional new Strategy-specific conditions only. Input Decision change conditions "
+                "are preserved automatically; do not repeat or paraphrase them. Use an empty array "
+                "when no genuinely new condition is warranted."
+            ),
+        },
     }
     return {
         "type": "object",
