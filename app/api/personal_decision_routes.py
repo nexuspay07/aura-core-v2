@@ -45,10 +45,10 @@ logger = logging.getLogger("uvicorn.error")
 _DECISION_STRATEGY_ROUTE = "/personal/decisions/{decision_public_id}/strategy"
 
 
-def _strategy_http_event(stage: str, *, category: str = "none", status_code: int | None = None, quality_codes: str = "none") -> None:
+def _strategy_http_event(stage: str, *, category: str = "none", status_code: int | None = None, quality_codes: str = "none", generation_codes: str = "none") -> None:
     logger.warning(
-        "strategy_http_stage=%s category=%s status_code=%s quality_codes=%s",
-        stage, category, status_code if status_code is not None else "none", quality_codes,
+        "strategy_http_stage=%s category=%s status_code=%s quality_codes=%s generation_codes=%s",
+        stage, category, status_code if status_code is not None else "none", quality_codes, generation_codes,
     )
 
 
@@ -270,7 +270,7 @@ async def develop_strategy_from_decision(
         elif isinstance(error, StrategyValidationError):
             _strategy_http_event("generation_failed", category="strategy_structural_validation", status_code=422)
         elif isinstance(error, StrategyGenerationError):
-            _strategy_http_event("generation_failed", category="strategy_generation_validation", status_code=422)
+            _strategy_http_event("generation_failed", category="strategy_generation_validation", status_code=422, generation_codes=error.code)
         elif isinstance(error, InvalidModelResponseError):
             _strategy_http_event("generation_failed", category="provider_response", status_code=502)
         elif isinstance(error, ProviderUnavailableError):

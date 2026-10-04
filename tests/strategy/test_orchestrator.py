@@ -141,6 +141,14 @@ def test_strategy_schema_name_and_schema_are_passed_on_strict_structured_path():
     assert call["timeout_seconds"] >= 10 and call["reasoning_effort"] == "medium"
 
 
+def test_provider_schema_matches_parser_meaningful_text_and_success_measure_requirements():
+    schema = strategy_model_schema()
+    assert schema["properties"]["approach"]["minLength"] == 1
+    assert schema["properties"]["phases"]["items"]["properties"]["name"]["minLength"] == 1
+    assert schema["properties"]["success_measures"]["items"]["minLength"] == 1
+    assert schema["properties"]["success_measures"]["minItems"] == 1
+
+
 def test_bounded_payload_has_only_strategy_descriptions_and_no_trusted_ids():
     source = rich_input()
     _, provider = generate(source)
@@ -204,6 +212,17 @@ def test_invalid_structured_outputs_fail_after_one_bounded_retry(output, match):
         StrategyOrchestrator(provider).generate(minimal_input())
     assert len(provider.calls) == 2
     assert provider.calls[1]["reasoning_effort"] == "low"
+
+
+def test_generation_validation_error_has_stable_privacy_safe_code():
+    provider = RecordingProvider(valid_model_output(
+        risk_mitigations=[{"risk_index": 0, "mitigation": "PRIVATE CONTENT"}],
+    ))
+    with pytest.raises(StrategyGenerationError) as error:
+        StrategyOrchestrator(provider).generate(minimal_input())
+    assert error.value.code == "strategy_generation.invalid_risk_reference"
+    assert "PRIVATE" not in error.value.code
+    assert len(provider.calls) == 2
 
 
 @pytest.mark.parametrize("field,value", [

@@ -100,6 +100,8 @@ def authorized_scope(identity: dict) -> StrategyScope:
 
     organization = identity.get("organization") or {}
     workspace = identity.get("workspace") or {}
+    if organization.get("account_type") == "personal":
+        return StrategyScope(user_id=user["id"])
     organization_id = organization.get("id")
     workspace_id = workspace.get("id")
     if not (isinstance(organization_id, int) and isinstance(workspace_id, int)):

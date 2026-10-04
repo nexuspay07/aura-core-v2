@@ -16,6 +16,7 @@ from app.db.personal_decision_table import personal_decision_table
 from app.db.strategy_resource_table import strategy_resource_table, strategy_revision_table
 from app.db.strategy_idempotency_table import strategy_create_idempotency_table
 from app.api import personal_decision_routes
+from app.strategy import resource_routes, routes
 from app.strategy.application import StrategyApplicationService, StrategyApplicationValidationError
 from app.strategy.contracts import StrategyPhase, StrategyResult, SuccessMeasure
 from app.strategy.idempotency import StrategyCreateIdempotencyRepository
@@ -70,7 +71,8 @@ def api(tmp_path,monkeypatch):
     async def current(_): return identity["value"]
     capability=Capability(); service=StrategyApplicationService(capability,StrategyRepository(),StrategyCreateIdempotencyRepository())
     monkeypatch.setattr(personal_decision_routes,"get_current_user_from_token",current); monkeypatch.setattr(personal_decision_routes,"SessionLocal",factory); monkeypatch.setattr(personal_decision_routes,"strategy_application_service",service)
-    app=FastAPI(); app.include_router(personal_decision_routes.router); app.add_exception_handler(RequestValidationError, personal_decision_routes.strategy_request_validation_handler)
+    monkeypatch.setattr(routes,"get_current_user_from_token",current); monkeypatch.setattr(resource_routes,"SessionLocal",factory); monkeypatch.setattr(resource_routes,"strategy_application_service",service)
+    app=FastAPI(); app.include_router(personal_decision_routes.router); app.include_router(resource_routes.router); app.add_exception_handler(RequestValidationError, personal_decision_routes.strategy_request_validation_handler)
     yield TestClient(app,raise_server_exceptions=False),factory,capability,identity
     engine.dispose()
 
@@ -85,6 +87,32 @@ def test_create_uses_exact_snapshot_persists_both_provenance_and_replays(api):
     db=factory(); revision=db.execute(select(strategy_revision_table)).mappings().one(); assert revision["origin_type"]=="decision_derived" and revision["source_decision_id"]==41 and revision["source_decision_snapshot_id"]==101
     assert db.execute(select(strategy_create_idempotency_table.c.operation)).scalar_one()=="strategy_create_from_decision"; db.close()
     rendered=first.text; assert 'source_decision_id' not in rendered and 'source_decision_snapshot_id' not in rendered and 'canonical_decision_json' not in rendered
+
+
+def test_personal_account_decision_strategy_returned_public_id_is_immediately_retrievable(api):
+    client,factory,capability,identity=api
+    db=factory(); db.execute(update(organization_table).where(organization_table.c.id.in_([10,20])).values(account_type="personal")); db.commit(); db.close()
+    identity["value"]["organization"]["account_type"]="personal"
+
+    created=client.post(
+        "/personal/decisions/10000000-0000-4000-8000-000000000041/strategy",
+        headers=HEADERS,json={"title":"Career strategy"},
+    )
+    assert created.status_code==201
+    public_id=created.json()["public_id"]
+
+    fetched=client.get(f"/strategy-resources/{public_id}",headers={"Authorization":"Bearer token"})
+    listed=client.get("/strategy-resources",headers={"Authorization":"Bearer token"})
+    assert fetched.status_code==200 and fetched.json()["public_id"]==public_id
+    assert [item["public_id"] for item in listed.json()["items"]]==[public_id]
+    db=factory(); resource=db.execute(select(strategy_resource_table)).mappings().one(); revision=db.execute(select(strategy_revision_table)).mappings().one(); db.close()
+    assert resource["public_id"]==public_id and resource["owner_user_id"]==1
+    assert resource["organization_id"] is None and resource["workspace_id"] is None
+    assert revision["source_decision_id"]==41 and revision["source_decision_snapshot_id"]==101
+
+    identity["value"]={"user":{"id":2},"organization":{"id":20,"account_type":"personal"},"workspace":{"id":21},"capabilities":["decisions"]}
+    assert client.get(f"/strategy-resources/{public_id}",headers={"Authorization":"Bearer token"}).status_code==404
+    assert capability.calls==1
 
 def test_eligibility_choice_scope_and_request_fail_before_provider(api):
     client,factory,capability,identity=api
@@ -165,6 +193,8 @@ def test_typed_generation_422_categories_are_safe(api,caplog,monkeypatch,error,c
     logs=strategy_http_logs(caplog); rendered=" ".join(logs)
     assert response.status_code==422
     assert any(f"category={category} status_code=422" in line for line in logs)
+    if isinstance(error,StrategyGenerationError):
+        assert any("generation_codes=strategy_generation.invalid_output" in line for line in logs)
     assert any("strategy_http_stage=orchestrator_entered" in line for line in logs)
     assert "PRIVATE" not in rendered
 

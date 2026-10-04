@@ -55,6 +55,7 @@ def test_first_quality_failure_logs_safe_code_and_existing_repair_succeeds(caplo
     assert any(
         "strategy_generation_stage=attempt_failed attempt=1 max_attempts=2 "
         "category=quality_validation quality_codes=strategy.approach_restates_direction "
+        "generation_codes=none "
         "repair_next=true repair_exhausted=false provider_calls=1" in line
         for line in logs
     )
@@ -75,6 +76,7 @@ def test_second_quality_failure_logs_terminal_exhausted_state(caplog):
     assert any(
         "strategy_generation_stage=terminal_failure attempt=2 max_attempts=2 "
         "category=quality_validation quality_codes=strategy.approach_restates_direction "
+        "generation_codes=none "
         "repair_next=false repair_exhausted=true provider_calls=2" in line
         for line in logs
     )
@@ -105,6 +107,21 @@ def test_failures_log_only_safe_categories_and_preserve_call_counts(caplog, fail
     logs = messages(caplog)
     assert len(provider.calls) == calls
     assert any(f"category={category}" in line for line in logs)
+    assert not any(marker in " ".join(logs) for marker in PRIVATE_MARKERS)
+
+
+def test_generation_failure_logs_stable_code_without_private_content(caplog):
+    caplog.set_level(logging.WARNING, logger="uvicorn.error")
+    provider = RecordingProvider(valid_model_output(
+        risk_mitigations=[{"risk_index": 0, "mitigation": "PRIVATE GENERATED APPROACH"}],
+    ))
+
+    with pytest.raises(StrategyGenerationError):
+        StrategyOrchestrator(provider).generate(private_input())
+
+    logs = messages(caplog)
+    assert len(provider.calls) == 2
+    assert any("generation_codes=strategy_generation.invalid_risk_reference" in line for line in logs)
     assert not any(marker in " ".join(logs) for marker in PRIVATE_MARKERS)
 
 

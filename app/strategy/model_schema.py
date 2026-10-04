@@ -9,7 +9,7 @@ STRATEGY_SCHEMA_NAME = "strategy_result"
 
 
 def strategy_model_schema() -> dict[str, Any]:
-    string = lambda maximum: {"type": "string", "maxLength": maximum}
+    string = lambda maximum: {"type": "string", "minLength": 1, "maxLength": maximum}
     strings = lambda count, length=240: {
         "type": "array", "items": string(length), "maxItems": count,
     }
@@ -21,7 +21,7 @@ def strategy_model_schema() -> dict[str, Any]:
             "name": string(120),
             "purpose": string(360),
             "focus_areas": strings(5, 220),
-            "milestone_intent": {"type": ["string", "null"], "maxLength": 280},
+            "milestone_intent": {"type": ["string", "null"], "minLength": 1, "maxLength": 280},
         },
         "required": ["order", "name", "purpose", "focus_areas", "milestone_intent"],
     }
@@ -38,7 +38,7 @@ def strategy_model_schema() -> dict[str, Any]:
         "approach": string(700),
         "phases": {"type": "array", "items": phase, "minItems": 1, "maxItems": 6},
         "risk_mitigations": {"type": "array", "items": mitigation, "maxItems": 8},
-        "success_measures": strings(6, 300),
+        "success_measures": {**strings(6, 300), "minItems": 1},
         "assumptions": strings(4, 260),
         "uncertainties": strings(6, 260),
         "change_conditions": {
