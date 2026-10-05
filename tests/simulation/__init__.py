@@ -1,0 +1,1 @@
+"""Canonical Simulation Intelligence tests."""
