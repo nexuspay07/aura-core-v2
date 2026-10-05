@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from uuid import UUID
 
 from app.simulation.contracts import (
     FindingProvenance,
@@ -10,10 +11,13 @@ from app.simulation.contracts import (
     ScenarioSeverity,
     ScenarioSource,
     SimulationFinding,
+    SimulationExecutionInputV1,
     SimulationInputV1,
     SimulationLimitation,
     SimulationResultV1,
     SimulationScenario,
+    SimulationSourceProvenanceV1,
+    SimulationSourceType,
     SimulationType,
     StrategyStressResult,
     UserSimulationAssumption,
@@ -42,6 +46,40 @@ class SimulationValidationError(ValueError):
     def __init__(self, errors: list[str]):
         self.errors = tuple(errors)
         super().__init__("; ".join(errors))
+
+
+def validate_simulation_source_provenance(value: SimulationSourceProvenanceV1) -> None:
+    if not isinstance(value, SimulationSourceProvenanceV1):
+        raise SimulationValidationError(["provenance must be a SimulationSourceProvenanceV1"])
+    errors: list[str] = []
+    if value.source_type is not SimulationSourceType.STRATEGY_REVISION:
+        errors.append("source_type must be strategy_revision")
+    try:
+        UUID(value.strategy_public_id)
+    except (ValueError, TypeError, AttributeError):
+        errors.append("strategy_public_id must be a public UUID")
+    for name in ("strategy_revision", "strategy_schema_version"):
+        item = getattr(value, name)
+        if not isinstance(item, int) or isinstance(item, bool) or item <= 0:
+            errors.append(f"{name} must be a positive integer")
+    if errors:
+        raise SimulationValidationError(errors)
+
+
+def validate_simulation_execution_input(value: SimulationExecutionInputV1) -> None:
+    if not isinstance(value, SimulationExecutionInputV1):
+        raise SimulationValidationError(["value must be a SimulationExecutionInputV1"])
+    errors: list[str] = []
+    for validator, item in (
+        (validate_simulation_source_provenance, value.provenance),
+        (validate_simulation_input, value.simulation_input),
+    ):
+        try:
+            validator(item)
+        except SimulationValidationError as error:
+            errors.extend(error.errors)
+    if errors:
+        raise SimulationValidationError(errors)
 
 
 def _text(value: object, name: str, errors: list[str], *, optional: bool = False) -> None:

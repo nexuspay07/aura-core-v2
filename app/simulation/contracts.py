@@ -30,6 +30,10 @@ class SimulationType(str, Enum):
     STRATEGY_STRESS_TEST = "strategy_stress_test"
 
 
+class SimulationSourceType(str, Enum):
+    STRATEGY_REVISION = "strategy_revision"
+
+
 class ScenarioSource(str, Enum):
     USER_SUPPLIED = "USER_SUPPLIED"
     SYSTEM_DERIVED = "SYSTEM_DERIVED"
@@ -87,6 +91,24 @@ class SimulationInputV1:
     user_assumptions: tuple[UserSimulationAssumption, ...] = field(default_factory=tuple)
     simulation_type: SimulationType = SimulationType.STRATEGY_STRESS_TEST
     schema_version: int = SIMULATION_SCHEMA_VERSION
+
+
+@dataclass(frozen=True)
+class SimulationSourceProvenanceV1:
+    """Public, immutable identity of the exact source material analyzed."""
+
+    strategy_public_id: str
+    strategy_revision: int
+    strategy_schema_version: int
+    source_type: SimulationSourceType = SimulationSourceType.STRATEGY_REVISION
+
+
+@dataclass(frozen=True)
+class SimulationExecutionInputV1:
+    """Source identity separated from provider-facing analytical content."""
+
+    provenance: SimulationSourceProvenanceV1
+    simulation_input: SimulationInputV1
 
 
 @dataclass(frozen=True)
