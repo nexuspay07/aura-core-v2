@@ -26,6 +26,11 @@ from app.simulation.quality import (
     SimulationQualityIssue,
     validate_simulation_result_quality,
 )
+from app.simulation.orchestrator import (
+    SimulationGenerationError,
+    SimulationOrchestrator,
+    simulation_orchestrator,
+)
 from app.simulation.serialization import simulation_to_dict, simulation_to_json
 from app.simulation.validation import (
     SimulationValidationError,
@@ -43,8 +48,10 @@ __all__ = [
     "SimulationAdapterError",
     "SimulationExecutionInputV1",
     "SimulationFinding",
+    "SimulationGenerationError",
     "SimulationInputV1",
     "SimulationLimitation",
+    "SimulationOrchestrator",
     "SimulationQualityError",
     "SimulationQualityIssue",
     "SimulationResultV1",
@@ -58,6 +65,7 @@ __all__ = [
     "build_simulation_input_from_strategy_revision",
     "simulation_to_dict",
     "simulation_to_json",
+    "simulation_orchestrator",
     "validate_simulation_execution_input",
     "validate_simulation_input",
     "validate_simulation_result",
