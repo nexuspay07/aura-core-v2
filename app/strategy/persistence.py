@@ -65,6 +65,7 @@ class PersistedStrategy:
     origin_type: str
     source_decision_id: int | None
     source_decision_snapshot_id: int | None
+    snapshot_schema_version: int
     result: StrategyResult
 
 
@@ -566,6 +567,7 @@ class StrategyRepository:
             origin_type=revision["origin_type"],
             source_decision_id=revision["source_decision_id"],
             source_decision_snapshot_id=revision["source_decision_snapshot_id"],
+            snapshot_schema_version=revision["snapshot_schema_version"],
             result=result,
         )
 

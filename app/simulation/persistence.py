@@ -422,6 +422,34 @@ class SimulationRepository:
         row = self._workspace_row(db, public_id, organization_id, workspace_id)
         return self._hydrate_resource(db, row["id"])
 
+    def get_personal_resource_by_internal_id(self, db, *, resource_id: int, owner_user_id: int):
+        row = db.execute(select(simulation_resource_table).where(
+            simulation_resource_table.c.id == resource_id,
+            simulation_resource_table.c.owner_user_id == owner_user_id,
+            simulation_resource_table.c.organization_id.is_(None),
+            simulation_resource_table.c.workspace_id.is_(None),
+        )).mappings().first()
+        if not row:
+            raise SimulationPersistenceNotFoundError("Simulation not found")
+        return self._hydrate_resource(db, row["id"])
+
+    def get_workspace_resource_by_internal_id(
+        self, db, *, resource_id: int, organization_id: int, workspace_id: int,
+    ):
+        row = db.execute(select(simulation_resource_table).where(
+            simulation_resource_table.c.id == resource_id,
+            simulation_resource_table.c.owner_user_id.is_(None),
+            simulation_resource_table.c.organization_id == organization_id,
+            simulation_resource_table.c.workspace_id == workspace_id,
+        )).mappings().first()
+        if not row:
+            raise SimulationPersistenceNotFoundError("Simulation not found")
+        return self._hydrate_resource(db, row["id"])
+
+    def get_resource_internal_id(self, db, *, public_id: str, scope: StrategyScope) -> int:
+        """Resolve repository-internal identity only for an exact authorized scope."""
+        return self._resource_row(db, public_id, scope)["id"]
+
     def get_latest_run(self, db, *, resource_public_id: str, scope: StrategyScope):
         resource = self._resource_row(db, resource_public_id, scope)
         if resource["current_run_number"] == 0:
