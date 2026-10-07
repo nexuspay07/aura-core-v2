@@ -103,6 +103,7 @@ from app.api.personal_ask_routes import router as personal_ask_router
 from app.api.control_center_routes import router as control_center_router
 from app.strategy.routes import router as strategy_router
 from app.strategy.resource_routes import router as strategy_resource_router
+from app.simulation.resource_routes import router as simulation_resource_router
 
 from app.core.simulation.prediction_engine import prediction_engine
 from app.core.uncertainty_engine import uncertainty_engine
@@ -132,6 +133,7 @@ app.include_router(personal_ask_router)
 app.include_router(control_center_router)
 app.include_router(strategy_router)
 app.include_router(strategy_resource_router)
+app.include_router(simulation_resource_router)
 app.add_exception_handler(RequestValidationError, strategy_request_validation_handler)
 
 
