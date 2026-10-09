@@ -19,6 +19,7 @@ from app.strategy.contracts import StrategyScope
 SIMULATION_CREATE_OPERATION = "simulation_create_strategy_stress_test"
 IDEMPOTENCY_KEY_MAX_LENGTH = 255
 CLAIM_LEASE_DURATION = timedelta(minutes=5)
+MAX_CLAIM_LEASE_DURATION = timedelta(minutes=15)
 
 
 class SimulationIdempotencyError(ValueError):
@@ -45,6 +46,12 @@ class SimulationCreateClaim:
 
 class SimulationCreateIdempotencyStore:
     """Claim and complete Simulation creation across backend workers."""
+
+    @staticmethod
+    def _lease_duration(value: timedelta) -> timedelta:
+        if not isinstance(value, timedelta) or not timedelta(0) < value <= MAX_CLAIM_LEASE_DURATION:
+            raise SimulationIdempotencyError("Simulation claim lease duration is invalid")
+        return value
 
     @staticmethod
     def _key(value: object) -> str:
@@ -106,10 +113,12 @@ class SimulationCreateIdempotencyStore:
     def claim(
         self, db, *, idempotency_key: str, request_fingerprint: str,
         actor_user_id: int, scope: StrategyScope, now: datetime | None = None,
+        lease_duration: timedelta = CLAIM_LEASE_DURATION,
     ) -> SimulationCreateClaim:
         self._actor(actor_user_id, scope)
         key = self._key(idempotency_key)
         fingerprint = self._fingerprint(request_fingerprint)
+        lease_duration = self._lease_duration(lease_duration)
         tenancy = self._tenancy(scope)
         if scope.organization_id is not None and not db.execute(select(workspace_table.c.id).where(
             workspace_table.c.id == scope.workspace_id,
@@ -124,7 +133,7 @@ class SimulationCreateIdempotencyStore:
                     idempotency_key=key, operation=SIMULATION_CREATE_OPERATION,
                     request_fingerprint=fingerprint, actor_user_id=actor_user_id,
                     status="in_progress", claim_token=token,
-                    lease_expires_at=claimed_at + CLAIM_LEASE_DURATION,
+                    lease_expires_at=claimed_at + lease_duration,
                     updated_at=claimed_at, **tenancy,
                 ))
             return SimulationCreateClaim(SimulationCreateClaimState.CLAIMED, claim_token=token)
@@ -151,7 +160,7 @@ class SimulationCreateIdempotencyStore:
             simulation_create_idempotency_table.c.claim_token == row["claim_token"],
             simulation_create_idempotency_table.c.lease_expires_at == row["lease_expires_at"],
         ).values(
-            claim_token=token, lease_expires_at=claimed_at + CLAIM_LEASE_DURATION,
+            claim_token=token, lease_expires_at=claimed_at + lease_duration,
             updated_at=claimed_at,
         ))
         if reclaimed.rowcount == 1:
@@ -161,9 +170,11 @@ class SimulationCreateIdempotencyStore:
     def renew_claim(
         self, db, *, idempotency_key: str, actor_user_id: int,
         scope: StrategyScope, claim_token: str, now: datetime | None = None,
+        lease_duration: timedelta = CLAIM_LEASE_DURATION,
     ) -> bool:
         self._actor(actor_user_id, scope)
         key = self._key(idempotency_key)
+        lease_duration = self._lease_duration(lease_duration)
         renewed_at = now or datetime.now(timezone.utc)
         changed = db.execute(update(simulation_create_idempotency_table).where(
             *self._conditions(actor_user_id=actor_user_id, scope=scope, key=key),
@@ -171,7 +182,7 @@ class SimulationCreateIdempotencyStore:
             simulation_create_idempotency_table.c.claim_token == claim_token,
             simulation_create_idempotency_table.c.lease_expires_at > renewed_at,
         ).values(
-            lease_expires_at=renewed_at + CLAIM_LEASE_DURATION, updated_at=renewed_at,
+            lease_expires_at=renewed_at + lease_duration, updated_at=renewed_at,
         ))
         return changed.rowcount == 1
 

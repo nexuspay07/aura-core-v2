@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import json
 import re
@@ -11,6 +11,7 @@ from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.intelligence_v2.model_provider import analysis_timeout_seconds
 from app.simulation.adapters import SimulationAdapterError, build_simulation_input_from_strategy_revision
 from app.simulation.contracts import (
     FindingProvenance,
@@ -44,6 +45,19 @@ from app.strategy.persistence import StrategyPersistenceError, StrategyPersisten
 
 _SCENARIO_KEY = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _MAX_TEXT = 4000
+_LOCAL_PROCESSING_MARGIN_SECONDS = 60
+_CLOCK_AND_TRANSACTION_MARGIN_SECONDS = 30
+
+
+def simulation_generation_lease_duration() -> timedelta:
+    """Cover every supported provider attempt plus bounded local and clock margins."""
+
+    provider_window = analysis_timeout_seconds() * SimulationOrchestrator.max_provider_calls
+    return timedelta(seconds=(
+        provider_window
+        + _LOCAL_PROCESSING_MARGIN_SECONDS
+        + _CLOCK_AND_TRANSACTION_MARGIN_SECONDS
+    ))
 
 
 @dataclass(frozen=True)
@@ -132,10 +146,12 @@ class SimulationApplicationService:
     ) -> StrategyStressTestApplicationResult:
         command = self._validate(command, actor_user_id, scope)
         fingerprint = simulation_creation_fingerprint(command)
+        lease_duration = simulation_generation_lease_duration()
         try:
             claim = self.idempotency_store.claim(
                 db, idempotency_key=command.idempotency_key,
                 request_fingerprint=fingerprint, actor_user_id=actor_user_id, scope=scope,
+                lease_duration=lease_duration,
             )
             db.commit()
         except SimulationIdempotencyError as error:
@@ -178,7 +194,7 @@ class SimulationApplicationService:
         try:
             if not self.idempotency_store.renew_claim(
                 db, idempotency_key=command.idempotency_key, actor_user_id=actor_user_id,
-                scope=scope, claim_token=token,
+                scope=scope, claim_token=token, lease_duration=lease_duration,
             ):
                 db.rollback()
                 raise SimulationApplicationConflictError("Simulation creation claim was lost")

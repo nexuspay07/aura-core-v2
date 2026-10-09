@@ -18,8 +18,10 @@ from app.simulation.application import (
     SimulationApplicationService,
     SimulationApplicationValidationError,
     StrategyStressTestApplicationResult,
+    simulation_generation_lease_duration,
 )
 from app.simulation.contracts import FindingProvenance, ScenarioSeverity, ScenarioSource, SimulationScenario, UserSimulationAssumption
+from app.simulation.idempotency import SimulationCreateIdempotencyStore
 from app.simulation.persistence import SIMULATION_ENGINE_VERSION, SimulationPersistenceError, SimulationRepository
 from app.simulation.orchestrator import SimulationOrchestrator
 from app.strategy.contracts import StrategyScope
@@ -284,6 +286,85 @@ def test_real_orchestrator_repair_calls_provider_twice_but_creates_one_simulatio
     assert result.run_number == 1 and len(provider.calls) == 2
     assert len(db.execute(select(simulation_resource_table)).all()) == 1
     assert len(db.execute(select(simulation_run_table)).all()) == 1
+
+
+def test_execution_envelope_lease_blocks_retry_beyond_old_window_during_two_call_repair(db, monkeypatch):
+    monkeypatch.setenv("AURA_AI_TIMEOUT_SECONDS", "151")
+    strategy = persisted_strategy(db)
+    scope = StrategyScope(1)
+    favorable = SimulationScenario(
+        "favorable", "Favorable", "Reliability improves before expansion.",
+        ("Service reliability improves.",), ScenarioSource.USER_SUPPLIED, ScenarioSeverity.LOW,
+    )
+    cmd = command(strategy, scenarios=(SCENARIO, favorable))
+    started = datetime.now(timezone.utc)
+    observed = []
+    class ClockedStore(SimulationCreateIdempotencyStore):
+        now = started
+
+        def claim(self, db, **values):
+            return super().claim(db, now=self.now, **values)
+
+        def renew_claim(self, db, **values):
+            return super().renew_claim(db, now=self.now, **values)
+
+        def complete(self, db, **values):
+            return super().complete(db, now=self.now, **values)
+
+        def release_claim(self, db, **values):
+            return super().release_claim(db, now=self.now, **values)
+
+    store = ClockedStore()
+    retry_runner = Orchestrator()
+
+    class ConcurrentRetryProvider(RecordingProvider):
+        def generate_structured(self, **kwargs):
+            if len(self.calls) == 1:
+                store.now = started + timedelta(seconds=301)
+                with pytest.raises(SimulationApplicationInProgressError):
+                    SimulationApplicationService(
+                        orchestrator=retry_runner, idempotency_store=store,
+                    ).create_strategy_stress_test(
+                        db, command=cmd, actor_user_id=1, scope=scope,
+                    )
+                observed.append("blocked")
+            return super().generate_structured(**kwargs)
+
+    repaired = valid_output()
+    repaired["assumptions_used"] = [{
+        "statement": "Staffing remains fixed.",
+        "provenance": "USER_SUPPLIED",
+        "evidence_refs": ["evidence-1"],
+    }]
+    provider = ConcurrentRetryProvider({}, repaired)
+    application = SimulationApplicationService(
+        orchestrator=SimulationOrchestrator(provider), idempotency_store=store,
+    )
+    result = application.create_strategy_stress_test(
+        db, command=cmd, actor_user_id=1, scope=scope,
+    )
+    assert simulation_generation_lease_duration() == timedelta(seconds=392)
+    assert observed == ["blocked"]
+    assert retry_runner.calls == []
+    assert len(provider.calls) == 2
+    assert result.run_number == 1
+    assert len(db.execute(select(simulation_resource_table)).all()) == 1
+    assert len(db.execute(select(simulation_run_table)).all()) == 1
+
+    replay_provider = RecordingProvider(valid_output())
+    replay = SimulationApplicationService(
+        orchestrator=SimulationOrchestrator(replay_provider), idempotency_store=store,
+    ).create_strategy_stress_test(db, command=cmd, actor_user_id=1, scope=scope)
+    assert replay.simulation_public_id == result.simulation_public_id
+    assert replay_provider.calls == []
+
+
+@pytest.mark.parametrize(("configured", "expected_seconds"), [
+    ("1", 110), ("151", 392), ("300", 690), ("999", 690), ("invalid", 270),
+])
+def test_generation_lease_respects_timeout_configuration_boundaries(monkeypatch, configured, expected_seconds):
+    monkeypatch.setenv("AURA_AI_TIMEOUT_SECONDS", configured)
+    assert simulation_generation_lease_duration() == timedelta(seconds=expected_seconds)
 
 
 def test_stale_claim_is_recovered_by_application(db):

@@ -16,6 +16,7 @@ from app.db.user_table import user_table
 from app.db.workspace_table import workspace_table
 from app.simulation.idempotency import (
     CLAIM_LEASE_DURATION,
+    MAX_CLAIM_LEASE_DURATION,
     SIMULATION_CREATE_OPERATION,
     SimulationCreateClaimState,
     SimulationCreateIdempotencyStore,
@@ -119,6 +120,62 @@ def test_active_lease_cannot_be_stolen_but_stale_lease_is_reclaimed(db):
     assert active.state is SimulationCreateClaimState.IN_PROGRESS
     assert recovered.state is SimulationCreateClaimState.CLAIMED
     assert recovered.claim_token != first.claim_token
+
+
+def test_custom_execution_lease_blocks_old_window_reclaim_and_remains_stale_recoverable(db):
+    store = SimulationCreateIdempotencyStore(); scope = StrategyScope(1)
+    started = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    execution_lease = timedelta(seconds=392)
+    first = store.claim(
+        db, idempotency_key="same-key", request_fingerprint="a" * 64,
+        actor_user_id=1, scope=scope, now=started, lease_duration=execution_lease,
+    )
+    old_window_retry = store.claim(
+        db, idempotency_key="same-key", request_fingerprint="a" * 64,
+        actor_user_id=1, scope=scope, now=started + timedelta(seconds=301),
+        lease_duration=execution_lease,
+    )
+    recovered = store.claim(
+        db, idempotency_key="same-key", request_fingerprint="a" * 64,
+        actor_user_id=1, scope=scope, now=started + execution_lease + timedelta(seconds=1),
+        lease_duration=execution_lease,
+    )
+    assert old_window_retry.state is SimulationCreateClaimState.IN_PROGRESS
+    assert recovered.state is SimulationCreateClaimState.CLAIMED
+    assert recovered.claim_token != first.claim_token
+
+
+def test_lease_duration_is_positive_and_safely_bounded(db):
+    store = SimulationCreateIdempotencyStore(); scope = StrategyScope(1)
+    for duration in (timedelta(0), -timedelta(seconds=1), MAX_CLAIM_LEASE_DURATION + timedelta(seconds=1)):
+        with pytest.raises(SimulationIdempotencyError, match="lease duration"):
+            store.claim(
+                db, idempotency_key="same-key", request_fingerprint="a" * 64,
+                actor_user_id=1, scope=scope, lease_duration=duration,
+            )
+
+
+def test_reclaimed_claim_fences_expired_former_owner_from_completion(db):
+    store = SimulationCreateIdempotencyStore(); scope = StrategyScope(1)
+    resource_id = insert_simulation_resource(db, scope, 1)
+    started = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    lease = timedelta(seconds=2)
+    former = store.claim(
+        db, idempotency_key="same-key", request_fingerprint="a" * 64,
+        actor_user_id=1, scope=scope, now=started, lease_duration=lease,
+    )
+    current = store.claim(
+        db, idempotency_key="same-key", request_fingerprint="a" * 64,
+        actor_user_id=1, scope=scope, now=started + timedelta(seconds=3),
+        lease_duration=lease,
+    )
+    assert current.state is SimulationCreateClaimState.CLAIMED
+    with pytest.raises(SimulationIdempotencyCompletionError):
+        store.complete(
+            db, idempotency_key="same-key", request_fingerprint="a" * 64,
+            actor_user_id=1, scope=scope, claim_token=former.claim_token,
+            simulation_resource_id=resource_id, now=started + timedelta(seconds=4),
+        )
 
 
 def test_release_requires_owner_token_and_permits_retry(db):
