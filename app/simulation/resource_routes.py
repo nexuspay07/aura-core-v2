@@ -143,6 +143,34 @@ class SimulationResourceDetailResponse(BaseModel):
     archived: bool
 
 
+class SimulationErrorDetailResponse(BaseModel):
+    code: str
+    message: str
+
+
+class SimulationPublicErrorResponse(BaseModel):
+    detail: str | SimulationErrorDetailResponse | list[dict[str, object]]
+
+
+_COMMON_RESPONSES = {
+    401: {"model": SimulationPublicErrorResponse, "description": "Authentication is missing, invalid, or expired."},
+    403: {"model": SimulationPublicErrorResponse, "description": "Authentication credentials were not supplied."},
+    422: {"model": SimulationPublicErrorResponse, "description": "Request parameters or fields did not pass validation."},
+    500: {"model": SimulationPublicErrorResponse, "description": "The operation could not be completed."},
+    503: {"model": SimulationPublicErrorResponse, "description": "Simulation persistence is temporarily unavailable."},
+}
+_CREATE_RESPONSES = {
+    **_COMMON_RESPONSES,
+    404: {"model": SimulationPublicErrorResponse, "description": "The Strategy is not available in the authenticated scope."},
+    409: {"model": SimulationPublicErrorResponse, "description": "The idempotent request is in progress or conflicts with its original request."},
+    502: {"model": SimulationPublicErrorResponse, "description": "Generation could not produce a valid canonical result."},
+}
+_DETAIL_RESPONSES = {
+    **_COMMON_RESPONSES,
+    404: {"model": SimulationPublicErrorResponse, "description": "The Simulation is not available in the authenticated scope."},
+}
+
+
 def _result(value: SimulationResultV1) -> SimulationResultResponse:
     return SimulationResultResponse.model_validate(simulation_to_dict(value))
 
@@ -233,6 +261,7 @@ def _request(body: CreateStrategyStressTestRequest, strategy_public_id: UUID, ke
     status_code=status.HTTP_201_CREATED,
     summary="Create a Strategy Stress Test",
     description="Run canonical qualitative scenario analysis for an authorized persisted Strategy. Requires Idempotency-Key.",
+    responses=_CREATE_RESPONSES,
 )
 async def create_strategy_stress_test(
     strategy_public_id: UUID,
@@ -268,6 +297,7 @@ SimulationApplicationErrorTypes = (
     response_model=SimulationResourceListResponse,
     summary="List saved Strategy Stress Tests",
     description="List canonical qualitative scenario-analysis resources in the authenticated exact scope.",
+    responses=_COMMON_RESPONSES,
 )
 async def list_simulation_resources(
     limit: int = Query(default=50, ge=1, le=100),
@@ -292,6 +322,7 @@ async def list_simulation_resources(
     response_model=SimulationResourceDetailResponse,
     summary="Get a saved Strategy Stress Test",
     description="Retrieve canonical qualitative scenario-analysis detail from the authenticated exact scope.",
+    responses=_DETAIL_RESPONSES,
 )
 async def get_simulation_resource(
     simulation_public_id: UUID,

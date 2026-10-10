@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.api.control_center_routes as routes
 import app.auth.platform_admin as admin
+from app.services.control_center_service import CANONICAL_TELEMETRY_SINCE
 from app.db.database import metadata
 from app.db.intelligence_session_table import intelligence_session_table  # noqa: F401
 from app.db.organization_member_table import organization_member_table
@@ -87,7 +88,13 @@ def test_overview_metrics_definitions_boundaries_and_privacy(monkeypatch):
         assert body["decisions"] == {"total_saved_decisions":1, "new_saved_decisions_in_window":1}
         assert body["performance"] == {"average_latency_ms":200.0, "p50_latency_ms":200, "p95_latency_ms":300}
         assert body["usage"]["known_total_tokens"] == 8 and body["usage"]["requests_with_token_data"] == 1
-        assert body["data_completeness"]["request_telemetry"].startswith("partial")
+        window_start = datetime.fromisoformat(body["window_start"])
+        expected_completeness = (
+            "complete_for_selected_window"
+            if window_start >= CANONICAL_TELEMETRY_SINCE
+            else "partial_before_canonical_instrumentation"
+        )
+        assert body["data_completeness"]["request_telemetry"] == expected_completeness
         serialized = str(body)
         for private in ("PRIVATE_HASH", "PRIVATE QUESTION", "PRIVATE RECOMMENDATION", "analysis_snapshot"):
             assert private not in serialized

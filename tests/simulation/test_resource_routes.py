@@ -228,4 +228,8 @@ def test_authentication_and_openapi_contract():
     descriptions = json.dumps(post).casefold()
     assert "strategy stress test" in descriptions and "scenario analysis" in descriptions
     assert "calibrated forecast" not in descriptions
+    assert {"201", "401", "403", "404", "409", "422", "500", "502", "503"} <= set(post["responses"])
+    assert {"200", "401", "403", "422", "500", "503"} <= set(paths["/simulation-resources"]["get"]["responses"])
+    assert {"200", "401", "403", "404", "422", "500", "503"} <= set(paths["/simulation-resources/{simulation_public_id}"]["get"]["responses"])
+    assert "SimulationPublicErrorResponse" in schema["components"]["schemas"]
     assert not ({"/simulation/save", "/simulation/history", "/system/run_stream"} & set(paths))
