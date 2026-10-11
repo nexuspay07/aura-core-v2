@@ -18,6 +18,10 @@ def simulation_model_schema(
     scenarios = sorted(set(scenario_keys))
     evidence = sorted(set(evidence_ids))
     text = {"type": "string", "minLength": 1, "maxLength": 4000}
+    evidence_item = {"type": "string"}
+    if evidence:
+        evidence_item["enum"] = evidence
+    evidence_max_items = 50 if evidence else 0
     finding = {
         "type": "object",
         "additionalProperties": False,
@@ -29,9 +33,8 @@ def simulation_model_schema(
             },
             "evidence_refs": {
                 "type": "array",
-                "items": {"type": "string", "enum": evidence},
-                "maxItems": 50,
-                "uniqueItems": True,
+                "items": evidence_item,
+                "maxItems": evidence_max_items,
             },
         },
         "required": ["statement", "provenance", "evidence_refs"],
@@ -79,9 +82,8 @@ def simulation_model_schema(
         },
         "evidence_refs": {
             "type": "array",
-            "items": {"type": "string", "enum": evidence},
-            "maxItems": 50,
-            "uniqueItems": True,
+            "items": evidence_item,
+            "maxItems": evidence_max_items,
         },
     }
     return {

@@ -3,6 +3,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import insert, select, update
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.intelligence_v2.model_provider import ProviderUnavailableError
 
 from app.db.simulation_idempotency_table import simulation_create_idempotency_table
 from app.db.simulation_resource_table import simulation_resource_table, simulation_run_table
@@ -214,7 +217,9 @@ def test_active_claim_prevents_second_provider_execution(db):
 
 def test_provider_failure_creates_no_artifacts_and_releases_for_retry(db):
     strategy = persisted_strategy(db)
-    failing = Orchestrator(error=RuntimeError("private provider failure"))
+    failing = Orchestrator(error=ProviderUnavailableError(
+        "private provider failure", "provider_unavailable",
+    ))
     with pytest.raises(SimulationApplicationGenerationError) as captured:
         service(failing).create_strategy_stress_test(db, command=command(strategy), actor_user_id=1, scope=StrategyScope(1))
     assert "private" not in str(captured.value)
@@ -222,6 +227,61 @@ def test_provider_failure_creates_no_artifacts_and_releases_for_retry(db):
     assert db.execute(select(simulation_run_table)).all() == []
     retry = service(Orchestrator()).create_strategy_stress_test(db, command=command(strategy), actor_user_id=1, scope=StrategyScope(1))
     assert retry.run_number == 1
+
+
+def test_provider_bad_request_logs_only_safe_category(db, caplog):
+    strategy = persisted_strategy(db)
+    private = "private provider body and tenant details"
+    runner = Orchestrator(error=ProviderUnavailableError(private, "bad_request", {"body": private}))
+    caplog.set_level("WARNING", logger="uvicorn.error")
+
+    with pytest.raises(SimulationApplicationGenerationError):
+        service(runner).create_strategy_stress_test(
+            db, command=command(strategy), actor_user_id=1, scope=StrategyScope(1),
+        )
+
+    messages = "\n".join(record.message for record in caplog.records)
+    assert "simulation_generation_failed category=bad_request" in messages
+    assert private not in messages
+    assert db.execute(select(simulation_resource_table)).all() == []
+    assert db.execute(select(simulation_run_table)).all() == []
+
+
+def test_claim_renewal_database_failure_is_503_class_and_never_calls_provider(db):
+    strategy = persisted_strategy(db)
+    runner = Orchestrator()
+
+    class FailingRenewalStore(SimulationCreateIdempotencyStore):
+        def renew_claim(self, db, **values):
+            raise SQLAlchemyError("private database detail")
+
+    application = SimulationApplicationService(
+        orchestrator=runner, idempotency_store=FailingRenewalStore(),
+    )
+
+    with pytest.raises(SimulationApplicationPersistenceError) as captured:
+        application.create_strategy_stress_test(
+            db, command=command(strategy), actor_user_id=1, scope=StrategyScope(1),
+        )
+
+    assert "private" not in str(captured.value)
+    assert runner.calls == []
+    assert db.execute(select(simulation_resource_table)).all() == []
+    assert db.execute(select(simulation_run_table)).all() == []
+
+
+def test_unexpected_orchestrator_failure_is_internal_and_atomic(db):
+    strategy = persisted_strategy(db)
+    runner = Orchestrator(error=RuntimeError("private programming defect"))
+
+    with pytest.raises(SimulationApplicationInternalError) as captured:
+        service(runner).create_strategy_stress_test(
+            db, command=command(strategy), actor_user_id=1, scope=StrategyScope(1),
+        )
+
+    assert "private" not in str(captured.value)
+    assert db.execute(select(simulation_resource_table)).all() == []
+    assert db.execute(select(simulation_run_table)).all() == []
 
 
 def test_resource_run_and_completion_rollback_together_on_persistence_failure(db):

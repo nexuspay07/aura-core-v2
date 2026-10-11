@@ -240,6 +240,8 @@ def _findings(values: tuple[SimulationFinding, ...], name: str, evidence_ids: se
             errors.append(f"{name}[{index}].provenance is invalid")
         if len(finding.evidence_refs) > MAX_SOURCE_ITEMS:
             errors.append(f"{name}[{index}].evidence_refs exceeds {MAX_SOURCE_ITEMS} items")
+        if len(finding.evidence_refs) != len(set(finding.evidence_refs)):
+            errors.append(f"{name}[{index}].evidence_refs must be unique")
         for evidence_ref in finding.evidence_refs:
             if evidence_ref not in evidence_ids:
                 errors.append(f"{name}[{index}].evidence_ref is unknown")

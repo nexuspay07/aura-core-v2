@@ -6,12 +6,18 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import hashlib
 import json
+import logging
 import re
 from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.intelligence_v2.model_provider import analysis_timeout_seconds
+from app.intelligence_v2.model_provider import (
+    InvalidModelResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+    analysis_timeout_seconds,
+)
 from app.simulation.adapters import SimulationAdapterError, build_simulation_input_from_strategy_revision
 from app.simulation.contracts import (
     FindingProvenance,
@@ -29,7 +35,12 @@ from app.simulation.idempotency import (
     SimulationIdempotencyError,
     simulation_create_idempotency_store,
 )
-from app.simulation.orchestrator import SimulationOrchestrator, simulation_orchestrator
+from app.simulation.orchestrator import (
+    SimulationGenerationError,
+    SimulationOrchestrator,
+    simulation_orchestrator,
+)
+from app.simulation.quality import SimulationQualityError
 from app.simulation.persistence import (
     PersistedSimulationResource,
     PersistedSimulationRun,
@@ -39,6 +50,7 @@ from app.simulation.persistence import (
     simulation_repository,
 )
 from app.simulation.serialization import simulation_to_dict
+from app.simulation.validation import SimulationValidationError
 from app.strategy.contracts import StrategyScope
 from app.strategy.persistence import StrategyPersistenceError, StrategyPersistenceNotFoundError, StrategyRepository, strategy_repository
 
@@ -47,6 +59,24 @@ _SCENARIO_KEY = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _MAX_TEXT = 4000
 _LOCAL_PROCESSING_MARGIN_SECONDS = 60
 _CLOCK_AND_TRANSACTION_MARGIN_SECONDS = 30
+_generation_logger = logging.getLogger("uvicorn.error")
+
+
+def _generation_failure_category(error: Exception) -> str:
+    """Return content-free operational categories safe for production logs."""
+
+    category = getattr(error, "category", None)
+    if isinstance(error, ProviderTimeoutError) or category == "timeout":
+        return "timeout"
+    if isinstance(error, ProviderUnavailableError):
+        return "bad_request" if category == "bad_request" else "provider_unavailable"
+    if isinstance(error, InvalidModelResponseError):
+        return "incomplete_max_tokens" if category == "incomplete_max_tokens" else "invalid_model_response"
+    if isinstance(error, SimulationQualityError):
+        return "quality_failure"
+    if isinstance(error, (SimulationGenerationError, SimulationValidationError)):
+        return "validation_failure"
+    return "internal_failure"
 
 
 def simulation_generation_lease_duration() -> timedelta:
@@ -199,13 +229,39 @@ class SimulationApplicationService:
                 db.rollback()
                 raise SimulationApplicationConflictError("Simulation creation claim was lost")
             db.commit()
-            generated = self.orchestrator.run(execution)
         except SimulationApplicationConflictError:
             raise
+        except (SimulationIdempotencyError, SQLAlchemyError) as error:
+            db.rollback()
+            self._release(db, command, actor_user_id, scope, token)
+            raise SimulationApplicationPersistenceError("Unable to renew Simulation creation claim") from error
         except Exception as error:
             db.rollback()
             self._release(db, command, actor_user_id, scope, token)
+            raise SimulationApplicationInternalError("Unable to renew Simulation creation claim") from error
+
+        try:
+            generated = self.orchestrator.run(execution)
+        except (
+            InvalidModelResponseError,
+            ProviderTimeoutError,
+            ProviderUnavailableError,
+            SimulationGenerationError,
+            SimulationQualityError,
+            SimulationValidationError,
+        ) as error:
+            db.rollback()
+            self._release(db, command, actor_user_id, scope, token)
+            _generation_logger.warning(
+                "simulation_generation_failed category=%s",
+                _generation_failure_category(error),
+            )
             raise SimulationApplicationGenerationError("Unable to generate Simulation") from error
+        except Exception as error:
+            db.rollback()
+            self._release(db, command, actor_user_id, scope, token)
+            _generation_logger.warning("simulation_generation_failed category=internal_failure")
+            raise SimulationApplicationInternalError("Unable to generate Simulation") from error
 
         try:
             provider = getattr(self.orchestrator, "provider", None)

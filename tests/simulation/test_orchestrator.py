@@ -125,6 +125,22 @@ def valid_output(**changes):
     return value
 
 
+def output_without_evidence():
+    value = valid_output(evidence_refs=[])
+    for section in ("cross_scenario_comparison", "assumptions_used", "uncertainties"):
+        for finding in value[section]:
+            finding["evidence_refs"] = []
+    for scenario in value["scenario_results"]:
+        for section in (
+            "elements_under_stress", "plausible_effects", "constraint_conflicts",
+            "risk_observations", "mitigation_observations", "phase_sensitivities",
+            "upside_conditions", "downside_conditions", "change_condition_triggers",
+        ):
+            for finding in scenario[section]:
+                finding["evidence_refs"] = []
+    return value
+
+
 def probability_output():
     value = valid_output()
     value["scenario_results"][0]["plausible_effects"] = [
@@ -156,6 +172,42 @@ def test_schema_is_strict_supplied_and_has_no_probability_field():
     )
     assert call["output_schema"]["additionalProperties"] is False
     assert "probability" not in repr(call["output_schema"]).casefold()
+
+
+def test_strategy_without_evidence_generates_with_empty_evidence_references():
+    source = execution_input(
+        success_measures=(SuccessMeasure("Reliability remains stable."),),
+        evidence_refs=(),
+    )
+
+    result, provider = run(output_without_evidence(), source=source)
+
+    assert result.evidence_refs == ()
+    assert len(provider.calls) == 1
+    assert provider.calls[0]["output_schema"]["properties"]["evidence_refs"]["maxItems"] == 0
+
+
+def test_duplicate_source_evidence_is_rejected_before_provider_call():
+    duplicate = EvidenceReference("evidence-1", "Duplicate reliability review")
+    provider = RecordingProvider(valid_output())
+
+    with pytest.raises(SimulationValidationError, match="identifiers must be unique"):
+        SimulationOrchestrator(provider).run(execution_input(
+            evidence_refs=(EvidenceReference("evidence-1", "Reliability review"), duplicate),
+        ))
+
+    assert provider.calls == []
+
+
+def test_duplicate_finding_evidence_references_fail_application_validation():
+    invalid = valid_output()
+    invalid["uncertainties"][0]["evidence_refs"] = ["evidence-1", "evidence-1"]
+    provider = RecordingProvider(invalid, invalid)
+
+    with pytest.raises(SimulationValidationError, match="evidence_refs must be unique"):
+        SimulationOrchestrator(provider).run(execution_input())
+
+    assert len(provider.calls) == 2
 
 
 @pytest.mark.parametrize("field,value", [
