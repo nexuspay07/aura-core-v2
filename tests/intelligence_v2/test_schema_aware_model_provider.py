@@ -142,3 +142,11 @@ def test_model_timeout_and_selection_configuration_are_unchanged():
     request = provider.request_kwargs(system="system", payload={}, output_schema=CUSTOM_SCHEMA, schema_name="custom")
     assert request["model"] == "gpt-5.1"
     assert request["reasoning"] == {"effort": provider.reasoning_effort}
+
+
+def test_request_can_use_a_call_specific_output_budget_without_mutating_provider():
+    provider = OpenAIModelProvider(api_key="offline", max_output_tokens=1800)
+    request = provider.request_kwargs(system="system", payload={}, max_output_tokens=8000)
+
+    assert request["max_output_tokens"] == 8000
+    assert provider.max_output_tokens == 1800

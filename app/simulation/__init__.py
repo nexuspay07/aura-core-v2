@@ -29,6 +29,7 @@ from app.simulation.quality import (
 from app.simulation.orchestrator import (
     SimulationGenerationError,
     SimulationOrchestrator,
+    simulation_output_token_budget,
     simulation_orchestrator,
 )
 from app.simulation.serialization import simulation_to_dict, simulation_to_json
@@ -52,6 +53,7 @@ __all__ = [
     "SimulationInputV1",
     "SimulationLimitation",
     "SimulationOrchestrator",
+    "simulation_output_token_budget",
     "SimulationQualityError",
     "SimulationQualityIssue",
     "SimulationResultV1",

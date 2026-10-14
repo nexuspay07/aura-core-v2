@@ -30,7 +30,7 @@ from app.simulation.orchestrator import SimulationOrchestrator
 from app.strategy.contracts import StrategyScope
 from app.strategy.persistence import serialize_strategy_result
 from tests.simulation.test_persistence import accepted_result, db, persisted_strategy, strategy_result  # noqa: F401
-from tests.simulation.test_orchestrator import RecordingProvider, valid_output
+from tests.simulation.test_orchestrator import RecordingProvider, probability_output, valid_output
 
 
 SCENARIO = SimulationScenario(
@@ -346,6 +346,26 @@ def test_real_orchestrator_repair_calls_provider_twice_but_creates_one_simulatio
     assert result.run_number == 1 and len(provider.calls) == 2
     assert len(db.execute(select(simulation_resource_table)).all()) == 1
     assert len(db.execute(select(simulation_run_table)).all()) == 1
+
+
+def test_two_quality_failures_stop_at_two_calls_and_persist_nothing(db):
+    strategy = persisted_strategy(db)
+    favorable = SimulationScenario(
+        "favorable", "Favorable", "Reliability improves before expansion.",
+        ("Service reliability improves.",), ScenarioSource.USER_SUPPLIED, ScenarioSeverity.LOW,
+    )
+    provider = RecordingProvider(probability_output(), probability_output())
+    application = service(SimulationOrchestrator(provider))
+
+    with pytest.raises(SimulationApplicationGenerationError):
+        application.create_strategy_stress_test(
+            db, command=command(strategy, scenarios=(SCENARIO, favorable)),
+            actor_user_id=1, scope=StrategyScope(1),
+        )
+
+    assert len(provider.calls) == 2
+    assert db.execute(select(simulation_resource_table)).all() == []
+    assert db.execute(select(simulation_run_table)).all() == []
 
 
 def test_execution_envelope_lease_blocks_retry_beyond_old_window_during_two_call_repair(db, monkeypatch):

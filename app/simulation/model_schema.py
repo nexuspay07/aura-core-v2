@@ -7,6 +7,11 @@ from typing import Any
 
 
 SIMULATION_SCHEMA_NAME = "strategy_stress_test_result"
+MAX_REQUIRED_FINDINGS = 4
+MAX_OPTIONAL_FINDINGS = 3
+MAX_ASSUMPTIONS_USED = 6
+MAX_CONFIDENCE_RATIONALE = 4
+MAX_MODEL_TEXT_LENGTH = 800
 
 
 def simulation_model_schema(
@@ -17,7 +22,7 @@ def simulation_model_schema(
 
     scenarios = sorted(set(scenario_keys))
     evidence = sorted(set(evidence_ids))
-    text = {"type": "string", "minLength": 1, "maxLength": 4000}
+    text = {"type": "string", "minLength": 1, "maxLength": MAX_MODEL_TEXT_LENGTH}
     evidence_item = {"type": "string"}
     if evidence:
         evidence_item["enum"] = evidence
@@ -39,11 +44,11 @@ def simulation_model_schema(
         },
         "required": ["statement", "provenance", "evidence_refs"],
     }
-    findings = lambda required=False: {
+    findings = lambda required=False, maximum=None: {
         "type": "array",
         "items": finding,
         "minItems": 1 if required else 0,
-        "maxItems": 50,
+        "maxItems": maximum or (MAX_REQUIRED_FINDINGS if required else MAX_OPTIONAL_FINDINGS),
     }
     scenario = {
         "type": "object",
@@ -74,11 +79,11 @@ def simulation_model_schema(
             "minItems": len(scenarios), "maxItems": len(scenarios),
         },
         "cross_scenario_comparison": findings(True),
-        "assumptions_used": findings(),
+        "assumptions_used": findings(maximum=MAX_ASSUMPTIONS_USED),
         "uncertainties": findings(True),
         "confidence": {"type": "string", "enum": ["LOW", "MODERATE", "HIGH"]},
         "confidence_rationale": {
-            "type": "array", "items": text, "minItems": 1, "maxItems": 20,
+            "type": "array", "items": text, "minItems": 1, "maxItems": MAX_CONFIDENCE_RATIONALE,
         },
         "evidence_refs": {
             "type": "array",

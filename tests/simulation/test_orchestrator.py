@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.intelligence_v2.model_provider import InvalidModelResponseError
+from app.intelligence_v2.model_provider import InvalidModelResponseError, ProviderUnavailableError
 from app.simulation import (
     FindingProvenance,
     ScenarioSeverity,
@@ -20,6 +20,7 @@ from app.simulation import (
 )
 from app.simulation.model_schema import SIMULATION_SCHEMA_NAME, simulation_model_schema
 from app.simulation.prompts import simulation_repair_instruction
+from app.simulation.orchestrator import simulation_output_token_budget
 from app.strategy.contracts import (
     EvidenceReference,
     StrategyAssumption,
@@ -348,6 +349,94 @@ def test_repair_instruction_is_deterministic_and_privacy_safe():
     )
     assert first == second
     assert "Retain private" not in first and "Demand rises" not in first
+    assert "Remove numerical probabilities" in first
+    assert "Remove repeated findings" in first
+    assert "corrected replacement response" in first
+
+
+@pytest.mark.parametrize(("configured", "expected"), [
+    (None, 8000), ("3999", 4000), ("4000", 4000), ("12000", 12000),
+    ("16000", 16000), ("16001", 16000), ("invalid", 8000),
+])
+def test_simulation_output_budget_is_separate_bounded_and_safe(monkeypatch, configured, expected):
+    if configured is None:
+        monkeypatch.delenv("AURA_SIMULATION_MAX_OUTPUT_TOKENS", raising=False)
+    else:
+        monkeypatch.setenv("AURA_SIMULATION_MAX_OUTPUT_TOKENS", configured)
+    assert simulation_output_token_budget() == expected
+
+
+@pytest.mark.parametrize("scenario_count", [1, 6])
+def test_every_supported_scenario_count_uses_simulation_budget(monkeypatch, scenario_count):
+    monkeypatch.setenv("AURA_SIMULATION_MAX_OUTPUT_TOKENS", "9000")
+    scenarios = tuple(
+        SimulationScenario(
+            f"scenario_{index}", f"Scenario {index}", f"Scenario {index} changes.",
+            (f"Condition {index} changes.",), ScenarioSource.USER_SUPPLIED, ScenarioSeverity.MODERATE,
+        )
+        for index in range(scenario_count)
+    )
+    provider = RecordingProvider(ProviderUnavailableError("private", "provider_unavailable"))
+    with pytest.raises(ProviderUnavailableError):
+        SimulationOrchestrator(provider).run(execution_input(scenarios=scenarios, user_assumptions=()))
+    assert len(provider.calls) == 1 and provider.calls[0]["max_output_tokens"] == 9000
+
+
+def test_incomplete_response_then_valid_replacement_is_bounded_and_logged(caplog):
+    incomplete = InvalidModelResponseError("private", "incomplete_max_tokens", {
+        "http_status": 200, "incomplete_reason": "max_output_tokens", "input_tokens": 500,
+        "output_tokens": 8000, "reasoning_tokens": 2000, "visible_output_tokens": 6000,
+        "latency_ms": 123,
+    })
+    with caplog.at_level("WARNING", logger="uvicorn.error"):
+        result, provider = run(incomplete, valid_output())
+    assert result.scenario_results and len(provider.calls) == 2
+    assert provider.calls[0]["max_output_tokens"] == provider.calls[1]["max_output_tokens"] == 8000
+    logs = " ".join(record.getMessage() for record in caplog.records)
+    assert "attempt=1" in logs and "repair_attempt=False" in logs
+    assert "category=incomplete_max_tokens" in logs and "incomplete_reason=max_output_tokens" in logs
+    assert "input_tokens=500" in logs and "output_tokens=8000" in logs
+    assert "private" not in logs
+
+
+def test_two_incomplete_responses_stop_at_two_calls_with_sanitized_diagnostics(caplog):
+    error = InvalidModelResponseError("secret prompt and output", "incomplete_max_tokens", {
+        "incomplete_reason": "max_output_tokens", "provider_body": "private body",
+    })
+    provider = RecordingProvider(error, error)
+    with caplog.at_level("WARNING", logger="uvicorn.error"), pytest.raises(InvalidModelResponseError):
+        SimulationOrchestrator(provider).run(execution_input())
+    assert len(provider.calls) == 2
+    logs = " ".join(record.getMessage() for record in caplog.records)
+    assert "attempt=2" in logs and "repair_attempt=True" in logs
+    for forbidden in ("secret prompt", "private body", "provider_body"):
+        assert forbidden not in logs
+
+
+def test_provider_unavailable_is_not_retried_and_logs_only_safe_metadata(caplog):
+    error = ProviderUnavailableError("secret credential and tenant content", "rate_limit", {
+        "http_status": 429, "latency_ms": 75, "provider_body": "private body",
+    })
+    provider = RecordingProvider(error)
+    with caplog.at_level("WARNING", logger="uvicorn.error"), pytest.raises(ProviderUnavailableError):
+        SimulationOrchestrator(provider).run(execution_input())
+    logs = " ".join(record.getMessage() for record in caplog.records)
+    assert len(provider.calls) == 1
+    assert "attempt=1" in logs and "repair_attempt=False" in logs
+    assert "category=rate_limit" in logs and "http_status=429" in logs and "latency_ms=75" in logs
+    for forbidden in ("secret credential", "tenant content", "private body", "provider_body"):
+        assert forbidden not in logs
+
+
+def test_quality_failure_diagnostics_include_only_safe_codes_and_count(caplog):
+    bad = probability_output()
+    provider = RecordingProvider(bad, bad)
+    with caplog.at_level("WARNING", logger="uvicorn.error"), pytest.raises(SimulationQualityError):
+        SimulationOrchestrator(provider).run(execution_input())
+    logs = " ".join(record.getMessage() for record in caplog.records)
+    assert len(provider.calls) == 2 and "quality_issue_count=1" in logs
+    assert "quality_issue_codes=simulation.numeric_probability" in logs
+    assert "70% chance" not in logs
 
 
 def test_same_provider_response_produces_same_canonical_result():

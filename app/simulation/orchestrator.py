@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import logging
+import os
 from typing import Any
 
 from app.intelligence_v2.model_provider import (
@@ -59,6 +61,63 @@ _SCENARIO_FIELDS = {
     *_FINDING_SECTIONS,
 }
 _FINDING_FIELDS = {"statement", "provenance", "evidence_refs"}
+_generation_logger = logging.getLogger("uvicorn.error")
+_SIMULATION_OUTPUT_TOKENS_MIN = 4000
+_SIMULATION_OUTPUT_TOKENS_DEFAULT = 8000
+_SIMULATION_OUTPUT_TOKENS_MAX = 16000
+_SAFE_PROVIDER_CATEGORIES = {
+    "api_connection_error", "authentication_error", "bad_request", "empty_content",
+    "incomplete_max_tokens", "invalid_json", "model_not_found", "permission_error",
+    "provider_error", "provider_unavailable", "rate_limit", "refusal",
+    "responses_configuration_error", "structured_output_error", "timeout",
+    "unknown_provider_error",
+}
+_SAFE_INCOMPLETE_REASONS = {"max_output_tokens", "content_filter", "max_messages", "steered"}
+
+
+def simulation_output_token_budget() -> int:
+    """Return a bounded Simulation-only generation budget without changing global Intelligence."""
+
+    try:
+        value = int(os.getenv("AURA_SIMULATION_MAX_OUTPUT_TOKENS", str(_SIMULATION_OUTPUT_TOKENS_DEFAULT)))
+    except (TypeError, ValueError):
+        return _SIMULATION_OUTPUT_TOKENS_DEFAULT
+    return min(max(value, _SIMULATION_OUTPUT_TOKENS_MIN), _SIMULATION_OUTPUT_TOKENS_MAX)
+
+
+def _safe_metric(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _log_attempt_failure(attempt: int, error: Exception, usage: dict[str, Any]) -> None:
+    diagnostics = getattr(error, "diagnostics", None)
+    diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+    provider_category = getattr(error, "category", None)
+    provider_category = provider_category if provider_category in _SAFE_PROVIDER_CATEGORIES else None
+    quality_codes = ()
+    if isinstance(error, SimulationQualityError):
+        category = "quality_failure"
+        quality_codes = tuple(sorted({item.code for item in error.issues}))
+    elif isinstance(error, (SimulationGenerationError, SimulationValidationError)):
+        category = "validation_failure"
+    else:
+        category = provider_category or "invalid_model_response"
+    incomplete_reason = diagnostics.get("incomplete_reason")
+    if incomplete_reason not in _SAFE_INCOMPLETE_REASONS:
+        incomplete_reason = None
+    combined = {**usage, **diagnostics}
+    _generation_logger.warning(
+        "simulation_provider_attempt_failed attempt=%s repair_attempt=%s category=%s "
+        "http_status=%s incomplete_reason=%s input_tokens=%s output_tokens=%s "
+        "reasoning_tokens=%s visible_output_tokens=%s latency_ms=%s "
+        "quality_issue_count=%s quality_issue_codes=%s",
+        attempt + 1, attempt > 0, category,
+        _safe_metric(combined.get("http_status")), incomplete_reason,
+        _safe_metric(combined.get("input_tokens")), _safe_metric(combined.get("output_tokens")),
+        _safe_metric(combined.get("reasoning_tokens")), _safe_metric(combined.get("visible_output_tokens")),
+        _safe_metric(combined.get("latency_ms")), len(getattr(error, "issues", ())),
+        ",".join(quality_codes) or "none",
+    )
 
 
 def _text(value: object, code: str = "simulation_generation.empty_text") -> str:
@@ -124,14 +183,16 @@ class SimulationOrchestrator:
         )
         repair = ""
         for attempt in range(self.max_provider_calls):
+            usage: dict[str, Any] = {}
             try:
-                raw, _usage = self.provider.generate_structured(
+                raw, usage = self.provider.generate_structured(
                     system=SIMULATION_SYSTEM_PROMPT + repair,
                     payload=payload,
                     timeout_seconds=analysis_timeout_seconds(),
                     reasoning_effort="medium" if attempt == 0 else "low",
                     output_schema=schema,
                     schema_name=SIMULATION_SCHEMA_NAME,
+                    max_output_tokens=simulation_output_token_budget(),
                 )
                 result = self._result(execution_input, raw)
                 validate_simulation_result(result, source)
@@ -143,11 +204,13 @@ class SimulationOrchestrator:
                 SimulationValidationError,
                 SimulationQualityError,
             ) as error:
+                _log_attempt_failure(attempt, error, usage)
                 if attempt + 1 == self.max_provider_calls:
                     raise
                 category, codes = _repair_details(error)
                 repair = simulation_repair_instruction(category=category, codes=codes)
-            except (ProviderTimeoutError, ProviderUnavailableError):
+            except (ProviderTimeoutError, ProviderUnavailableError) as error:
+                _log_attempt_failure(attempt, error, usage)
                 raise
         raise SimulationGenerationError(
             "simulation generation exhausted", "simulation_generation.exhausted",
